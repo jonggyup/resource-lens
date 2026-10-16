@@ -64,7 +64,9 @@ don't fit in overview. Minimum terminal size: 40 columns by 10 rows.
 
 History runs oldest to newest from left to right, retaining up to 120 displayed
 samples. Characters `._-:=+*#%@` represent increasing percentages from 0 to
-100. `?` means missing data. CPU/memory histories show their respective
+100. Missing samples appear as gaps; when the visible history has no measured
+samples, it shows `N/A (no measured data)` instead of a graph. In particular,
+an unsupported GPU cannot produce a utilization history. CPU/memory histories show their respective
 percentages; disk/GPU histories show the busiest device, whose identity may
 change. Sampling defaults to one second. Frozen intervals are omitted from
 display history, so it is a sequence of samples rather than a continuous

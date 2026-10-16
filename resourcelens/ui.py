@@ -36,9 +36,12 @@ def bar(value, width=22):
 
 
 def spark(values, width=40):
+    values = list(values)[-width:]
+    if not values or all(v is None for v in values):
+        return "N/A (no measured data)"[:width]
     levels = "._-:=+*#%@"
-    return "".join("?" if v is None else levels[min(len(levels) - 1, max(0,
-                    int(v / 100 * (len(levels) - 1))))] for v in list(values)[-width:])
+    return "".join(" " if v is None else levels[min(len(levels) - 1, max(0,
+                    int(v / 100 * (len(levels) - 1))))] for v in values)
 
 
 def pressure(snapshot, kind):
@@ -168,6 +171,7 @@ class View:
                     "?: toggle this help   q / Esc: quit", "",
                     "History: newest on right, up to 120 displayed samples.",
                     "All histories use 0-100%; disk/GPU show busiest device.",
+                    "History gaps are missing samples; all missing shows N/A.",
                     "N/A means unavailable or awaiting a second sample, never zero.",
                     "PSI = time at least some tasks waited for that resource.",
                     "Monitoring scope: visible host counters/processes, not cgroup limits.",

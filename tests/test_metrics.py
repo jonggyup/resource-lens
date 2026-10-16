@@ -6,7 +6,7 @@ from unittest.mock import patch
 import subprocess
 
 from resourcelens.collect import Collector, delta, parse_nvidia
-from resourcelens.ui import View, clean, ratio
+from resourcelens.ui import View, clean, ratio, spark
 
 
 class MetricsTests(unittest.TestCase):
@@ -198,6 +198,28 @@ class MetricsTests(unittest.TestCase):
     def test_nonpositive_time_is_not_a_rate(self):
         self.assertIsNone(delta(10, 5, 0))
         self.assertIsNone(delta(10, 5, -1))
+
+    def test_missing_history_is_explicit_instead_of_question_marks(self):
+        self.assertEqual(spark([]), "N/A (no measured data)")
+        self.assertEqual(spark([None] * 120), "N/A (no measured data)")
+        self.assertLessEqual(len(spark([None] * 120, width=8)), 8)
+
+    def test_history_gaps_are_distinct_from_measured_zero(self):
+        self.assertEqual(spark([0, None, 100]), ". @")
+        self.assertEqual(spark([0, 50, 100], width=2), "=@")
+        self.assertTrue(spark([100] + [None] * 8, width=8).startswith("N/A"))
+
+    def test_live_measured_history_and_unsupported_gpu_history(self):
+        self.write("sys/class/drm/card0/device/vendor", "0x102b")
+        view = View()
+        view.update(self.collector.sample())
+        self.now += 1
+        self.write("proc/stat", "cpu 140 0 40 920 50 0 0 50 100 0\n")
+        view.update(self.collector.sample())
+        self.assertEqual(spark(view.history["cpu"]), " -")
+        self.assertNotIn("N/A", spark(view.history["memory"]))
+        self.assertNotIn("N/A", spark(view.history["disk"]))
+        self.assertIn("History N/A (no measured data)", view.gpu_lines())
 
 
 if __name__ == "__main__":

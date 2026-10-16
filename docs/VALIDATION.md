@@ -1,5 +1,16 @@
 # Validation of 0.1.0
 
+## History display correction
+
+Reproduced the reported question-mark history on this host: GPU history
+contained only unavailable samples because the Matrox driver has no readable
+utilization counter. CPU, memory and disk histories contained actual measured
+values. The renderer now displays `N/A (no measured data)` for an entirely
+unavailable history, with gaps for occasional missing samples in a measured
+history. Added regression checks for missing histories, gaps versus real zero,
+visible-window clipping, and measured CPU/memory/disk versus unsupported GPU.
+The updated suite contains 27 tests. The original baseline validation follows.
+
 Executed on 2026-10-16 on Linux, Python 3.10.12, Intel Xeon E5530
 (8 online logical CPUs), two visible disks and a Matrox mgag200 adapter.
 
