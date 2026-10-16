@@ -1,0 +1,195 @@
+{
+  "version": "0.2.0",
+  "environment": {
+    "kernel": "5.15.0-187-generic",
+    "systemd": "249",
+    "python": "3.10.12"
+  },
+  "system_service_enforcement": {
+    "units": [
+      "rlcheck97fa2ccf1769-a.service",
+      "rlcheck97fa2ccf1769-b.service"
+    ],
+    "slice": "rlcheck97fa2ccf1769.slice",
+    "pinned_cpu": 0,
+    "root_controllers_before": "memory pids",
+    "grouped_pids": 3,
+    "baseline": {
+      "cpu_pct": [
+        60.12406956107122,
+        39.9508495254761
+      ],
+      "a_to_b_ratio": 1.5049509653788697,
+      "elapsed_s": 2.002322877990082
+    },
+    "weighted": {
+      "cpu_pct": [
+        85.72289105118597,
+        14.377730737079933
+      ],
+      "a_to_b_ratio": 5.962198946326629,
+      "elapsed_s": 3.0007725689793006
+    },
+    "quota_25": {
+      "cpu_pct": [
+        25.76376355156008,
+        74.3426855166922
+      ],
+      "a_to_b_ratio": 0.34655411453727114,
+      "elapsed_s": 3.000842630979605
+    },
+    "throttling": {
+      "usage_usec": 4762564,
+      "user_usec": 4750490,
+      "system_usec": 12073,
+      "nr_periods": 30,
+      "nr_throttled": 30,
+      "throttled_usec": 2078707
+    },
+    "restored": {
+      "cpu_pct": [
+        59.81106970064928,
+        40.332622374665696
+      ],
+      "a_to_b_ratio": 1.4829452234729636,
+      "elapsed_s": 2.0008319630287588
+    },
+    "inherited_quota": {
+      "quota_pct": 50.0,
+      "quota_source": "/rlcheck97fa2ccf1769.slice",
+      "quota_complete": true
+    },
+    "events": [
+      {
+        "property": "weight",
+        "requested": 400,
+        "status": "undone"
+      },
+      {
+        "property": "quota",
+        "requested": 25,
+        "status": "undone"
+      },
+      {
+        "property": "quota",
+        "requested": 80,
+        "status": "undone"
+      }
+    ],
+    "passed": true,
+    "root_controllers_after": "memory pids",
+    "leftover_owned_cgroups": []
+  },
+  "actual_terminal_workflow": {
+    "unit": "rlui879f488e0eee.service",
+    "root_before": "memory pids",
+    "unprivileged_change_denied": true,
+    "w_preview_owned_target": true,
+    "CPUWeight_applied": "400",
+    "CPUWeight_undone": "100",
+    "l_preview_owned_target": true,
+    "CPUQuotaPerSecUSec_applied": "250ms",
+    "CPUQuotaPerSecUSec_undone": "infinity",
+    "passed": true,
+    "root_after": "memory pids",
+    "owned_cgroup_removed": true
+  },
+  "unset_weight_restoration": {
+    "root_before": "memory pids",
+    "initial_manager_weight": null,
+    "initial_kernel_weight": null,
+    "restored_manager_weight": null,
+    "restored_kernel_weight": null,
+    "passed": true,
+    "root_after": "memory pids",
+    "owned_cgroup_removed": true
+  },
+  "collector_cost": {
+    "samples": 20,
+    "processes": 181,
+    "workloads": 27,
+    "wall_ms_per_sample": 68.31301420461386,
+    "cpu_ms_per_sample": 68.244681,
+    "nvidia_probing": false,
+    "note": "Measured collector only on this host; not a cross-machine or full-UI benchmark."
+  },
+  "source_sha256": {
+    "resourcelens/controls.py": "ddbbc99fca0f809bad0397848f509a730c35b05e684a7097991b38079a046ae8",
+    "resourcelens/workloads.py": "409e5d7bac89748632df6676affb89cd0b38affe58a2ddd2431a0241c8de92e4"
+  },
+  "final_regression_enforcement": {
+    "units": [
+      "rlcheckc69a1b8877bd-a.service",
+      "rlcheckc69a1b8877bd-b.service"
+    ],
+    "slice": "rlcheckc69a1b8877bd.slice",
+    "pinned_cpu": 0,
+    "root_controllers_before": "memory pids",
+    "grouped_pids": 3,
+    "baseline": {
+      "cpu_pct": [
+        59.87980749158383,
+        39.99896604263269
+      ],
+      "a_to_b_ratio": 1.4970338840199333,
+      "elapsed_s": 2.002249256009236
+    },
+    "weighted": {
+      "cpu_pct": [
+        85.83489488285234,
+        14.21354615671789
+      ],
+      "a_to_b_ratio": 6.038950022495501,
+      "elapsed_s": 3.002431590924971
+    },
+    "quota_25": {
+      "cpu_pct": [
+        25.557367762532852,
+        74.49766440519522
+      ],
+      "a_to_b_ratio": 0.34306267138155494,
+      "elapsed_s": 3.0022457990562543
+    },
+    "throttling": {
+      "usage_usec": 4768936,
+      "user_usec": 4764856,
+      "system_usec": 4079,
+      "nr_periods": 30,
+      "nr_throttled": 30,
+      "throttled_usec": 2128951
+    },
+    "restored": {
+      "cpu_pct": [
+        60.13167679410512,
+        39.73953035379264
+      ],
+      "a_to_b_ratio": 1.5131451292646267,
+      "elapsed_s": 2.0023689080262557
+    },
+    "inherited_quota": {
+      "quota_pct": 50.0,
+      "quota_source": "/rlcheckc69a1b8877bd.slice",
+      "quota_complete": true
+    },
+    "events": [
+      {
+        "property": "weight",
+        "requested": 400,
+        "status": "undone"
+      },
+      {
+        "property": "quota",
+        "requested": 25,
+        "status": "undone"
+      },
+      {
+        "property": "quota",
+        "requested": 80,
+        "status": "undone"
+      }
+    ],
+    "passed": true,
+    "root_controllers_after": "memory pids",
+    "leftover_owned_cgroups": []
+  }
+}

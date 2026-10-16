@@ -33,7 +33,8 @@ class TerminalTests(unittest.TestCase):
                     output.extend(os.read(master, 65536))
 
         drain(0.7)
-        for key in (b"2", b"3", b"4", b"5", b"6", b"7", b"/python\r", b"m", b"?", b"?", b" ", b" ", b"1"):
+        for key in (b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"w", b"\r", b"/ssh\r", b"1",
+                    b"/python\r", b"m", b"?", b"?", b" ", b" ", b"1"):
             os.write(master, key)
             drain()
         for height, width in ((24, 80), (12, 40), (35, 120)):
@@ -45,7 +46,7 @@ class TerminalTests(unittest.TestCase):
         text = output.decode(errors="replace")
         self.assertEqual(child.returncode, 0, text[-3000:])
         self.assertIn("RESOURCE LENS", text)
-        self.assertIn("read-only", text)
+        self.assertIn("Read-only", text)
         self.assertIn("Filter:", text)
         self.assertIn("RX history", text)
         self.assertNotIn("Traceback", text)
@@ -58,6 +59,7 @@ class TerminalTests(unittest.TestCase):
         self.assertGreater(samples[0]["elapsed_s"], 0)
         self.assertIn("disks", samples[0])
         self.assertIn("network", samples[0])
+        self.assertIn("workloads", samples[0])
 
     def test_bad_interval_rejected(self):
         for value in ("nan", "inf", "0", "-1", "61"):

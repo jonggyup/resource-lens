@@ -2,11 +2,14 @@
 
 from collections import defaultdict, deque
 import curses
+import queue
 import sys
+import textwrap
 import threading
 import time
 
 from .presentation import GLYPHS, card_layout, chart, compact_overview, draw_card, overview_cards, palette
+from .controls import ControlSession
 
 
 def clean(value):
@@ -31,6 +34,12 @@ def ratio(used, total):
     return used / total * 100 if used is not None and total else None
 
 
+def cpu_setting(property, value):
+    if value is None:
+        return "default (100)" if property == "weight" else "no local quota"
+    return f"{value:g}" if property == "weight" else f"{value:g}% of one CPU"
+
+
 def bar(value, width=22):
     if value is None:
         return "[" + " no data ".center(width, ".") + "] N/A"
@@ -53,13 +62,15 @@ def pressure(snapshot, kind):
 
 
 class View:
-    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network")
+    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Workloads")
 
-    def __init__(self, unicode=False):
+    def __init__(self, unicode=False, control=False, session=None):
         self.page = 0
         self.scroll = 0
         self.sort = "cpu"
         self.filter = ""
+        self.workload_filter = ""
+        self.filter_context = "processes"
         self.editing_filter = False
         self.paused = False
         self.help = False
@@ -68,6 +79,13 @@ class View:
         self.unicode = unicode
         self.colors = {key: 0 for key in ("accent", "cpu", "memory", "disk", "gpu", "network", "muted", "warning")}
         self.tab_regions = []
+        self.control = control
+        self.session = session or ControlSession()
+        self.workload_id = None
+        self.workload_detail = False
+        self.modal = None
+        self.results = queue.SimpleQueue()
+        self.screen_size = (24, 80)
 
     def trend(self, values, width=40, maximum=100):
         return spark(values, width, maximum, unicode=self.unicode)
@@ -91,6 +109,177 @@ class View:
         for entry in snapshot["network"]:
             for direction in ("rx", "tx"):
                 self.history[(entry["name"], entry["ifindex"], direction)].append(entry[f"{direction}_bps"])
+        active = {"workload:" + group["id"] for group in snapshot.get("workloads", [])}
+        for key in list(self.history):
+            if isinstance(key, str) and key.startswith("workload:") and key not in active:
+                del self.history[key]
+        for group in snapshot.get("workloads", []):
+            self.history["workload:" + group["id"]].append(group["cpu_pct"])
+
+    def workload_rows(self):
+        groups = self.snapshot.get("workloads", []) if self.snapshot else []
+        groups = [group for group in groups if self.workload_filter.casefold() in
+                  f"{group.get('unit') or ''} {group['id']}".casefold()]
+        rows = sorted(groups,
+                      key=lambda group: group["cpu_pct"] if group["cpu_pct"] is not None else -1, reverse=True)
+        if self.workload_id not in {group["id"] for group in rows}:
+            self.workload_id = rows[0]["id"] if rows else None
+            self.workload_detail = False
+        return rows
+
+    def selected_workload(self):
+        return next((group for group in self.workload_rows() if group["id"] == self.workload_id), None)
+
+    def workload_lines(self, width=100):
+        rows = self.workload_rows()
+        group = self.selected_workload()
+        mode = "CPU controls enabled: w weight | l quota | u Undo" if self.control else "Read-only | use --control to enable runtime CPU changes"
+        if not self.workload_detail or group is None:
+            name_width = max(12, min(45, width - 32))
+            lines = [f"{len(rows)} workloads | / find | Enter inspect | Filter: {clean(self.workload_filter) or '(none)'}", mode,
+                     "Accounting includes descendants; nested rows may overlap.",
+                     f"  {'UNIT / GROUP':<{name_width}} {'CPU':>7} {'MEMORY':>10} {'PIDS':>5}"]
+            for row in rows:
+                name = clean(row["unit"] or row["id"])
+                lines.append(f"{'>' if row['id'] == self.workload_id else ' '} {name[:name_width]:<{name_width}} "
+                             f"{pct(row['cpu_pct']):>7} {size(row['memory_current']):>10} {len(row['pids']):>5}")
+            if not rows:
+                lines.append("No visible workload membership. cgroup v2 is required.")
+            return lines
+        limits = group["limits"]
+        local = limits["ancestors"][0] if limits["ancestors"] else {}
+        lines = [f"{clean(group['unit'] or group['id'])} | {group['kind']}",
+                 f"Manager: {group['manager'] or 'unknown'} | owner UID: {group['owner_uid'] if group['owner_uid'] is not None else 'system'}",
+                 mode, "Esc: workload list | runtime changes remain after exit",
+                 f"CPU {pct(group['cpu_pct'])} (100% = one CPU) | memory {size(group['memory_current'])}"]
+        lines.extend(textwrap.wrap("Cgroup: " + clean(group["path"] or "unattributed"), width))
+        values = self.history["workload:" + group["id"]]
+        maximum = max(100, max((value for value in values if value is not None), default=100))
+        lines.extend([f"CPU history (0-{maximum:.0f}%): {self.trend(values, max(8, width - 25), maximum)}",
+                      f"Local cpu.max: {local.get('cpu.max') or 'unavailable'} | cpu.weight: {local.get('cpu.weight') or 'unavailable'}"])
+        if limits["quota_pct"] is not None:
+            lines.extend(textwrap.wrap(f"Tightest readable CPU quota: {pct(limits['quota_pct'])} at {limits['quota_source']}", width))
+        else:
+            lines.append("CPU quota: no finite value found" if limits["quota_complete"] else "CPU quota: unavailable/inactive controller; not assumed unlimited")
+        if not limits["quota_complete"]:
+            lines.append("Ancestor CPU quota inspection is incomplete.")
+        lines.append("Quota is a ceiling, not a guaranteed allocation.")
+        if limits["memory_max"] is not None:
+            lines.extend(textwrap.wrap(f"Tightest memory.max: {size(limits['memory_max'])} at {limits['memory_source']}", width))
+        else:
+            lines.append("Memory ceiling: no finite value found" if limits["memory_complete"] else "Memory ceiling: unavailable")
+        throttled = group["throttled_usec_per_s"]
+        lines.append(f"CPU throttling: {throttled / 1000:.1f}ms/s" if throttled is not None else "CPU throttling: unavailable or awaiting sample")
+        for kind, entry in group["pressure"].items():
+            lines.append(f"{kind.upper()} pressure (10s): {pct(entry.get('avg10'))}")
+        lines.extend(["", "Assigned visible processes (nested units are listed separately):"])
+        members = {process["pid"]: process for process in self.snapshot["processes"]}
+        for pid in group["pids"]:
+            process = members.get(pid, {})
+            lines.append(f"  {pid:<8} {clean(process.get('name', 'exited')):<25} CPU {pct(process.get('cpu_pct'))}")
+        lines.extend(["", "I/O accounting by block device:"])
+        for entry in group["io_devices"]:
+            lines.append(f"  {entry['device']} R {size(entry['read_bps'])}/s W {size(entry['write_bps'])}/s")
+        if not group["io_devices"]:
+            lines.append("  No readable I/O accounting entries")
+        lines.extend(["", "Local and ancestor settings (nearest first):"])
+        for entry in limits["ancestors"]:
+            lines.extend(textwrap.wrap(clean(entry["path"]), width))
+            for name in ("cpu.max", "cpu.weight", "memory.high", "memory.max", "io.max"):
+                lines.extend(textwrap.wrap(f"  {name}: {entry[name] or 'unavailable/empty'}", width))
+        lines.extend(["", "CPU control events this session (latest first):"])
+        for event in reversed(self.session.events[-10:]):
+            before = event["before"][event["property"]]
+            lines.append(f"  {time.strftime('%H:%M:%S', time.localtime(event['timestamp']))} {clean(event['target']['unit'])} "
+                         f"{event['property']} {cpu_setting(event['property'], before)} -> "
+                         f"{cpu_setting(event['property'], event['requested'])} [{event['status']}]")
+        if not self.session.events:
+            lines.append("  No changes")
+        return lines
+
+    def job(self, kind, function, *args):
+        self.modal = {"stage": "busy", "kind": kind}
+        def execute():
+            try:
+                self.results.put((kind, function(*args), None))
+            except Exception as exc:
+                self.results.put((kind, None, str(exc)))
+        threading.Thread(target=execute, daemon=True).start()
+
+    def poll_actions(self):
+        while not self.results.empty():
+            kind, result, error = self.results.get()
+            if error:
+                self.modal = {"stage": "result", "message": error}
+            elif kind == "prepare":
+                self.modal = {"stage": "confirm", "plan": result}
+            else:
+                self.modal = {"stage": "result", "message": (
+                    f"{result['target']['unit']}: previous CPU {result['property']} restored and verified." if kind == "undo" else
+                    f"{result['target']['unit']}: CPU {result['property']} confirmed in systemd and the kernel. u: Undo latest change.")}
+
+    def modal_lines(self):
+        modal = self.modal
+        if modal["stage"] == "busy":
+            return ["Working with systemd...", "The dashboard continues collecting data.", "Please wait for a confirmed result."]
+        if modal["stage"] == "input":
+            property = modal["property"]
+            return [f"Set CPU {property} for {modal['target']['unit']}",
+                    "Weight: 1-10000, relative priority among sibling groups." if property == "weight" else
+                    "Quota: whole percent; 100% = one CPU, 200% = two CPUs.",
+                    "Enter 'default' to reset weight or 'max' to remove quota.",
+                    "Runtime only. The next screen previews the actual setting.",
+                    "Value: " + modal["value"] + "_", "Enter: preview | Esc: cancel"]
+        if modal["stage"] == "confirm":
+            plan = modal["plan"]
+            property = plan["property"]
+            return ["Confirm temporary CPU setting", f"Unit: {plan['target']['unit']}",
+                    f"Manager: {plan['target']['manager']}", "Cgroup: " + plan["target"]["path"],
+                    f"{property.title()}: {cpu_setting(property, plan['before'][property])} -> {cpu_setting(property, plan['value'])}",
+                    "Weight affects competition; quota limits CPU time.",
+                    "Applies to this entire unit and its descendants.",
+                    "Remains active after UI exit, until changed or reboot.",
+                    "Undo restores the previous value using systemd.",
+                    "Enter: apply and verify | Esc: cancel"]
+        if modal["stage"] == "quit":
+            return ["CPU changes may still be active.", "Runtime settings remain after leaving this dashboard.",
+                    "This session's Undo history is lost when you exit.",
+                    "Enter: exit and keep settings | Esc: return | u: Undo latest"]
+        return [modal["message"], "", "Enter or Esc: close | 8: inspect workloads"]
+
+    def modal_key(self, key):
+        stage = self.modal["stage"]
+        if stage == "busy":
+            return True
+        if stage == "quit":
+            if key in (10, 13):
+                return False
+            if key == ord("u"):
+                self.job("undo", self.session.undo)
+            elif key == 27:
+                self.modal = None
+            return True
+        if key == 27:
+            self.modal = None
+            return True
+        if stage == "input":
+            if key in (10, 13):
+                modal = self.modal
+                self.job("prepare", self.session.prepare, modal["target"], modal["property"], modal["value"])
+            elif key in (curses.KEY_BACKSPACE, 127, 8):
+                self.modal["value"] = self.modal["value"][:-1]
+            elif 32 <= key < 127 and len(self.modal["value"]) < 12:
+                self.modal["value"] += chr(key)
+        elif stage == "confirm" and key in (10, 13):
+            width = max(20, min(76, self.screen_size[1] - 8))
+            length = sum(max(1, len(textwrap.wrap(clean(line), width))) for line in self.modal_lines())
+            if length <= self.screen_size[0] - 5:
+                self.job("apply", self.session.apply, self.modal["plan"])
+        elif stage == "result" and key in (10, 13, ord("8")):
+            self.modal = None
+            if key == ord("8"):
+                self.page = 7
+        return True
 
     def cpu_lines(self, width=60):
         s = self.snapshot
@@ -224,8 +413,8 @@ class View:
 
     def lines(self, width):
         if self.help:
-            return ["RESOURCE LENS - read-only Linux dashboard", "",
-                    "1 Overview  2 CPU  3 Memory  4 Disks  5 GPU  6 Processes  7 Network",
+            return ["RESOURCE LENS - Linux resource dashboard", "",
+                    "1 Overview  2 CPU  3 Memory  4 Disks  5 GPU  6 Processes  7 Network  8 Workloads",
                     "Tab / Shift-Tab: next / previous page; click a tab to select", "Up/Down, PgUp/PgDn, Home/End: scroll details",
                     "Space: freeze/unfreeze display (collection continues)",
                     "c/m/n/p: process sort by CPU/memory/name/PID",
@@ -236,13 +425,16 @@ class View:
                     "Network: per-interface RX/TX rates, scaled to each visible peak.",
                     "Overview charts: oldest left, newest right; fixed 0-100% axes.",
                     "Use --ascii for terminals without Unicode block graphics.",
+                    "8 Workloads: Up/Down select, Enter inspect, Esc return.",
+                    "With --control: w CPU weight, l CPU quota, u Undo latest.",
                     "History gaps are missing samples; all missing shows N/A.",
                     "N/A means unavailable or awaiting a second sample, never zero.",
                     "PSI = time at least some tasks waited for that resource.",
                     "Monitoring scope: visible host counters/processes, not cgroup limits.",
-                    "No frequency, affinity, priority or resource settings are changed."]
+                    "CPU changes require --control and explicit preview confirmation.",
+                    "Runtime settings survive UI exit; Undo is session-only."]
         return {1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
-                4: self.gpu_lines, 6: self.network_lines}.get(self.page, self.process_lines)(width)
+                4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines}.get(self.page, self.process_lines)(width)
 
     def mouse(self, x, y, state):
         if state & (getattr(curses, "BUTTON1_CLICKED", 0) | getattr(curses, "BUTTON1_PRESSED", 0)) and y == 1:
@@ -256,15 +448,19 @@ class View:
             self.scroll += 3
 
     def key(self, key, height=24):
+        if self.modal:
+            return self.modal_key(key)
         if self.editing_filter:
+            field = "workload_filter" if self.filter_context == "workloads" else "filter"
             if key in (10, 13):
                 self.editing_filter = False
             elif key == 27:
-                self.filter, self.editing_filter = "", False
+                setattr(self, field, "")
+                self.editing_filter = False
             elif key in (curses.KEY_BACKSPACE, 127, 8):
-                self.filter = self.filter[:-1]
-            elif 32 <= key < 127 and len(self.filter) < 80:
-                self.filter += chr(key)
+                setattr(self, field, getattr(self, field)[:-1])
+            elif 32 <= key < 127 and len(getattr(self, field)) < 80:
+                setattr(self, field, getattr(self, field) + chr(key))
             self.scroll = 0
             return True
         if key == curses.KEY_MOUSE:
@@ -275,8 +471,46 @@ class View:
                 pass
             return True
         if key in (ord("q"), 27):
+            if key == 27 and self.page == 7 and self.workload_detail:
+                self.workload_detail, self.scroll = False, 0
+                return True
+            if any(event["status"] in ("confirmed", "unconfirmed") for event in self.session.events):
+                self.modal = {"stage": "quit"}
+                return True
             return False
-        if ord("1") <= key <= ord("7"):
+        if self.page == 7 and key in (ord("w"), ord("l"), ord("u")):
+            if not self.control:
+                self.modal = {"stage": "result", "message": "Controls are disabled. Restart with --control to enable temporary CPU changes."}
+            elif self.screen_size[0] < 18 or self.screen_size[1] < 70:
+                self.modal = {"stage": "result", "message": "Resize to at least 70 columns by 18 rows to preview CPU controls."}
+            elif key == ord("u"):
+                self.job("undo", self.session.undo)
+            else:
+                group = self.selected_workload()
+                if not group or not group["controllable"]:
+                    self.modal = {"stage": "result", "message": "Select a systemd service/scope owned by an accessible manager."}
+                else:
+                    self.modal = {"stage": "input", "target": dict(group), "property": "weight" if key == ord("w") else "quota", "value": ""}
+            return True
+        if self.page == 7 and not self.workload_detail:
+            rows = self.workload_rows()
+            if rows and key in (curses.KEY_DOWN, curses.KEY_UP, curses.KEY_NPAGE, curses.KEY_PPAGE, curses.KEY_HOME, curses.KEY_END):
+                index = next(i for i, row in enumerate(rows) if row["id"] == self.workload_id)
+                step = max(1, height - 9) if key in (curses.KEY_NPAGE, curses.KEY_PPAGE) else 1
+                if key in (curses.KEY_DOWN, curses.KEY_NPAGE):
+                    index = min(len(rows) - 1, index + step)
+                elif key in (curses.KEY_UP, curses.KEY_PPAGE):
+                    index = max(0, index - step)
+                else:
+                    index = 0 if key == curses.KEY_HOME else len(rows) - 1
+                self.workload_id = rows[index]["id"]
+                line, capacity = index + 4, max(1, height - 5)
+                self.scroll = min(self.scroll, line) if line < self.scroll else max(self.scroll, line - capacity + 1)
+                return True
+            if key in (10, 13) and rows:
+                self.workload_detail, self.scroll = True, 0
+                return True
+        if ord("1") <= key <= ord("8"):
             self.page, self.scroll = key - ord("1"), 0
         elif key in (9, curses.KEY_BTAB):
             self.page = (self.page + (1 if key == 9 else -1)) % len(self.names)
@@ -286,7 +520,10 @@ class View:
         elif key == ord(" "):
             self.paused = not self.paused
         elif key == ord("/"):
-            self.page, self.scroll, self.editing_filter = 5, 0, True
+            self.filter_context = "workloads" if self.page == 7 else "processes"
+            self.page, self.scroll, self.editing_filter = (7 if self.page == 7 else 5), 0, True
+            if self.page == 7:
+                self.workload_detail = False
         elif key in map(ord, "cmnp"):
             self.sort = {ord("c"): "cpu", ord("m"): "memory", ord("n"): "name", ord("p"): "pid"}[key]
             self.scroll = 0
@@ -314,6 +551,7 @@ def put(screen, y, x, text, attr=0, limit=None):
 def draw(screen, view, interval, error=None):
     screen.erase()
     h, w = screen.getmaxyx()
+    view.screen_size = h, w
     if h < 10 or w < 40:
         put(screen, 0, 0, "Resize to at least 40 x 10. q: quit")
         screen.refresh()
@@ -330,7 +568,7 @@ def draw(screen, view, interval, error=None):
     put(screen, 0, 1, f"RESOURCE LENS  {state}  {interval:g}s  |  {stamp}", accent)
     if s and w >= 95:
         put(screen, 0, 60, s["hostname"], muted)
-    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net")
+    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net", "Work")
     view.tab_regions = []
     x = 1
     for page, label in enumerate(labels):
@@ -341,7 +579,8 @@ def draw(screen, view, interval, error=None):
         x += len(text) + 1
     if w < 76:
         put(screen, 1, x + 1, view.names[view.page], accent)
-    status = "Read-only | newest samples at right"
+    mode = "Runtime CPU controls enabled" if view.control else "Read-only"
+    status = mode + " | newest samples at right"
     if not s:
         put(screen, 4, 2, "Collecting the first sample...", muted)
     elif view.page == 0 and not view.help:
@@ -351,7 +590,7 @@ def draw(screen, view, interval, error=None):
             cards = overview_cards(view, first[3], first[2], view.colors)
             for geometry, (title, hint, color, content) in zip(layout, cards):
                 draw_card(screen, put, geometry, title, hint, color, content, view.unicode)
-            status = "Read-only | 2-7 details | charts: oldest left, newest right"
+            status = mode + " | 2-8 details | newest samples at right"
         else:
             lines = compact_overview(view)
             capacity = h - 5
@@ -379,22 +618,43 @@ def draw(screen, view, interval, error=None):
             index = view.scroll + i
             if view.page == 5 and not view.help:
                 attribute = accent | curses.A_REVERSE if index == 2 else (curses.A_BOLD if index >= 3 and index % 2 else 0)
+            elif view.page == 7 and not view.workload_detail and not view.help:
+                attribute = accent | curses.A_REVERSE if line.startswith(">") or index == 3 else 0
             else:
                 attribute = color if index < 5 else (accent if i == 0 else 0)
             put(screen, i + 3, 1, line, attribute)
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     message = error or ("; ".join(s["warnings"]) if s else "") or status
     if view.editing_filter:
-        message = f"Filter: {view.filter}_  Enter: apply  Esc: clear"
+        value = view.workload_filter if view.filter_context == "workloads" else view.filter
+        message = f"Filter: {value}_ ({view.filter_context})  Enter: apply  Esc: clear"
     put(screen, h - 2, 1, message, view.colors["warning"] if error else muted)
-    footer = "Tab next | 1-7 views | Space freeze | / find task | ? help | q quit"
+    footer = "Tab next | 1-8 views | Space freeze | / find task | ? help | q quit"
+    if view.page == 7:
+        footer = "Enter inspect | w weight | l quota | u Undo | Esc back | ? help | q quit"
     if w < 76:
         footer = "Tab next | / find | ? help | q quit"
     put(screen, h - 1, 1, footer, accent)
+    if view.modal:
+        content_width = max(20, min(76, w - 8))
+        lines = [piece for line in view.modal_lines() for piece in (textwrap.wrap(clean(line), content_width) or [""])]
+        if view.modal["stage"] == "confirm" and len(lines) > h - 5:
+            lines = ["The full target preview does not fit this terminal.",
+                     "Resize larger to review and confirm, or Esc to cancel.",
+                     "Enter is disabled until the complete preview is visible."]
+        box_height = min(h - 2, len(lines) + 4)
+        box_width = min(w - 2, content_width + 4)
+        top, left = (h - box_height) // 2, (w - box_width) // 2
+        for row in range(box_height):
+            put(screen, top + row, left, " " * box_width, curses.A_REVERSE, box_width)
+        put(screen, top, left, "+" + "-" * (box_width - 2) + "+", accent, box_width)
+        put(screen, top + box_height - 1, left, "+" + "-" * (box_width - 2) + "+", accent, box_width)
+        for index, line in enumerate(lines[:box_height - 3]):
+            put(screen, top + 1 + index, left + 2, line, curses.A_REVERSE | (curses.A_BOLD if index == 0 else 0), content_width)
     screen.refresh()
 
 
-def run(collector, interval, ascii=False):
+def run(collector, interval, ascii=False, control=False):
     latest = {"snapshot": None, "sequence": 0, "error": None}
     lock, stop = threading.Lock(), threading.Event()
 
@@ -422,10 +682,11 @@ def run(collector, interval, ascii=False):
         except curses.error:
             pass
         encoding = (sys.stdout.encoding or "").lower().replace("-", "")
-        view, sequence = View(unicode=not ascii and encoding == "utf8"), -1
+        view, sequence = View(unicode=not ascii and encoding == "utf8", control=control), -1
         view.colors = palette()
         previous_render = None
         while True:
+            view.poll_actions()
             with lock:
                 current = latest.copy()
             if current["snapshot"] is not None and current["sequence"] != sequence:
@@ -433,8 +694,8 @@ def run(collector, interval, ascii=False):
                 sequence = current["sequence"]
             stale = bool(view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
-                      view.editing_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale)
+                      view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
+                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render

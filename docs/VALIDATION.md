@@ -1,4 +1,83 @@
-# Validation of 0.1.0
+# Validation
+
+## 0.2.0: workload inspection and runtime CPU controls
+
+Executed on Linux **5.15.0-187-generic**, systemd **249** and Python **3.10.12**.
+The automated suite now contains **71 tests**, including synthetic cgroup
+hierarchies, systemd backends and control-UI state transitions. It does not
+mutate host policies. [Structured evidence](cpu-controls-evidence.json) records
+the separate, explicitly executed host experiments.
+
+### Actual kernel enforcement
+
+`python3 scripts/verify_cpu_controls.py --run` created two unique transient
+services in an owned slice, pinned to the same allowed logical CPU. The first
+service had three visible processes and was grouped once. Both initially had
+weight 100. Observations over short measured windows:
+
+| Stage | Service A CPU | Service B CPU | A/B ratio |
+| --- | --- | --- | --- |
+| Baseline, weight 100/100 | 60.12% | 39.95% | 1.50 |
+| A changed to weight 400 | 85.72% | 14.38% | 5.96 |
+| A capped at 25% of one CPU | 25.76% | 74.34% | 0.35 |
+| CPU settings undone | 59.81% | 40.33% | 1.48 |
+
+The direction and reversal of CPU allocation were observed; the weight value
+is not a promise of an exact measured ratio. Short windows can include quota
+period/burst effects. The quota stage recorded 30 throttled periods and about
+2.079 seconds of throttled time in kernel counters. Read-back verified the
+requested local quota/weight, not merely a successful command exit.
+
+An additional 50% quota on the owned parent slice with an 80% local quota on
+the child was correctly shown as a **50% tightest readable ancestor ceiling**,
+with the parent's cgroup path identified. All three session changes were
+undone, owned units stopped and their overrides reverted. No owned cgroups
+remained. Root controller state was `memory pids` both before and after.
+A second enforcement run against the final control guards also passed; its
+measurements and complete cleanup result are retained in the structured evidence.
+
+### Actual terminal control workflow and authorization
+
+A dedicated tmux session ran the real `--control` UI. It filtered to one newly
+created sleeping service, selected CPU weight 400, displayed/checked that
+owned unit's preview, applied and verified it, then used `u` to restore 100.
+The same keyboard workflow set quota 25% (`CPUQuotaPerSecUSec=250ms`) and
+restored `infinity`. No existing service was used as a mutation target.
+
+A real `nobody` request to change that owned service's weight was denied and
+the weight remained 100. Default rootless JSON monitoring also passed with
+27 visible workloads. Another owned service started with an unset CPU weight
+and no active kernel weight file; applying 400 and Undo restored the original
+unset manager setting and inactive kernel state. All temporary units and
+runtime override paths were removed; root controller state returned to its
+original value in each experiment.
+
+### Failure handling and limits
+
+Regression checks cover stale previews, direct kernel disagreement, an
+existing untracked kernel configuration, denied requests, false success,
+recoverable manager-only partial changes, PID/group identity boundaries,
+unit restart/replaced cgroup rejection, conflict-aware Undo, input validation,
+confirmation cancellation, too-small previews, and explicit exit with pending
+settings. The PTY test visits Workloads and attempts a disabled control; real
+mutation testing remains outside the automatic suite.
+
+The current-user systemd bus is unavailable on this host. User-manager command
+routing and ownership detection have fixture coverage, but actual user-service
+edits are not yet live-validated. No cgroup v1 control support, per-process
+nice/affinity editing, disk/memory mutation, persistent event recording,
+durable Undo, or broad distribution validation is claimed. Conflict detection
+is best effort rather than an atomic transaction with external writers. Undo
+restores observed values rather than the exact runtime-file layout.
+
+Twenty back-to-back complete collector samples (NVIDIA probing disabled)
+averaged **68.31ms wall / 68.24ms CPU per sample**, with 181 visible processes
+and 27 workloads on this older Xeon host. Ancestor metadata is cached within
+each sample. At a one-second interval this measured collection cost is about
+6.8% of one logical CPU; shorter intervals increase overhead. This supersedes
+the earlier collector-only 0.1 measurement below and excludes UI rendering.
+
+The historical visualization checks follow.
 
 ## Visualization redesign
 
@@ -23,7 +102,7 @@ now resizes through 80x24, 40x12 and 120x35 during navigation. The packaged
 command was reinstalled in the isolated validation environment; from `/tmp`,
 its help exposed `--ascii` and its JSON mode returned network/interface data.
 This establishes functionality and layout checks, not usability validation
-with independent users. Resource-changing controls remain unimplemented.
+with independent users. Controls were unimplemented in this 0.1 visualization baseline.
 
 ## Network monitoring addition
 
@@ -124,7 +203,7 @@ under these measured conditions; shorter intervals increase overhead.
   `resource-lens --json --count 1 --interval 0.2 --no-nvidia` command ran from
   `/tmp`, outside the source tree, and returned valid schema-version-1 data.
 - No large-process-count, long-duration leak or broad distribution testing.
-- No resource-changing controls exist in this release.
+- No resource-changing controls existed in the 0.1 baseline.
 
 Reproduce the automated checks from the repository root:
 

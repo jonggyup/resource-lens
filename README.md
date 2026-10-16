@@ -3,11 +3,13 @@
 A live Linux terminal dashboard for CPU, GPU, memory, disks, network, and processes.
 See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
-packages, daemon, database, or root access required.
+packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.1.0 is a monitoring prototype.** Resource controls are planned;
-this version does not change priorities, frequencies, CPU online state,
-cgroups, or bandwidth limits. It does not claim functionality is unique to Linux tools.
+**Version 0.2.0 is a preview with optional temporary CPU controls.** Monitoring
+is read-only by default. `--control` enables previewed, confirmed CPU weight and
+quota changes for supported systemd services/scopes. Disk/memory controls,
+nice/affinity editing, CPU online state and frequency changes are future work.
+It does not claim functionality is unique to Linux tools.
 
 ## Run immediately
 
@@ -48,6 +50,7 @@ also works without it.
 | `5` | GPU | Detected GPUs, available utilization, VRAM, temperature and power |
 | `6` | Processes | PID, name, CPU, resident memory, nice value and state |
 | `7` | Network | Per-interface RX/TX rates and histories, transfer totals, packet rates, link state/speed, errors and drops |
+| `8` | Workloads | Grouped service/cgroup CPU, memory, I/O, members, pressure, throttling and inherited limits; optional CPU controls |
 
 Overview uses six colored cards at 76+ columns and 23+ rows. Each resource has
 a prominent current value and a chart; unavailable GPU data has a plain
@@ -76,6 +79,9 @@ always sorted by CPU; sorting/filtering applies to the full Tasks page.
 | `Space` | Freeze/unfreeze the display; collection continues |
 | `c` / `m` / `n` / `p` | Sort processes by CPU / memory / name / PID |
 | `/` | Filter processes by name or PID; Enter finishes, Esc clears |
+| `/` on Workloads | Filter workloads by unit name or cgroup path |
+| Workloads: Up/Down, Enter, Esc | Select a group, inspect details, return to list |
+| Workloads with `--control`: `w`, `l`, `u` | CPU weight, CPU quota, Undo latest session change |
 | `?` | Help |
 | `q` / `Esc` | Quit (Esc clears an active filter first) |
 
@@ -92,6 +98,81 @@ percentages; disk/GPU histories show the busiest device, whose identity may
 change. Sampling defaults to one second. Frozen intervals are omitted from
 display history, so it is a sequence of samples rather than a continuous
 wall-clock axis.
+
+## Inspect and control a workload
+
+Press `8`, then `/` to find a service by name. Enter completes the filter;
+Up/Down selects a row; Enter opens its details; Esc returns to the list.
+Processes are grouped using actual cgroup v2 membership, not guessed names.
+The nearest systemd service/scope is used where available; unrecognized
+membership remains an unattributed/cgroup row.
+
+Accounting comes from the group's kernel counters and includes descendants.
+Nested units can appear separately, so rows are **not disjoint and must not be
+summed**. PID lists show visible processes assigned to the group; nested units
+are listed separately. Details include per-device I/O, group PSI, CPU
+throttling, local settings, and the tightest readable ancestor CPU/memory
+ceiling with its source. Missing limit files mean unavailable or an inactive
+controller, not unlimited. CPU quota is an upper bound, not guaranteed CPU time.
+
+Enable editing deliberately:
+
+```bash
+python3 -m resourcelens --control
+```
+
+On page `8`, select the intended service/scope:
+
+1. Press `w` for **CPU weight**, or `l` for **CPU quota**.
+2. Type a whole number and press Enter to preview the current/requested values,
+   exact unit, owning manager, and cgroup scope. Esc cancels without a mutation.
+3. Press Enter again to apply. Success requires read-back from **both systemd
+   and the kernel**. The request runs in the background while sampling continues.
+4. Observe CPU usage/throttling; `u` restores the latest session change, across
+   all workloads. Details include timestamped session control events.
+
+Weight is 1-10000, relative to sibling groups under contention; `default`
+resets it. Quota is a whole percent, 1-100000: **100% = one logical CPU**, not
+the entire machine. `max` removes the local quota; an ancestor may still cap
+the group. Controls apply to the entire selected unit and its descendants.
+
+### Authorization, lifetime and Undo
+
+- `systemctl` and systemd with cgroup v2 CPU support are required for controls.
+  The selected unit must be active and match the observed cgroup and invocation.
+  Unsupported units/groups remain inspectable. Only numeric/default CPU
+  weights are editable; an unsupported existing weight mode is refused.
+- The UI does not invoke sudo/pkexec or install a privileged helper. It uses
+  systemd's existing authorization through `systemctl --no-ask-password`.
+  Current-user services use the user manager; system services use the system
+  manager. Other users' user-manager units remain read-only. An unavailable
+  bus or denied change produces an error, not a success indicator. Use an
+  account/policy authorized to manage the intended unit; the app does not
+  grant authorization itself.
+- Changes use **`--runtime`**. They survive closing the UI and can survive
+  restarting the service; they remain until changed, removed, or rebooted.
+  They are not persistent configuration in `/etc`. Exiting with outstanding
+  changes asks explicitly whether to keep them.
+- Undo records are **in memory for the current UI session only**. Undo refuses
+  a detected unit restart, replaced cgroup, or conflicting current setting.
+  It restores the previous manager value and verifies observable kernel
+  state. systemd may retain runtime reset/override files or enabled controllers;
+  Undo does not promise byte-for-byte restoration of runtime configuration
+  files. Do not use `systemctl revert` on a real unit just to remove our one
+  property: it can remove unrelated overrides.
+- Conflict checks are best effort: systemd exposes no compare-and-swap for
+  this workflow, so an external writer can race between inspection and the
+  mutation. Run one tuning authority per workload when changing settings.
+  An existing disagreement between manager settings and readable kernel
+  settings is refused before editing, to avoid overwriting untracked tuning.
+- A failed or timed-out request can leave uncertain state; its event remains
+  `unconfirmed`. Inspect the current setting before retrying. Undo can recover
+  an unchanged/manager-only partial request when observations still match;
+  conflicting state is refused rather than overwritten. Force-interrupting
+  the UI does not automatically restore changes.
+
+This release does not regroup unmanaged processes or edit parent slices. A
+small terminal that cannot show the full target preview cannot confirm a change.
 
 ## Snapshots and recording
 
@@ -111,7 +192,7 @@ python3 -m resourcelens --no-nvidia
 
 `--json` without `--count` streams until interrupted. JSON schema version 1
 includes timestamps, measured elapsed seconds, CPU, memory, GPU, disk, network,
-process, pressure and temperature data. Unavailable numbers are `null`, not
+process, workload, pressure and temperature data. Unavailable numbers are `null`, not
 zero. Text/JSON modes prime the counters and wait one interval before
 producing the first measured sample. Interactive mode initially shows N/A for
 rates until the second sample. CPU/disk counter resets also produce N/A for
@@ -167,7 +248,8 @@ measurement of shared/integrated GPU memory.
   per-process network attribution or external probes are used.
 - **Scope:** the `/proc` and `/sys` visible to the process. Containers may
   expose host CPU/memory totals alongside a restricted process list. This
-  version does not normalize usage against cgroup limits or quotas.
+  version shows workload limits separately and does not normalize host
+  percentage charts against a selected cgroup's limits or quotas.
 - **Frequency/temperature:** driver-reported samples where available.
   Frequency is not guaranteed to be an independently controllable per-core
   clock. No inferred power or temperature values are invented.
@@ -186,6 +268,19 @@ python3 -m unittest discover -s tests -v
 git diff --check
 ```
 
+The automated suite uses synthetic/mocked control backends and never changes
+host resource policies. An **optional explicit host integration experiment**
+creates two uniquely named transient services and an owned slice, runs bounded
+CPU work, changes/undoes their settings, then stops/reverts only its own units:
+
+```bash
+# Requires root to create the disposable system services; about 15 seconds.
+python3 scripts/verify_cpu_controls.py --run
+```
+
+It is not part of CI or ordinary startup. See validation for measured results
+and cleanup evidence.
+
 Tests cover counter units and resets, guest CPU accounting, process lifecycle,
 missing data, GPU parser fixtures, filtering, JSON CLI output, and an actual
 pseudo-terminal session with navigation and resize. See
@@ -197,14 +292,16 @@ Architecture:
 - `resourcelens/collect.py`: Linux telemetry and counter-to-rate calculations.
 - `resourcelens/ui.py`: presentation, history, keyboard navigation, sampler.
 - `resourcelens/presentation.py`: responsive cards, chart rendering and colors.
+- `resourcelens/workloads.py`: cgroup membership, accounting and inherited limits.
+- `resourcelens/controls.py`: systemd runtime operations, verification and session Undo.
 - `resourcelens/__main__.py`: CLI and text/JSON modes.
 
-Future resource control should use systemd/cgroup interfaces with capability
-detection, effective-setting feedback, and explicit undo. Hardware-wide
-controls and per-application allocation must remain distinguishable. See
+Further resource controls should retain capability detection, effective-setting
+feedback and explicit Undo. Hardware-wide controls and per-application
+allocation must remain distinguishable. See
 [docs/ROADMAP.md](docs/ROADMAP.md) and the proposed
-[feature sequence](docs/FEATURE_PLAN.md). These controls are for discussion;
-they are not implemented in the visualization release.
+[feature sequence](docs/FEATURE_PLAN.md), which distinguishes the implemented
+CPU milestone from remaining plans.
 
 Metric references: [Linux disk statistics](https://docs.kernel.org/admin-guide/iostats.html),
 [Linux PSI](https://docs.kernel.org/accounting/psi.html),

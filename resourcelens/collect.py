@@ -71,6 +71,8 @@ class Collector:
         self.last_time = None
         self.last_cpu, self.last_disk, self.last_process = {}, {}, {}
         self.last_network = {}
+        from .workloads import WorkloadCollector
+        self.workloads = WorkloadCollector(self.sys / "fs/cgroup")
         self.ticks = os.sysconf("SC_CLK_TCK")
         self.pages = os.sysconf("SC_PAGE_SIZE")
         self.nvidia = shutil.which("nvidia-smi") if nvidia else None
@@ -192,6 +194,7 @@ class Collector:
         return sorted(result, key=lambda entry: entry["name"])
 
     def processes(self, elapsed, total_memory):
+        from .workloads import membership
         counters, result = {}, []
         skipped = 0
         for path in self.proc.glob("[0-9]*"):
@@ -209,7 +212,8 @@ class Collector:
                 result.append({"pid": identity[0], "name": name, "state": v[0],
                                "nice": int(v[16]), "memory": resident,
                                "cpu_pct": cpu / self.ticks * 100 if cpu is not None else None,
-                               "memory_pct": 100 * resident / total_memory if total_memory else None})
+                               "memory_pct": 100 * resident / total_memory if total_memory else None,
+                               "cgroup": membership(read(path / "cgroup"))})
             except (OSError, ValueError, IndexError):
                 skipped += 1
         self.last_process = counters
@@ -279,6 +283,7 @@ class Collector:
         disks = self.disks(elapsed)
         network = self.network(elapsed)
         processes, skipped = self.processes(elapsed, memory["total"])
+        workloads = self.workloads.sample(processes, elapsed)
         self.last_time = now
         try:
             usage = shutil.disk_usage("/")
@@ -290,6 +295,7 @@ class Collector:
                 "hostname": os.uname().nodename, "cpu_model": self.model,
                 "cpu": cpu, "memory": memory, "disks": disks, "gpus": self.gpus(),
                 "network": network,
+                "workloads": workloads,
                 "pressure": self.pressure(), "temperatures": self.temperatures(),
                 "processes": processes, "processes_skipped": skipped,
                 "load": [number(x) for x in loads[:3]], "root_filesystem": root_fs,

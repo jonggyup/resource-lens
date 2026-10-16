@@ -13,7 +13,7 @@ from .ui import View, run
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Live, read-only Linux CPU/GPU/memory/disk/network dashboard.")
+    parser = argparse.ArgumentParser(description="Live Linux resource dashboard with optional temporary systemd CPU controls.")
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--interval", type=float, default=1, help="sample interval in seconds (0.2-60; default 1)")
     parser.add_argument("--once", action="store_true", help="print one measured text snapshot and exit")
@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--count", type=int, help="number of JSON samples (default: stream until interrupted)")
     parser.add_argument("--no-nvidia", action="store_true", help="do not invoke nvidia-smi")
     parser.add_argument("--ascii", action="store_true", help="use ASCII charts and borders in the terminal")
+    parser.add_argument("--control", action="store_true", help="enable previewed runtime CPU controls on the Workloads page")
     args = parser.parse_args()
     if not math.isfinite(args.interval) or not 0.2 <= args.interval <= 60:
         parser.error("--interval must be between 0.2 and 60 seconds")
@@ -28,6 +29,8 @@ def main():
         parser.error("--count requires --json and a positive integer")
     if args.once and args.json:
         parser.error("choose --once or --json")
+    if args.control and (args.once or args.json):
+        parser.error("--control is interactive only; text/JSON snapshots are read-only")
     if sys.platform != "linux":
         parser.error("Resource Lens requires Linux /proc and /sys")
     if not (args.once or args.json) and not (sys.stdin.isatty() and sys.stdout.isatty()):
@@ -57,7 +60,7 @@ def main():
                 if args.once or (args.count is not None and count >= args.count):
                     break
         else:
-            run(collector, args.interval, ascii=args.ascii)
+            run(collector, args.interval, ascii=args.ascii, control=args.control)
     except (KeyboardInterrupt, BrokenPipeError):
         return 0
     except curses.error as exc:

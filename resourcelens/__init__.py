@@ -1,3 +1,3 @@
-"""Resource Lens: read-only Linux resource visualization."""
+"""Resource Lens: Linux resource visualization and optional runtime CPU controls."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

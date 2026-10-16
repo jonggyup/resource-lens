@@ -1,34 +1,45 @@
 # Roadmap
 
-The proposed implementation sequence and acceptance criteria are in
-[FEATURE_PLAN.md](FEATURE_PLAN.md). Next: group workloads, expose effective CPU
-limits, then implement temporary CPU allocation controls with verification and
-Undo. These are discussion/planning items, not implemented controls.
+The implementation sequence and acceptance criteria are in
+[FEATURE_PLAN.md](FEATURE_PLAN.md).
 
-## 0.1: visualization prototype
+## 0.1: visualization prototype — implemented
 
-CPU, memory, GPU, disk and network views; top processes; PSI; short live histories;
-keyboard navigation; text/JSON exports. Rootless and read-only.
+CPU, memory, GPU, disk and network views; top processes; PSI; live histories;
+responsive resource cards; keyboard/mouse navigation; text/JSON exports.
 
-## Next: make monitoring trustworthy on more machines
+## 0.2: workload inspection and temporary CPU controls — implemented preview
 
-- Real AMD, NVIDIA and Intel hardware validation; capability-specific backends.
-- NUMA/SMT topology and CPU offline state visualization.
-- Application/service grouping using existing cgroup membership.
-- Visible inherited CPU/memory/I/O limits and throttling counters.
-- Mount/device mapping and disk latency where it can be interpreted correctly.
-- Measure sampler cost on hosts with thousands of processes.
+- Group visible processes using cgroup v2 and nearest systemd service/scope.
+- Group CPU, memory, per-device I/O, pressure and throttling accounting.
+- Local/ancestor CPU and memory ceilings, with incomplete-data indicators.
+- Workload selection/filter/details and recent timestamped control events.
+- Optional `--control`: temporary CPU weight/quota with preview/confirmation,
+  matching unit/cgroup/invocation identity, systemd/kernel read-back and Undo.
 
-## Later: interactive resource allocation
+Actual system-service enforcement and terminal edits were verified on Linux
+5.15/systemd 249. User-manager operations need further live validation; this
+host has no usable current-user manager. Undo is session-only, best effort for
+concurrent writers, and restores values rather than exact runtime-file bytes.
 
-Start with an explicitly selected systemd service or scope. Show current and
-inherited settings; apply a temporary CPU weight/quota or disk bandwidth
-limit; verify the effective value; mark changes on the timeline; support undo.
-Test that changing one workload does not accidentally modify another.
+## Next: disk bandwidth and process controls
+
+Per-service, per-device read/write limits with explicit backing-device mapping,
+enforcement observations and Undo. Add nice/affinity as clearly separate
+per-process operations. Memory budgets follow once their failure/reclaim/OOM
+behavior can be presented clearly.
+
+## Monitoring and hardware coverage
+
+- Real AMD/NVIDIA telemetry validation and a dedicated Intel GPU backend.
+- NUMA/SMT topology, offline CPUs and shared frequency-policy visualization.
+- Large-process-count and long-duration sampler-cost measurements.
+- Mount/device mapping and disk latency with reliable interpretation.
+- Durable observations and control events, plus before/after reports.
 
 Hardware controls (CPU online state, governor/frequency limits, power settings)
-are separate machine-wide operations. Detect shared frequency policies and
-conflicts with other power managers. Expose only supported controls.
+are machine-wide operations. Detect supported interfaces and conflicts with
+other power managers before implementing them. GPU/network controls need
+separate capability and attribution work.
 
-No release date or cross-device compatibility guarantee is implied by this
-roadmap. The first release does not implement any resource modification.
+No release date or broad cross-device compatibility guarantee is implied.

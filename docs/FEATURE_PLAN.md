@@ -1,6 +1,13 @@
-# Proposed functionality and implementation sequence
+# Functionality and implementation sequence
 
-The visualization release is read-only. The next goal is to help a user find
+**0.2.0 status:** workload inspection and runtime CPU weight/quota with preview,
+verification and session Undo are implemented. Real system-service kernel and
+terminal-UI checks passed; see [VALIDATION.md](VALIDATION.md). Per-process
+nice/affinity edits, disk/memory changes, persistent event recording and hardware
+controls below remain planned. Monitoring stays read-only unless `--control`
+is explicitly enabled.
+
+The goal is to help a user find
 the workload competing for resources, inspect its actual resource allocation,
 change that allocation deliberately, and observe the outcome. Implement the
 following in order rather than adding unrelated tuning switches.
@@ -104,12 +111,17 @@ misrepresent what it controls. Compare existing traffic-control tools before
 implementing shaping. Never replace unrelated qdisc/firewall rules as a side
 effect of enabling a resource control.
 
-## Recommended next milestone
+## Delivered CPU milestone and recommended next milestone
 
-Build **the read-only application/service view plus visible effective CPU
-limits**, then deliver **temporary CPU quota/weight with confirmed application
-and Undo**. That completes a useful “inspect, adjust, observe, restore” task
-before expanding to disk, memory and hardware settings.
+The read-only workload view and temporary CPU quota/weight complete an initial
+“inspect, adjust, observe, restore” workflow. Undo restores settings through
+systemd, is session-only, and cannot atomically exclude concurrent external
+writers; see README for lifetime and limitations. Timestamped control events
+appear in workload details but are not yet durable recordings or chart markers.
+
+Next, implement per-service **disk read/write bandwidth controls** using the
+same preview/identity/verification/Undo workflow and per-device enforcement
+tests. Per-process nice/affinity can follow as distinct process-level controls.
 
 Kernel references: [cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html),
 [CPU frequency policies](https://docs.kernel.org/admin-guide/pm/cpufreq.html).

@@ -197,5 +197,5 @@ def compact_overview(view):
         lines.append(f"Net {clean(net['name'])} RX {size(net['rx_bps'])}/s TX {size(net['tx_bps'])}/s")
     else:
         lines.append("Network unavailable")
-    lines.extend(["", "1-7: details | Tab: next view", "Larger terminal: charts + top processes"])
+    lines.extend(["", "1-8: details | Tab: next view", "Larger terminal: charts + top processes"])
     return lines
