@@ -1,5 +1,30 @@
 # Validation of 0.1.0
 
+## Visualization redesign
+
+All **40 tests passed** after introducing six responsive overview cards,
+multi-row percentage charts, Unicode graphics with `--ascii` fallback,
+highlighted/clickable tabs, a busiest-process summary, names-first process
+tables and compact small-terminal summaries. The renderer now redraws when
+data, input state, terminal size or stale/error status changes, rather than
+redrawing unchanged content ten times a second. No new numerical overhead
+claim is made for the complete redesigned UI.
+
+New presentation checks cover fixed chart scales, missing samples versus
+measured zero, network peak scaling, clipped history windows, card geometry
+without overlap/footer collision, narrow process-name/value visibility,
+terminal-safe graphics and mouse tab routing. Mouse routing is unit-tested;
+the interactive PTY exercises keyboard input and resizing rather than physical
+mouse input.
+
+Actual dashboards were inspected through dedicated tmux sessions at 120x35
+(Unicode), 80x24 (ASCII) and 40x12 (compact summary). The PTY integration test
+now resizes through 80x24, 40x12 and 120x35 during navigation. The packaged
+command was reinstalled in the isolated validation environment; from `/tmp`,
+its help exposed `--ascii` and its JSON mode returned network/interface data.
+This establishes functionality and layout checks, not usability validation
+with independent users. Resource-changing controls remain unimplemented.
+
 ## Network monitoring addition
 
 All 33 tests passed after adding network collection, per-interface histories,

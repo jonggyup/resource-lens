@@ -41,7 +41,7 @@ also works without it.
 
 | Key | View | What it shows |
 | --- | --- | --- |
-| `1` | Overview | CPU, memory, GPU, disks and network panels with usage histories |
+| `1` | Overview | Six cards: CPU, memory, disk, GPU, network and busiest processes |
 | `2` | CPU | Aggregate and each online logical CPU, I/O wait, steal, load, available frequencies and CPU temperatures |
 | `3` | Memory | Used/available RAM, cache, buffers, swap and memory pressure |
 | `4` | Disks | Per-device read/write rates, IOPS, active time, in-flight requests, average queue depth and `/` capacity |
@@ -49,13 +49,29 @@ also works without it.
 | `6` | Processes | PID, name, CPU, resident memory, nice value and state |
 | `7` | Network | Per-interface RX/TX rates and histories, transfer totals, packet rates, link state/speed, errors and drops |
 
-Overview uses a two-column grid plus a network strip at 90+ columns and 20+ rows. On narrower
-terminals it becomes a scrollable list. Dedicated pages show details that
-don't fit in overview. Minimum terminal size: 40 columns by 10 rows.
+Overview uses six colored cards at 76+ columns and 23+ rows. Each resource has
+a prominent current value and a chart; unavailable GPU data has a plain
+explanation instead of an empty graph. CPU/memory/disk/GPU detail pages also
+have expanded history charts. Colors identify resources rather than declaring
+that high utilization is bad. On smaller terminals a compact, scrollable
+summary keeps the main values visible. Minimum size: 40 columns by 10 rows.
+
+UTF-8 terminals use block charts and box borders. For ASCII-only terminals:
+
+```bash
+python3 -m resourcelens --ascii
+```
+
+The selected navigation tab is highlighted. Click a tab when your terminal
+supports mouse reporting, or use numbers and Tab. The footer shows the current
+scroll position and relevant shortcuts. Process names appear first so they
+remain visible on narrow terminals. The overview's busiest-process card is
+always sorted by CPU; sorting/filtering applies to the full Tasks page.
 
 | Key | Action |
 | --- | --- |
 | `Tab` / `Shift-Tab` | Next / previous view |
+| Mouse | Click a navigation tab; wheel scrolls detail pages where supported |
 | Up/Down, Page Up/Down, Home/End | Scroll detail pages and narrow overview |
 | `Space` | Freeze/unfreeze the display; collection continues |
 | `c` / `m` / `n` / `p` | Sort processes by CPU / memory / name / PID |
@@ -64,13 +80,14 @@ don't fit in overview. Minimum terminal size: 40 columns by 10 rows.
 | `q` / `Esc` | Quit (Esc clears an active filter first) |
 
 History runs oldest to newest from left to right, retaining up to 120 displayed
-samples. For CPU/memory/disk/GPU, characters `._-:=+*#%@` represent increasing
-percentages from 0 to 100. Network RX and TX histories instead scale each
-interface/direction to its visible peak byte rate, which is labeled next to
-the graph; they do not represent link utilization. Missing samples appear as
-gaps; when the visible history has no measured
-samples, it shows `N/A (no measured data)` instead of a graph. In particular,
-an unsupported GPU cannot produce a utilization history. CPU/memory histories show their respective
+samples. CPU/memory/disk/GPU charts have a fixed 0-100% scale. Network RX and
+TX histories instead scale each interface/direction to its visible peak byte
+rate, which is labeled next to
+the graph; they do not represent link utilization. New samples enter on the
+right; startup space on the left is not fabricated history. Missing samples
+appear as gaps; entirely missing histories display a plain message. Single-row
+ASCII charts use `._-:=+*#%@` intensity; multi-row ASCII charts use `#` height.
+An unsupported GPU cannot produce a utilization history. CPU/memory histories show their respective
 percentages; disk/GPU histories show the busiest device, whose identity may
 change. Sampling defaults to one second. Frozen intervals are omitted from
 display history, so it is a sequence of samples rather than a continuous
@@ -179,12 +196,15 @@ Architecture:
 
 - `resourcelens/collect.py`: Linux telemetry and counter-to-rate calculations.
 - `resourcelens/ui.py`: presentation, history, keyboard navigation, sampler.
+- `resourcelens/presentation.py`: responsive cards, chart rendering and colors.
 - `resourcelens/__main__.py`: CLI and text/JSON modes.
 
 Future resource control should use systemd/cgroup interfaces with capability
 detection, effective-setting feedback, and explicit undo. Hardware-wide
 controls and per-application allocation must remain distinguishable. See
-[docs/ROADMAP.md](docs/ROADMAP.md).
+[docs/ROADMAP.md](docs/ROADMAP.md) and the proposed
+[feature sequence](docs/FEATURE_PLAN.md). These controls are for discussion;
+they are not implemented in the visualization release.
 
 Metric references: [Linux disk statistics](https://docs.kernel.org/admin-guide/iostats.html),
 [Linux PSI](https://docs.kernel.org/accounting/psi.html),

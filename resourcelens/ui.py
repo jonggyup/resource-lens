@@ -2,13 +2,16 @@
 
 from collections import defaultdict, deque
 import curses
+import sys
 import threading
 import time
+
+from .presentation import GLYPHS, card_layout, chart, compact_overview, draw_card, overview_cards, palette
 
 
 def clean(value):
     # Kernel process/device names are untrusted terminal content.
-    return "".join(c if 32 <= ord(c) < 127 else "?" for c in str(value))
+    return "".join(c if 32 <= ord(c) < 127 or c in GLYPHS else "?" for c in str(value))
 
 
 def size(value):
@@ -35,11 +38,11 @@ def bar(value, width=22):
     return "[" + "#" * fill + "." * (width - fill) + "] " + pct(value)
 
 
-def spark(values, width=40, maximum=100):
+def spark(values, width=40, maximum=100, unicode=False):
     values = list(values)[-width:]
     if not values or all(v is None for v in values):
         return "N/A (no measured data)"[:width]
-    levels = "._-:=+*#%@"
+    levels = "·▁▂▃▄▅▆▇█" if unicode else "._-:=+*#%@"
     return "".join(" " if v is None else levels[min(len(levels) - 1, max(0,
                     int(v / max(1, maximum) * (len(levels) - 1))))] for v in values)
 
@@ -52,7 +55,7 @@ def pressure(snapshot, kind):
 class View:
     names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network")
 
-    def __init__(self):
+    def __init__(self, unicode=False):
         self.page = 0
         self.scroll = 0
         self.sort = "cpu"
@@ -62,6 +65,12 @@ class View:
         self.help = False
         self.history = defaultdict(lambda: deque(maxlen=120))
         self.snapshot = None
+        self.unicode = unicode
+        self.colors = {key: 0 for key in ("accent", "cpu", "memory", "disk", "gpu", "network", "muted", "warning")}
+        self.tab_regions = []
+
+    def trend(self, values, width=40, maximum=100):
+        return spark(values, width, maximum, unicode=self.unicode)
 
     def update(self, snapshot):
         if self.paused:
@@ -87,7 +96,7 @@ class View:
         s = self.snapshot
         aggregate = next((c for c in s["cpu"] if c["id"] == "cpu"), {})
         lines = [clean(s["cpu_model"]), bar(aggregate.get("busy_pct"), max(8, min(30, width - 13))),
-                 "History " + spark(self.history["cpu"], max(8, width - 10)),
+                 "History " + self.trend(self.history["cpu"], max(8, width - 10)),
                  "Load " + " / ".join(f"{v:.2f}" if v is not None else "N/A" for v in s["load"]),
                  pressure(s, "cpu"),
                  f"I/O wait {pct(aggregate.get('iowait_pct'))}  Steal {pct(aggregate.get('steal_pct'))}"]
@@ -107,12 +116,12 @@ class View:
                  f"Cache {size(m['cache'])}  Buffers {size(m['buffers'])}",
                  f"Swap {size(m['swap_used'])} / {size(m['swap_total'])}",
                  pressure(self.snapshot, "memory"),
-                 "History " + spark(self.history["memory"], max(8, width - 10)),
+                 "History " + self.trend(self.history["memory"], max(8, width - 10)),
                  "Used = total - available; reclaimable cache is useful."]
         return lines
 
     def disk_lines(self, width=60):
-        lines = [pressure(self.snapshot, "io"), "Active time history " + spark(self.history["disk"], max(8, width - 22))]
+        lines = [pressure(self.snapshot, "io"), "Active time history " + self.trend(self.history["disk"], max(8, width - 22))]
         fs = self.snapshot["root_filesystem"]
         if fs:
             lines.append(f"/ capacity: {size(fs['used'])} / {size(fs['total'])} ({pct(ratio(fs['used'], fs['total']))})")
@@ -143,7 +152,7 @@ class View:
                           clean(g["status"])])
         if not lines:
             lines = ["No GPUs detected by DRM or nvidia-smi.", "GPU usage: N/A (not zero)."]
-        lines.append("History " + spark(self.history["gpu"], max(8, width - 10)))
+        lines.append("History " + self.trend(self.history["gpu"], max(8, width - 10)))
         if self.page == 4:
             lines.extend(["", "AMD: available sysfs busy/VRAM/hwmon counters.",
                           "NVIDIA: nvidia-smi, when installed and accessible.",
@@ -151,15 +160,19 @@ class View:
                           "Integrated/shared memory is not total system RAM."])
         return lines
 
+    def primary_network(self):
+        entries = self.snapshot["network"]
+        entries = [entry for entry in entries if entry["name"] != "lo"] or entries
+        return max(entries, key=lambda entry: (
+            entry["state"] == "up", (entry["rx_bps"] or 0) + (entry["tx_bps"] or 0)), default=None)
+
     def network_lines(self, width=60):
         entries = self.snapshot["network"]
         others = 0
         if self.page == 0:
-            entries = [entry for entry in entries if entry["name"] != "lo"] or entries
-            entries = sorted(entries, key=lambda entry: (
-                entry["state"] == "up", (entry["rx_bps"] or 0) + (entry["tx_bps"] or 0)), reverse=True)
-            others = len(self.snapshot["network"]) - min(1, len(entries))
-            entries = entries[:1]
+            primary = self.primary_network()
+            entries = [primary] if primary else []
+            others = len(self.snapshot["network"]) - len(entries)
         lines = []
         for entry in entries:
             lines.append(f"{clean(entry['name'])} ({clean(entry['state'])})  "
@@ -176,7 +189,7 @@ class View:
                 values = self.history[(entry["name"], entry["ifindex"], direction)]
                 visible = list(values)[-max(8, width - 30):]
                 peak = max((v for v in visible if v is not None), default=None)
-                lines.append(f"  {direction.upper()} history {spark(visible, max(8, width - 30), peak or 1)}"
+                lines.append(f"  {direction.upper()} history {self.trend(visible, max(8, width - 30), peak or 1)}"
                              f" peak {size(peak)}/s")
             if self.page == 6:
                 lines.append("")
@@ -191,19 +204,21 @@ class View:
                           "Interface counters only; no per-process or Internet-only attribution."])
         return lines
 
-    def process_lines(self):
+    def process_lines(self, width=100):
         rows = [p for p in self.snapshot["processes"] if self.filter.casefold() in
                 f"{p['pid']} {p['name']}".casefold()]
         keys = {"cpu": "cpu_pct", "memory": "memory", "pid": "pid", "name": "name"}
         key = keys[self.sort]
         rows.sort(key=lambda p: p[key] if p[key] is not None else -1,
                   reverse=self.sort in ("cpu", "memory"))
+        name_width = max(10, min(30, width - 32))
         lines = [f"Sort: {self.sort} | Filter: {clean(self.filter) or '(none)'} | {len(rows)} visible",
                  "CPU: 100% = one logical CPU; memory: resident pages (RSS).",
-                 f"{'PID':>8} {'CPU%':>8} {'RSS':>11} {'RAM%':>7} {'NI':>4} {'S':>2}  NAME"]
+                 f"{'NAME':<{name_width}} {'PID':>7} {'CPU':>7} {'MEMORY':>10}" +
+                 (f" {'RAM':>6} {'NICE':>4} STATE" if width >= 85 else "")]
         for p in rows:
-            lines.append(f"{p['pid']:>8} {pct(p['cpu_pct']):>8} {size(p['memory']):>11} "
-                         f"{pct(p['memory_pct']):>7} {p['nice']:>4} {p['state']:>2}  {clean(p['name'])}")
+            lines.append(f"{clean(p['name'])[:name_width]:<{name_width}} {p['pid']:>7} {pct(p['cpu_pct']):>7} {size(p['memory']):>10}" +
+                         (f" {pct(p['memory_pct']):>6} {p['nice']:>4} {p['state']:>5}" if width >= 85 else ""))
         lines.append(f"Skipped/exited/unreadable processes: {self.snapshot['processes_skipped']}")
         return lines
 
@@ -211,7 +226,7 @@ class View:
         if self.help:
             return ["RESOURCE LENS - read-only Linux dashboard", "",
                     "1 Overview  2 CPU  3 Memory  4 Disks  5 GPU  6 Processes  7 Network",
-                    "Tab / Shift-Tab: next / previous page", "Up/Down, PgUp/PgDn, Home/End: scroll details",
+                    "Tab / Shift-Tab: next / previous page; click a tab to select", "Up/Down, PgUp/PgDn, Home/End: scroll details",
                     "Space: freeze/unfreeze display (collection continues)",
                     "c/m/n/p: process sort by CPU/memory/name/PID",
                     "/: filter processes by name or PID; Enter: finish; Esc: clear",
@@ -219,13 +234,26 @@ class View:
                     "History: newest on right, up to 120 displayed samples.",
                     "CPU/memory/disk/GPU histories use 0-100%; disk/GPU: busiest device.",
                     "Network: per-interface RX/TX rates, scaled to each visible peak.",
+                    "Overview charts: oldest left, newest right; fixed 0-100% axes.",
+                    "Use --ascii for terminals without Unicode block graphics.",
                     "History gaps are missing samples; all missing shows N/A.",
                     "N/A means unavailable or awaiting a second sample, never zero.",
                     "PSI = time at least some tasks waited for that resource.",
                     "Monitoring scope: visible host counters/processes, not cgroup limits.",
                     "No frequency, affinity, priority or resource settings are changed."]
         return {1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
-                4: self.gpu_lines, 6: self.network_lines}.get(self.page, lambda w: self.process_lines())(width)
+                4: self.gpu_lines, 6: self.network_lines}.get(self.page, self.process_lines)(width)
+
+    def mouse(self, x, y, state):
+        if state & (getattr(curses, "BUTTON1_CLICKED", 0) | getattr(curses, "BUTTON1_PRESSED", 0)) and y == 1:
+            for start, end, page in self.tab_regions:
+                if start <= x < end:
+                    self.page, self.scroll = page, 0
+                    return
+        if state & getattr(curses, "BUTTON4_PRESSED", 0):
+            self.scroll = max(0, self.scroll - 3)
+        elif state & getattr(curses, "BUTTON5_PRESSED", 0):
+            self.scroll += 3
 
     def key(self, key, height=24):
         if self.editing_filter:
@@ -238,6 +266,13 @@ class View:
             elif 32 <= key < 127 and len(self.filter) < 80:
                 self.filter += chr(key)
             self.scroll = 0
+            return True
+        if key == curses.KEY_MOUSE:
+            try:
+                _, x, y, _, state = curses.getmouse()
+                self.mouse(x, y, state)
+            except curses.error:
+                pass
             return True
         if key in (ord("q"), 27):
             return False
@@ -290,48 +325,76 @@ def draw(screen, view, interval, error=None):
         state = "COLLECTOR ERROR"
     elif s and not view.paused and time.time() - s["timestamp"] > max(5, interval * 3):
         state = "STALE"
-    accent = curses.color_pair(1) | curses.A_BOLD
-    put(screen, 0, 0, f" RESOURCE LENS | {state} | {s['hostname'] if s else ''} | {stamp} | read-only", accent)
-    put(screen, 1, 0, "  ".join(f"{'>' if i == view.page else ' '}{i+1} {name}" for i, name in enumerate(view.names)))
+    accent = view.colors["accent"] | curses.A_BOLD
+    muted = view.colors["muted"] | curses.A_DIM
+    put(screen, 0, 1, f"RESOURCE LENS  {state}  {interval:g}s  |  {stamp}", accent)
+    if s and w >= 95:
+        put(screen, 0, 60, s["hostname"], muted)
+    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net")
+    view.tab_regions = []
+    x = 1
+    for page, label in enumerate(labels):
+        text = f" {page + 1} {label} " if w >= 76 else f" {page + 1} "
+        attr = accent | curses.A_REVERSE if page == view.page else muted
+        put(screen, 1, x, text, attr)
+        view.tab_regions.append((x, x + len(text), page))
+        x += len(text) + 1
+    if w < 76:
+        put(screen, 1, x + 1, view.names[view.page], accent)
+    status = "Read-only | newest samples at right"
     if not s:
-        put(screen, 3, 2, "Collecting first sample...")
-    elif view.page == 0 and not view.help and w >= 90 and h >= 20:
-        network_height = 6 if h >= 24 else 4
-        panel_width, panel_height = (w - 3) // 2, (h - 5 - network_height) // 2
-        for i, (title, lines) in enumerate((("CPU", view.cpu_lines(panel_width)),
-                                          ("MEMORY", view.memory_lines(panel_width)),
-                                          ("GPU", view.gpu_lines(panel_width)),
-                                          ("DISKS", view.disk_lines(panel_width)))):
-            y, x = 3 + (i // 2) * panel_height, 1 + (i % 2) * (panel_width + 1)
-            put(screen, y, x, f" {title} " + "-" * panel_width, accent, panel_width)
-            for j, line in enumerate(lines[:max(0, panel_height - 1)]):
-                put(screen, y + j + 1, x, line, limit=panel_width)
-        y = 3 + panel_height * 2
-        put(screen, y, 1, " NETWORK " + "-" * w, accent)
-        for j, line in enumerate(view.network_lines(w - 3)[:network_height - 1]):
-            put(screen, y + j + 1, 1, line)
-    else:
-        if view.page == 0 and not view.help:
-            lines = []
-            for title, values in (("CPU", view.cpu_lines(w)), ("MEMORY", view.memory_lines(w)),
-                                  ("GPU", view.gpu_lines(w)), ("DISKS", view.disk_lines(w)),
-                                  ("NETWORK", view.network_lines(w))):
-                lines.extend([f"-- {title} --"] + values + [""])
+        put(screen, 4, 2, "Collecting the first sample...", muted)
+    elif view.page == 0 and not view.help:
+        layout = card_layout(h, w)
+        if layout:
+            first = layout[0]
+            cards = overview_cards(view, first[3], first[2], view.colors)
+            for geometry, (title, hint, color, content) in zip(layout, cards):
+                draw_card(screen, put, geometry, title, hint, color, content, view.unicode)
+            status = "Read-only | 2-7 details | charts: oldest left, newest right"
         else:
-            lines = view.lines(w - 3)
+            lines = compact_overview(view)
+            capacity = h - 5
+            view.scroll = min(view.scroll, max(0, len(lines) - capacity))
+            for i, line in enumerate(lines[view.scroll:view.scroll + capacity]):
+                put(screen, i + 3, 1, line, curses.A_BOLD if i < 2 else 0)
+            status = f"Overview | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
+    else:
+        lines = view.lines(w - 3)
+        # Put a readable multi-row chart above percentage-based detail pages.
+        kinds = {1: "cpu", 2: "memory", 3: "disk", 4: "gpu"}
+        if not view.help and view.page in kinds:
+            kind = kinds[view.page]
+            color = view.colors[kind]
+            plot = chart(view.history[kind], max(1, w - 9), 3, unicode=view.unicode)
+            lines = ["History: 0-100%, oldest left / newest right"] + [
+                ("100% " if i == 0 else "  0% " if i == 2 else "     ") + row
+                for i, row in enumerate(plot)] + [""] + [
+                line for line in lines if not line.startswith(("History ", "Active time history "))]
+        else:
+            color = accent
         capacity = h - 5
         view.scroll = min(view.scroll, max(0, len(lines) - capacity))
         for i, line in enumerate(lines[view.scroll:view.scroll + capacity]):
-            put(screen, i + 3, 1, line)
-    message = error or ("; ".join(s["warnings"]) if s else "")
+            index = view.scroll + i
+            if view.page == 5 and not view.help:
+                attribute = accent | curses.A_REVERSE if index == 2 else (curses.A_BOLD if index >= 3 and index % 2 else 0)
+            else:
+                attribute = color if index < 5 else (accent if i == 0 else 0)
+            put(screen, i + 3, 1, line, attribute)
+        status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
+    message = error or ("; ".join(s["warnings"]) if s else "") or status
     if view.editing_filter:
-        message = f"Filter: {view.filter}_  Enter: finish  Esc: clear"
-    put(screen, h - 2, 0, message, curses.A_BOLD)
-    put(screen, h - 1, 0, "q quit | ? help | 1-7 views | Space freeze | arrows scroll | / filter | c/m/n/p sort", accent)
+        message = f"Filter: {view.filter}_  Enter: apply  Esc: clear"
+    put(screen, h - 2, 1, message, view.colors["warning"] if error else muted)
+    footer = "Tab next | 1-7 views | Space freeze | / find task | ? help | q quit"
+    if w < 76:
+        footer = "Tab next | / find | ? help | q quit"
+    put(screen, h - 1, 1, footer, accent)
     screen.refresh()
 
 
-def run(collector, interval):
+def run(collector, interval, ascii=False):
     latest = {"snapshot": None, "sequence": 0, "error": None}
     lock, stop = threading.Lock(), threading.Event()
 
@@ -352,19 +415,29 @@ def run(collector, interval):
             curses.curs_set(0)
         except curses.error:
             pass
-        if curses.has_colors():
-            curses.start_color()
-            curses.use_default_colors()
-            curses.init_pair(1, curses.COLOR_CYAN, -1)
         screen.timeout(100)
-        view, sequence = View(), -1
+        try:
+            curses.mousemask(curses.ALL_MOUSE_EVENTS)
+            curses.mouseinterval(0)
+        except curses.error:
+            pass
+        encoding = (sys.stdout.encoding or "").lower().replace("-", "")
+        view, sequence = View(unicode=not ascii and encoding == "utf8"), -1
+        view.colors = palette()
+        previous_render = None
         while True:
             with lock:
                 current = latest.copy()
             if current["snapshot"] is not None and current["sequence"] != sequence:
                 view.update(current["snapshot"])
                 sequence = current["sequence"]
-            draw(screen, view, interval, current["error"])
+            stale = bool(view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
+            render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
+                      view.editing_filter, view.help, view.paused, current["error"],
+                      screen.getmaxyx(), stale)
+            if render != previous_render:
+                draw(screen, view, interval, current["error"])
+                previous_render = render
             if not view.key(screen.getch(), screen.getmaxyx()[0]):
                 break
 

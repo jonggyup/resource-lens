@@ -36,8 +36,9 @@ class TerminalTests(unittest.TestCase):
         for key in (b"2", b"3", b"4", b"5", b"6", b"7", b"/python\r", b"m", b"?", b"?", b" ", b" ", b"1"):
             os.write(master, key)
             drain()
-        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 12, 45, 0, 0))
-        drain()
+        for height, width in ((24, 80), (12, 40), (35, 120)):
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
+            drain()
         os.write(master, b"q")
         drain()
         child.wait(timeout=3)

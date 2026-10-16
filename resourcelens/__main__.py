@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--json", action="store_true", help="stream one JSON object per measured sample")
     parser.add_argument("--count", type=int, help="number of JSON samples (default: stream until interrupted)")
     parser.add_argument("--no-nvidia", action="store_true", help="do not invoke nvidia-smi")
+    parser.add_argument("--ascii", action="store_true", help="use ASCII charts and borders in the terminal")
     args = parser.parse_args()
     if not math.isfinite(args.interval) or not 0.2 <= args.interval <= 60:
         parser.error("--interval must be between 0.2 and 60 seconds")
@@ -56,7 +57,7 @@ def main():
                 if args.once or (args.count is not None and count >= args.count):
                     break
         else:
-            run(collector, args.interval)
+            run(collector, args.interval, ascii=args.ascii)
     except (KeyboardInterrupt, BrokenPipeError):
         return 0
     except curses.error as exc:

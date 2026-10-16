@@ -1,5 +1,10 @@
 # Roadmap
 
+The proposed implementation sequence and acceptance criteria are in
+[FEATURE_PLAN.md](FEATURE_PLAN.md). Next: group workloads, expose effective CPU
+limits, then implement temporary CPU allocation controls with verification and
+Undo. These are discussion/planning items, not implemented controls.
+
 ## 0.1: visualization prototype
 
 CPU, memory, GPU, disk and network views; top processes; PSI; short live histories;
