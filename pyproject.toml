@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "resource-lens"
+version = "0.1.0"
+description = "A live Linux resource dashboard for terminals"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "Resource Lens contributors"}]
+dependencies = []
+
+[project.scripts]
+resource-lens = "resourcelens.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["resourcelens*"]
