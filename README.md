@@ -1,6 +1,6 @@
 # Resource Lens
 
-A live Linux terminal dashboard for CPU, GPU, memory, disks, and processes.
+A live Linux terminal dashboard for CPU, GPU, memory, disks, network, and processes.
 See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, daemon, database, or root access required.
@@ -41,14 +41,15 @@ also works without it.
 
 | Key | View | What it shows |
 | --- | --- | --- |
-| `1` | Overview | Four panels: CPU, memory, GPU, disks, with usage histories |
+| `1` | Overview | CPU, memory, GPU, disks and network panels with usage histories |
 | `2` | CPU | Aggregate and each online logical CPU, I/O wait, steal, load, available frequencies and CPU temperatures |
 | `3` | Memory | Used/available RAM, cache, buffers, swap and memory pressure |
 | `4` | Disks | Per-device read/write rates, IOPS, active time, in-flight requests, average queue depth and `/` capacity |
 | `5` | GPU | Detected GPUs, available utilization, VRAM, temperature and power |
 | `6` | Processes | PID, name, CPU, resident memory, nice value and state |
+| `7` | Network | Per-interface RX/TX rates and histories, transfer totals, packet rates, link state/speed, errors and drops |
 
-Overview uses a two-column grid at 90+ columns and 20+ rows. On narrower
+Overview uses a two-column grid plus a network strip at 90+ columns and 20+ rows. On narrower
 terminals it becomes a scrollable list. Dedicated pages show details that
 don't fit in overview. Minimum terminal size: 40 columns by 10 rows.
 
@@ -63,8 +64,11 @@ don't fit in overview. Minimum terminal size: 40 columns by 10 rows.
 | `q` / `Esc` | Quit (Esc clears an active filter first) |
 
 History runs oldest to newest from left to right, retaining up to 120 displayed
-samples. Characters `._-:=+*#%@` represent increasing percentages from 0 to
-100. Missing samples appear as gaps; when the visible history has no measured
+samples. For CPU/memory/disk/GPU, characters `._-:=+*#%@` represent increasing
+percentages from 0 to 100. Network RX and TX histories instead scale each
+interface/direction to its visible peak byte rate, which is labeled next to
+the graph; they do not represent link utilization. Missing samples appear as
+gaps; when the visible history has no measured
 samples, it shows `N/A (no measured data)` instead of a graph. In particular,
 an unsupported GPU cannot produce a utilization history. CPU/memory histories show their respective
 percentages; disk/GPU histories show the busiest device, whose identity may
@@ -89,7 +93,7 @@ python3 -m resourcelens --no-nvidia
 ```
 
 `--json` without `--count` streams until interrupted. JSON schema version 1
-includes timestamps, measured elapsed seconds, CPU, memory, GPU, disk,
+includes timestamps, measured elapsed seconds, CPU, memory, GPU, disk, network,
 process, pressure and temperature data. Unavailable numbers are `null`, not
 zero. Text/JSON modes prime the counters and wait one interval before
 producing the first measured sample. Interactive mode initially shows N/A for
@@ -131,6 +135,19 @@ measurement of shared/integrated GPU memory.
 - **Pressure:** Linux PSI `some avg10`: the percentage of time in the last
   ten seconds during which at least some tasks were stalled for that resource.
   It is context, not an automatic bottleneck diagnosis.
+- **Network:** rates are bytes/second from `/proc/net/dev` counter deltas,
+  not bits/second. Totals/errors/drops are cumulative since interface counter
+  initialization, not since dashboard startup. The dedicated page includes
+  loopback and virtual interfaces; overview shows one interface, preferring
+  non-loopback links that are up and then the highest current throughput, plus
+  a count of other interfaces. Press `7` for the complete list.
+  Traffic can appear at multiple layers (VPN, bridge, veth, physical NIC), so
+  interfaces are never summed into a system-wide total. Rates are N/A on first
+  discovery, counter reset or a detected replacement via changed interface
+  index. Link state is the kernel's operational state (`unknown` is common for
+  loopback); it does not prove Internet access. Reported link speed is optional
+  metadata in Mb/s, not a traffic cap. No packet capture, IP/MAC addresses,
+  per-process network attribution or external probes are used.
 - **Scope:** the `/proc` and `/sys` visible to the process. Containers may
   expose host CPU/memory totals alongside a restricted process list. This
   version does not normalize usage against cgroup limits or quotas.
@@ -172,6 +189,7 @@ controls and per-application allocation must remain distinguishable. See
 Metric references: [Linux disk statistics](https://docs.kernel.org/admin-guide/iostats.html),
 [Linux PSI](https://docs.kernel.org/accounting/psi.html),
 [AMDGPU telemetry](https://docs.kernel.org/gpu/amdgpu/driver-misc.html),
-[NVIDIA SMI](https://docs.nvidia.com/deploy/nvidia-smi/index.html).
+[NVIDIA SMI](https://docs.nvidia.com/deploy/nvidia-smi/index.html),
+[Linux network statistics](https://docs.kernel.org/networking/statistics.html).
 
 MIT licensed. No telemetry service or external data upload.

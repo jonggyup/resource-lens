@@ -1,5 +1,25 @@
 # Validation of 0.1.0
 
+## Network monitoring addition
+
+All 33 tests passed after adding network collection, per-interface histories,
+an overview strip and the `7` Network page. New fixture checks cover byte-rate
+units, metadata, unavailable speed, real zero traffic, counter resets,
+interface replacement/removal, malformed/missing counters, independent RX/TX
+histories and peak-based scaling. The real PTY navigation test visits the
+network page, and JSON output includes the additive `network` field.
+
+An actual 1 MiB TCP transfer to an owned temporary localhost listener delivered
+1,048,576 payload bytes. The loopback counters increased by 1,051,452 bytes in
+each direction, including protocol overhead; measured RX/TX rates were about
+8,078,640 bytes/s during that short interval. The listener and connection were
+closed after verification. No external traffic or host network configuration
+changes were needed. This verifies interface accounting, not per-process
+attribution or physical NIC throughput.
+
+The dashboard was also launched in a dedicated tmux server to inspect the
+network overview and detail page on real host interfaces.
+
 ## History display correction
 
 Reproduced the reported question-mark history on this host: GPU history

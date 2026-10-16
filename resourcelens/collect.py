@@ -70,6 +70,7 @@ class Collector:
         self.clock = clock
         self.last_time = None
         self.last_cpu, self.last_disk, self.last_process = {}, {}, {}
+        self.last_network = {}
         self.ticks = os.sysconf("SC_CLK_TCK")
         self.pages = os.sysconf("SC_PAGE_SIZE")
         self.nvidia = shutil.which("nvidia-smi") if nvidia else None
@@ -158,6 +159,38 @@ class Collector:
         self.last_disk = counters
         return result
 
+    def network(self, elapsed):
+        counters, result = {}, []
+        for line in read(self.proc / "net/dev").splitlines():
+            name, sep, raw = line.rpartition(":")
+            if not sep:
+                continue
+            name = name.strip()
+            try:
+                values = [int(x) for x in raw.split()]
+            except ValueError:
+                continue
+            if len(values) < 16:
+                continue
+            dev = self.sys / "class/net" / name
+            ifindex = numeric_file(dev / "ifindex")
+            identity = (name, ifindex)
+            previous = self.last_network.get(identity)
+            counters[identity] = values
+            def rate(index):
+                return delta(values[index], previous[index] if previous else None, elapsed)
+            speed = numeric_file(dev / "speed")
+            result.append({"name": name, "ifindex": ifindex,
+                           "state": read(dev / "operstate") or "unavailable",
+                           "speed_mbps": speed if speed is not None and speed > 0 else None,
+                           "rx_bps": rate(0), "tx_bps": rate(8),
+                           "rx_pps": rate(1), "tx_pps": rate(9),
+                           "rx_bytes": values[0], "tx_bytes": values[8],
+                           "rx_errors": values[2], "tx_errors": values[10],
+                           "rx_dropped": values[3], "tx_dropped": values[11]})
+        self.last_network = counters
+        return sorted(result, key=lambda entry: entry["name"])
+
     def processes(self, elapsed, total_memory):
         counters, result = {}, []
         skipped = 0
@@ -244,6 +277,7 @@ class Collector:
         cpu = self.cpus()
         memory = self.memory()
         disks = self.disks(elapsed)
+        network = self.network(elapsed)
         processes, skipped = self.processes(elapsed, memory["total"])
         self.last_time = now
         try:
@@ -255,6 +289,7 @@ class Collector:
         return {"schema_version": 1, "timestamp": time.time(), "elapsed_s": elapsed,
                 "hostname": os.uname().nodename, "cpu_model": self.model,
                 "cpu": cpu, "memory": memory, "disks": disks, "gpus": self.gpus(),
+                "network": network,
                 "pressure": self.pressure(), "temperatures": self.temperatures(),
                 "processes": processes, "processes_skipped": skipped,
                 "load": [number(x) for x in loads[:3]], "root_filesystem": root_fs,

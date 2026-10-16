@@ -35,13 +35,13 @@ def bar(value, width=22):
     return "[" + "#" * fill + "." * (width - fill) + "] " + pct(value)
 
 
-def spark(values, width=40):
+def spark(values, width=40, maximum=100):
     values = list(values)[-width:]
     if not values or all(v is None for v in values):
         return "N/A (no measured data)"[:width]
     levels = "._-:=+*#%@"
     return "".join(" " if v is None else levels[min(len(levels) - 1, max(0,
-                    int(v / 100 * (len(levels) - 1))))] for v in values)
+                    int(v / max(1, maximum) * (len(levels) - 1))))] for v in values)
 
 
 def pressure(snapshot, kind):
@@ -50,7 +50,7 @@ def pressure(snapshot, kind):
 
 
 class View:
-    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes")
+    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network")
 
     def __init__(self):
         self.page = 0
@@ -75,6 +75,13 @@ class View:
                                           if d["active_pct"] is not None), default=None))
         self.history["gpu"].append(max((g["busy_pct"] for g in snapshot["gpus"]
                                          if g["busy_pct"] is not None), default=None))
+        identities = {(entry["name"], entry["ifindex"]) for entry in snapshot["network"]}
+        for key in list(self.history):
+            if isinstance(key, tuple) and key[:2] not in identities:
+                del self.history[key]
+        for entry in snapshot["network"]:
+            for direction in ("rx", "tx"):
+                self.history[(entry["name"], entry["ifindex"], direction)].append(entry[f"{direction}_bps"])
 
     def cpu_lines(self, width=60):
         s = self.snapshot
@@ -144,6 +151,46 @@ class View:
                           "Integrated/shared memory is not total system RAM."])
         return lines
 
+    def network_lines(self, width=60):
+        entries = self.snapshot["network"]
+        others = 0
+        if self.page == 0:
+            entries = [entry for entry in entries if entry["name"] != "lo"] or entries
+            entries = sorted(entries, key=lambda entry: (
+                entry["state"] == "up", (entry["rx_bps"] or 0) + (entry["tx_bps"] or 0)), reverse=True)
+            others = len(self.snapshot["network"]) - min(1, len(entries))
+            entries = entries[:1]
+        lines = []
+        for entry in entries:
+            lines.append(f"{clean(entry['name'])} ({clean(entry['state'])})  "
+                         f"RX {size(entry['rx_bps'])}/s  TX {size(entry['tx_bps'])}/s")
+            if self.page == 6:
+                lines.append(f"  Totals RX {size(entry['rx_bytes'])} / TX {size(entry['tx_bytes'])}")
+                speed = f"{entry['speed_mbps']:g} Mb/s" if entry["speed_mbps"] else "N/A"
+                packets = "/".join("N/A" if entry[k] is None else f"{entry[k]:.1f}"
+                                   for k in ("rx_pps", "tx_pps"))
+                lines.append(f"  Link speed {speed} | RX/TX packets/s {packets}")
+                lines.append(f"  Errors RX/TX {entry['rx_errors']}/{entry['tx_errors']} | "
+                             f"Drops RX/TX {entry['rx_dropped']}/{entry['tx_dropped']}")
+            for direction in ("rx", "tx"):
+                values = self.history[(entry["name"], entry["ifindex"], direction)]
+                visible = list(values)[-max(8, width - 30):]
+                peak = max((v for v in visible if v is not None), default=None)
+                lines.append(f"  {direction.upper()} history {spark(visible, max(8, width - 30), peak or 1)}"
+                             f" peak {size(peak)}/s")
+            if self.page == 6:
+                lines.append("")
+        if not entries:
+            lines.append("Network: N/A (no readable interface counters)")
+        elif self.page == 0:
+            lines.append(f"{others} other interfaces | 7 Network: all interfaces and totals")
+        if self.page == 6:
+            lines.extend(["History scale: each direction's visible peak, NOT link utilization.",
+                          "Totals/errors/drops: since interface counter initialization.",
+                          "Includes loopback and virtual interfaces; never sum layered traffic.",
+                          "Interface counters only; no per-process or Internet-only attribution."])
+        return lines
+
     def process_lines(self):
         rows = [p for p in self.snapshot["processes"] if self.filter.casefold() in
                 f"{p['pid']} {p['name']}".casefold()]
@@ -163,21 +210,22 @@ class View:
     def lines(self, width):
         if self.help:
             return ["RESOURCE LENS - read-only Linux dashboard", "",
-                    "1 Overview  2 CPU  3 Memory  4 Disks  5 GPU  6 Processes",
+                    "1 Overview  2 CPU  3 Memory  4 Disks  5 GPU  6 Processes  7 Network",
                     "Tab / Shift-Tab: next / previous page", "Up/Down, PgUp/PgDn, Home/End: scroll details",
                     "Space: freeze/unfreeze display (collection continues)",
                     "c/m/n/p: process sort by CPU/memory/name/PID",
                     "/: filter processes by name or PID; Enter: finish; Esc: clear",
                     "?: toggle this help   q / Esc: quit", "",
                     "History: newest on right, up to 120 displayed samples.",
-                    "All histories use 0-100%; disk/GPU show busiest device.",
+                    "CPU/memory/disk/GPU histories use 0-100%; disk/GPU: busiest device.",
+                    "Network: per-interface RX/TX rates, scaled to each visible peak.",
                     "History gaps are missing samples; all missing shows N/A.",
                     "N/A means unavailable or awaiting a second sample, never zero.",
                     "PSI = time at least some tasks waited for that resource.",
                     "Monitoring scope: visible host counters/processes, not cgroup limits.",
                     "No frequency, affinity, priority or resource settings are changed."]
         return {1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
-                4: self.gpu_lines}.get(self.page, lambda w: self.process_lines())(width)
+                4: self.gpu_lines, 6: self.network_lines}.get(self.page, lambda w: self.process_lines())(width)
 
     def key(self, key, height=24):
         if self.editing_filter:
@@ -193,10 +241,10 @@ class View:
             return True
         if key in (ord("q"), 27):
             return False
-        if ord("1") <= key <= ord("6"):
+        if ord("1") <= key <= ord("7"):
             self.page, self.scroll = key - ord("1"), 0
         elif key in (9, curses.KEY_BTAB):
-            self.page = (self.page + (1 if key == 9 else -1)) % 6
+            self.page = (self.page + (1 if key == 9 else -1)) % len(self.names)
             self.scroll = 0
         elif key == ord("?"):
             self.help, self.scroll = not self.help, 0
@@ -248,7 +296,8 @@ def draw(screen, view, interval, error=None):
     if not s:
         put(screen, 3, 2, "Collecting first sample...")
     elif view.page == 0 and not view.help and w >= 90 and h >= 20:
-        panel_width, panel_height = (w - 3) // 2, (h - 5) // 2
+        network_height = 6 if h >= 24 else 4
+        panel_width, panel_height = (w - 3) // 2, (h - 5 - network_height) // 2
         for i, (title, lines) in enumerate((("CPU", view.cpu_lines(panel_width)),
                                           ("MEMORY", view.memory_lines(panel_width)),
                                           ("GPU", view.gpu_lines(panel_width)),
@@ -257,11 +306,16 @@ def draw(screen, view, interval, error=None):
             put(screen, y, x, f" {title} " + "-" * panel_width, accent, panel_width)
             for j, line in enumerate(lines[:max(0, panel_height - 1)]):
                 put(screen, y + j + 1, x, line, limit=panel_width)
+        y = 3 + panel_height * 2
+        put(screen, y, 1, " NETWORK " + "-" * w, accent)
+        for j, line in enumerate(view.network_lines(w - 3)[:network_height - 1]):
+            put(screen, y + j + 1, 1, line)
     else:
         if view.page == 0 and not view.help:
             lines = []
             for title, values in (("CPU", view.cpu_lines(w)), ("MEMORY", view.memory_lines(w)),
-                                  ("GPU", view.gpu_lines(w)), ("DISKS", view.disk_lines(w))):
+                                  ("GPU", view.gpu_lines(w)), ("DISKS", view.disk_lines(w)),
+                                  ("NETWORK", view.network_lines(w))):
                 lines.extend([f"-- {title} --"] + values + [""])
         else:
             lines = view.lines(w - 3)
@@ -273,7 +327,7 @@ def draw(screen, view, interval, error=None):
     if view.editing_filter:
         message = f"Filter: {view.filter}_  Enter: finish  Esc: clear"
     put(screen, h - 2, 0, message, curses.A_BOLD)
-    put(screen, h - 1, 0, "q quit | ? help | 1-6 views | Space freeze | arrows scroll | / filter | c/m/n/p sort", accent)
+    put(screen, h - 1, 0, "q quit | ? help | 1-7 views | Space freeze | arrows scroll | / filter | c/m/n/p sort", accent)
     screen.refresh()
 
 

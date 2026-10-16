@@ -13,7 +13,7 @@ from .ui import View, run
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Live, read-only Linux CPU/GPU/memory/disk dashboard.")
+    parser = argparse.ArgumentParser(description="Live, read-only Linux CPU/GPU/memory/disk/network dashboard.")
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--interval", type=float, default=1, help="sample interval in seconds (0.2-60; default 1)")
     parser.add_argument("--once", action="store_true", help="print one measured text snapshot and exit")
@@ -45,7 +45,7 @@ def main():
                     view = View()
                     view.update(sample)
                     print(f"Resource Lens {__version__} | {sample['hostname']} | read-only")
-                    for page in range(1, 6):
+                    for page in range(1, len(view.names)):
                         view.page = page
                         print(f"\n{view.names[page]}")
                         lines = view.lines(100)

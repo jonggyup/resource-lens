@@ -221,6 +221,91 @@ class MetricsTests(unittest.TestCase):
         self.assertNotIn("N/A", spark(view.history["disk"]))
         self.assertIn("History N/A (no measured data)", view.gpu_lines())
 
+    def net(self, rx=1000, tx=2000, ifindex=2):
+        self.write("proc/net/dev", "Inter-| Receive | Transmit\n face | bytes packets errs drop | bytes packets errs drop\n"
+                   f" eth0: {rx} 10 2 3 0 0 0 0 {tx} 20 4 5 0 0 0 0\n")
+        self.write("sys/class/net/eth0/ifindex", str(ifindex))
+        self.write("sys/class/net/eth0/operstate", "up")
+        self.write("sys/class/net/eth0/speed", "1000")
+
+    def test_network_rate_units_and_link_metadata(self):
+        self.net()
+        first = self.collector.sample()["network"][0]
+        self.assertIsNone(first["rx_bps"])
+        self.now += 2
+        self.net(rx=3000, tx=6000)
+        entry = self.collector.sample()["network"][0]
+        self.assertEqual(entry["rx_bps"], 1000)
+        self.assertEqual(entry["tx_bps"], 2000)
+        self.assertEqual(entry["rx_bytes"], 3000)
+        self.assertEqual(entry["state"], "up")
+        self.assertEqual(entry["speed_mbps"], 1000)
+        self.assertEqual(entry["rx_errors"], 2)
+        self.assertEqual(entry["tx_dropped"], 5)
+
+    def test_network_counter_reset_and_interface_replacement(self):
+        self.net()
+        self.collector.sample()
+        self.now += 1
+        self.net(rx=100, tx=100)
+        reset = self.collector.sample()["network"][0]
+        self.assertIsNone(reset["rx_bps"])
+        self.assertIsNone(reset["tx_bps"])
+        self.now += 1
+        self.net(rx=90000, tx=90000, ifindex=3)
+        self.assertIsNone(self.collector.sample()["network"][0]["rx_bps"])
+
+    def test_network_missing_malformed_and_removed(self):
+        self.assertEqual(self.collector.sample()["network"], [])
+        self.net()
+        self.collector.sample()
+        self.write("proc/net/dev", "bad: nonsense\nshort: 1 2\n")
+        self.now += 1
+        self.assertEqual(self.collector.sample()["network"], [])
+        self.net(rx=90000)
+        self.now += 1
+        self.assertIsNone(self.collector.sample()["network"][0]["rx_bps"])
+
+    def test_network_history_is_scaled_to_rate_and_has_separate_directions(self):
+        self.net()
+        view = View()
+        view.update(self.collector.sample())
+        self.now += 1
+        self.net(rx=1000, tx=3000)
+        view.update(self.collector.sample())
+        self.now += 1
+        self.net(rx=2000, tx=3000)
+        view.update(self.collector.sample())
+        self.assertEqual(spark(view.history[("eth0", 2, "rx")], maximum=1000), " .@")
+        self.assertEqual(spark(view.history[("eth0", 2, "tx")], maximum=1000), " @.")
+        view.key(ord("7"))
+        self.assertEqual(view.names[view.page], "Network")
+        lines = view.lines(100)
+        self.assertTrue(any("RX history" in line for line in lines))
+        self.assertTrue(any("peak 1000.0B/s" in line for line in lines))
+        self.write("proc/net/dev", "")
+        view.update(self.collector.sample())
+        self.assertFalse(any(isinstance(key, tuple) for key in view.history))
+
+    def test_network_zero_traffic_and_unknown_link_speed(self):
+        self.net()
+        self.write("sys/class/net/eth0/speed", "-1")
+        self.collector.sample()
+        self.now += 1
+        entry = self.collector.sample()["network"][0]
+        self.assertEqual(entry["rx_bps"], 0)
+        self.assertIsNone(entry["speed_mbps"])
+
+    def test_network_overview_favors_live_link_and_summarizes_other_interfaces(self):
+        self.net()
+        snapshot = self.collector.sample()
+        snapshot["network"].insert(0, {**snapshot["network"][0], "name": "aaa", "state": "down"})
+        view = View()
+        view.update(snapshot)
+        lines = view.network_lines(100)
+        self.assertTrue(lines[0].startswith("eth0 (up)"))
+        self.assertIn("1 other interfaces", lines[-1])
+
 
 if __name__ == "__main__":
     unittest.main()

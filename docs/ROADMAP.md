@@ -2,7 +2,7 @@
 
 ## 0.1: visualization prototype
 
-CPU, memory, GPU and disk views; top processes; PSI; short live histories;
+CPU, memory, GPU, disk and network views; top processes; PSI; short live histories;
 keyboard navigation; text/JSON exports. Rootless and read-only.
 
 ## Next: make monitoring trustworthy on more machines
