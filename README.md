@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.7.0 is a preview with optional temporary CPU controls.** Monitoring
+**Version 0.7.1 is a preview with optional temporary CPU controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Disk/memory controls, direct frequency
@@ -95,6 +95,27 @@ not current throttle duration or a complete machine-wide health assessment.
 Missing counters are unknown; repeated package counters are not summed.
 See the kernel's [PSI documentation](https://docs.kernel.org/accounting/psi.html)
 and [thermal counter documentation](https://cdn.kernel.org/doc/html/latest/admin-guide/thermal/intel_thermal_throttle.html).
+
+## Responsiveness and Escape
+
+Escape closes the current help/menu/filter first; at the top level it exits.
+The default escape-sequence wait is 35 ms. For a connection that delivers arrow,
+function-key or mouse sequences slowly, increase it explicitly:
+
+```bash
+ESCDELAY=150 python3 -m resourcelens
+```
+
+`q` / F10 exits without Escape-sequence detection. Active resource changes still
+require the existing exit acknowledgement; a control operation in progress is
+not cancelled by Escape. Read-only collection runs separately from input and
+shutdown waits at most 100 ms for that worker. A final unfinished sample may be
+discarded. A recording write already in progress is allowed to finish, so slow
+recording storage can still delay exit. Input wakes the UI immediately; changing
+`--interval` changes sampling frequency, not keyboard responsiveness.
+
+See [real-world usability priorities](docs/USABILITY.md) and
+[measured responsiveness](docs/VALIDATION.md).
 
 ## Views
 

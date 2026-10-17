@@ -1,3 +1,9 @@
+# 0.7.1
+
+- Reduce default Escape recognition delay to 35 ms; honor positive ESCDELAY overrides.
+- Bound read-only collector shutdown waiting to 100 ms and discard late samples.
+- Add real-terminal exit-latency regression coverage and a usability priority plan.
+
 # 0.7.0
 
 - Focus individual sockets, memory nodes, disks, GPUs and interfaces while keeping

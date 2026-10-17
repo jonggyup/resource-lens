@@ -1,0 +1,31 @@
+{
+  "unit": "milliseconds",
+  "trials_per_case": 3,
+  "baseline_version": "0.7.0",
+  "updated_version": "0.7.1",
+  "before": {
+    "live_escape": [
+      1011.5,
+      1012.2,
+      1014.1
+    ],
+    "stalled_collector_escape": [
+      3012.6,
+      3014.0,
+      3011.5
+    ]
+  },
+  "after": {
+    "live_escape": [
+      46.0,
+      46.0,
+      48.1
+    ],
+    "stalled_collector_escape": [
+      145.7,
+      145.3,
+      145.6
+    ]
+  },
+  "method": "Local 100x24 PTY, TERM=xterm-256color, ESCDELAY unset; measure bare Escape to process exit after initial render; stalled collector sleeps five seconds. No recording. Three trials each; not a fleet or SSH benchmark."
+}

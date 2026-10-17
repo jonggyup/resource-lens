@@ -2,6 +2,7 @@
 
 from collections import defaultdict, deque
 import curses
+import os
 import queue
 import sys
 import textwrap
@@ -938,6 +939,8 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             started = time.monotonic()
             try:
                 snapshot = collector.sample()
+                if stop.is_set():
+                    break  # Discard an unfinished final read; do not publish after exit.
                 if recorder:
                     recorder.write('sample', snapshot)
                 with lock:
@@ -952,7 +955,14 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             curses.curs_set(0)
         except curses.error:
             pass
-        screen.timeout(100)
+        # A bare Escape otherwise commonly waits one second in ncurses.
+        # Keep sequence decoding enabled for arrows/function keys/mouse over SSH.
+        try:
+            escape_ms = int(os.environ.get('ESCDELAY', '35'))
+            curses.set_escdelay(escape_ms if escape_ms > 0 else 35)
+        except (ValueError, curses.error):
+            curses.set_escdelay(35)
+        screen.timeout(100)  # Input wakes immediately; this only bounds idle polling.
         try:
             curses.mousemask(curses.ALL_MOUSE_EVENTS)
             curses.mouseinterval(0)
@@ -1008,4 +1018,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
     finally:
         stop.set()
         if not replay:
-            worker.join(timeout=2)
+            # Collection is read-only and the worker is a daemon. A slow kernel
+            # read or GPU query must not hold the terminal application open.
+            # Recorder.close serializes with any write already in progress.
+            worker.join(timeout=0.1)

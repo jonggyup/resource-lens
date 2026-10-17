@@ -1,3 +1,20 @@
+# 0.7.1 responsiveness validation
+
+Local PTY measurements, three trials per case, from bare Escape to process exit:
+
+| Case | 0.7.0 | 0.7.1 |
+| --- | --- | --- |
+| Live collection | 1011–1014 ms (rounded) | 46–48 ms |
+| Collector deliberately stalled for 5 seconds | 3012–3014 ms | 145–146 ms |
+
+[Raw timings and method](exit-latency-evidence.json). These measure this host,
+not remote-network latency. Recording was off; blocking storage writes can still
+hold recording finalization. Resource-control confirmation remains in place.
+131 tests pass, including an actual terminal regression for normal/stalled
+collection exit under 750 ms, split arrow/F1 decoding with an ESCDELAY override, existing mouse menus, navigation and resizing.
+
+---
+
 # 0.7.0 investigation validation
 
 129 tests pass, including bounded/exclusive recordings, interrupted-tail recovery,

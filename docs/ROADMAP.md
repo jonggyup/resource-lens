@@ -1,3 +1,9 @@
+## Usability priorities
+
+See [USABILITY.md](USABILITY.md) for ordered real-world tasks and acceptance checks.
+0.7.1 addresses measured Escape/shutdown delays. Next: explain machine capabilities,
+make workload navigation stable, then implement verified per-service disk limits.
+
 # 0.7.0
 
 - Focus individual sockets, memory nodes, disks, GPUs and interfaces while keeping
