@@ -10,6 +10,7 @@ import time
 
 from .presentation import GLYPHS, card_layout, chart, compact_overview, draw_card, overview_cards, palette
 from .controls import ControlSession
+from .hardware_ui import HardwareView
 
 
 def clean(value):
@@ -61,10 +62,11 @@ def pressure(snapshot, kind):
     return f"{kind.upper()} pressure (10s): {pct(value)}"
 
 
-class View:
+class View(HardwareView):
     names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Workloads")
 
     def __init__(self, unicode=False, control=False, session=None):
+        self.hardware_init()
         self.page = 0
         self.scroll = 0
         self.sort = "cpu"
@@ -211,6 +213,10 @@ class View:
             kind, result, error = self.results.get()
             if error:
                 self.modal = {"stage": "result", "message": error}
+            elif kind == "hardware_prepare":
+                self.modal = {"stage": "hardware_confirm", "plan": result}
+            elif kind.startswith("hardware_"):
+                self.modal = {"stage": "result", "message": "Hardware change restored and verified." if kind == "hardware_undo" else "Hardware change verified. CPU page: u to Undo."}
             elif kind == "prepare":
                 self.modal = {"stage": "confirm", "plan": result}
             else:
@@ -220,8 +226,10 @@ class View:
 
     def modal_lines(self):
         modal = self.modal
+        if modal["stage"].startswith("hardware_"):
+            return self.hardware_lines()
         if modal["stage"] == "busy":
-            return ["Working with systemd...", "The dashboard continues collecting data.", "Please wait for a confirmed result."]
+            return ["Applying or checking CPU settings...", "The dashboard continues collecting data.", "Please wait for a confirmed result."]
         if modal["stage"] == "input":
             property = modal["property"]
             return [f"Set CPU {property} for {modal['target']['unit']}",
@@ -244,18 +252,23 @@ class View:
         if modal["stage"] == "quit":
             return ["CPU changes may still be active.", "Runtime settings remain after leaving this dashboard.",
                     "This session's Undo history is lost when you exit.",
-                    "Enter: exit and keep settings | Esc: return | u: Undo latest"]
+                    "Enter: exit and keep settings | Esc: return | u: Undo (hardware first)"]
         return [modal["message"], "", "Enter or Esc: close | 8: inspect workloads"]
 
     def modal_key(self, key):
         stage = self.modal["stage"]
+        if stage.startswith("hardware_"):
+            return self.hardware_key(key)
         if stage == "busy":
             return True
         if stage == "quit":
             if key in (10, 13):
                 return False
             if key == ord("u"):
-                self.job("undo", self.session.undo)
+                if any(e['status'] != 'undone' for e in self.hardware.events):
+                    self.job('hardware_undo', self.hardware.undo)
+                else:
+                    self.job("undo", self.session.undo)
             elif key == 27:
                 self.modal = None
             return True
@@ -289,10 +302,18 @@ class View:
                  "Load " + " / ".join(f"{v:.2f}" if v is not None else "N/A" for v in s["load"]),
                  pressure(s, "cpu"),
                  f"I/O wait {pct(aggregate.get('iowait_pct'))}  Steal {pct(aggregate.get('steal_pct'))}"]
-        for c in s["cpu"]:
-            if c["id"] != "cpu":
-                freq = f"{c['frequency_mhz']:.0f}MHz" if c["frequency_mhz"] is not None else "freq N/A"
-                lines.append(f"{c['id']:<7} {bar(c['busy_pct'], max(8, min(20, width - 29)))}  {freq}")
+        lines.append("[ All CPUs / sockets settings ]  Right-click CPU; g menu; u Undo")
+        data = s.get("cpu_hardware", {"cpus": [], "policies": {}})
+        metrics = {c["id"]: c for c in s["cpu"]}
+        for c in data["cpus"]:
+            metric = metrics.get(f"cpu{c['id']}", {})
+            policy = data["policies"].get(c['policy'], {})
+            state = bar(metric.get('busy_pct'), 8) if c['online'] else 'OFFLINE'
+            lines.append(f"cpu{c['id']} S{c['socket']} C{c['core']} {state} "
+                         f"{policy.get('governor') or 'governor N/A'} "
+                         + (f"{metric['frequency_mhz']:.0f}MHz" if metric.get('frequency_mhz') is not None else 'freq N/A'))
+        if not data['policies']:
+            lines.append('Frequency governors: unavailable on this system.')
         for sensor in s["temperatures"]:
             lines.append(f"{clean(sensor['name'])}: {sensor['temperature_c']:.1f} C")
         return lines
@@ -425,6 +446,8 @@ class View:
                     "Network: per-interface RX/TX rates, scaled to each visible peak.",
                     "Overview charts: oldest left, newest right; fixed 0-100% axes.",
                     "Use --ascii for terminals without Unicode block graphics.",
+                    "2 CPU: right-click CPU or g for all/socket/CPU settings; u Undo.",
+                    "S = socket, C = physical core; each CPU row is one logical CPU.",
                     "8 Workloads: Up/Down select, Enter inspect, Esc return.",
                     "With --control: w CPU weight, l CPU quota, u Undo latest.",
                     "History gaps are missing samples; all missing shows N/A.",
@@ -437,6 +460,22 @@ class View:
                 4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines}.get(self.page, self.process_lines)(width)
 
     def mouse(self, x, y, state):
+        left = state & (getattr(curses, "BUTTON1_CLICKED", 0) | getattr(curses, "BUTTON1_PRESSED", 0))
+        right = state & (getattr(curses, "BUTTON3_CLICKED", 0) | getattr(curses, "BUTTON3_PRESSED", 0))
+        if self.modal:
+            hit = self.modal_regions.get(y)
+            if left and hit and hit[0] <= x < hit[1]:
+                if self.modal['stage'] == 'hardware_menu':
+                    self.modal['selected'] = hit[2]
+                    self.hardware_choose()
+                elif self.modal['stage'] == 'hardware_confirm' and hit[2] == 'apply':
+                    self.hardware_key(10)
+                elif self.modal['stage'] == 'hardware_confirm' and hit[2] == 'cancel':
+                    self.modal = None
+            return
+        if self.page == 1 and not self.help and (left or right) and y in self.cpu_regions:
+            self.hardware_menu(self.cpu_regions[y])
+            return
         if state & (getattr(curses, "BUTTON1_CLICKED", 0) | getattr(curses, "BUTTON1_PRESSED", 0)) and y == 1:
             for start, end, page in self.tab_regions:
                 if start <= x < end:
@@ -449,6 +488,13 @@ class View:
 
     def key(self, key, height=24):
         if self.modal:
+            if key == curses.KEY_MOUSE:
+                try:
+                    _, x, y, _, state = curses.getmouse()
+                    self.mouse(x, y, state)
+                except curses.error:
+                    pass
+                return True
             return self.modal_key(key)
         if self.editing_filter:
             field = "workload_filter" if self.filter_context == "workloads" else "filter"
@@ -474,10 +520,16 @@ class View:
             if key == 27 and self.page == 7 and self.workload_detail:
                 self.workload_detail, self.scroll = False, 0
                 return True
-            if any(event["status"] in ("confirmed", "unconfirmed") for event in self.session.events):
+            if any(event["status"] in ("confirmed", "unconfirmed") for event in self.session.events + self.hardware.events):
                 self.modal = {"stage": "quit"}
                 return True
             return False
+        if self.page == 1 and key in (ord('g'), ord('u')):
+            if key == ord('g') or not self.control:
+                self.hardware_menu()
+            else:
+                self.job('hardware_undo', self.hardware.undo)
+            return True
         if self.page == 7 and key in (ord("w"), ord("l"), ord("u")):
             if not self.control:
                 self.modal = {"stage": "result", "message": "Controls are disabled. Restart with --control to enable temporary CPU changes."}
@@ -552,6 +604,8 @@ def draw(screen, view, interval, error=None):
     screen.erase()
     h, w = screen.getmaxyx()
     view.screen_size = h, w
+    view.cpu_regions = {}
+    view.modal_regions = {}
     if h < 10 or w < 40:
         put(screen, 0, 0, "Resize to at least 40 x 10. q: quit")
         screen.refresh()
@@ -622,6 +676,13 @@ def draw(screen, view, interval, error=None):
                 attribute = accent | curses.A_REVERSE if line.startswith(">") or index == 3 else 0
             else:
                 attribute = color if index < 5 else (accent if i == 0 else 0)
+            if view.page == 1 and not view.help:
+                import re
+                match = re.match(r'cpu(\d+) ', line)
+                if match:
+                    view.cpu_regions[i + 3] = ('id', int(match[1]))
+                elif line.startswith('[ All CPUs'):
+                    view.cpu_regions[i + 3] = ('all', None)
             put(screen, i + 3, 1, line, attribute)
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     message = error or ("; ".join(s["warnings"]) if s else "") or status
@@ -630,6 +691,8 @@ def draw(screen, view, interval, error=None):
         message = f"Filter: {value}_ ({view.filter_context})  Enter: apply  Esc: clear"
     put(screen, h - 2, 1, message, view.colors["warning"] if error else muted)
     footer = "Tab next | 1-8 views | Space freeze | / find task | ? help | q quit"
+    if view.page == 1:
+        footer = "Right-click CPU | g all/socket/core menu | u hardware Undo | q quit"
     if view.page == 7:
         footer = "Enter inspect | w weight | l quota | u Undo | Esc back | ? help | q quit"
     if w < 76:
@@ -638,7 +701,7 @@ def draw(screen, view, interval, error=None):
     if view.modal:
         content_width = max(20, min(76, w - 8))
         lines = [piece for line in view.modal_lines() for piece in (textwrap.wrap(clean(line), content_width) or [""])]
-        if view.modal["stage"] == "confirm" and len(lines) > h - 5:
+        if view.modal["stage"] in ("confirm", "hardware_confirm") and len(lines) > h - 5:
             lines = ["The full target preview does not fit this terminal.",
                      "Resize larger to review and confirm, or Esc to cancel.",
                      "Enter is disabled until the complete preview is visible."]
@@ -649,7 +712,13 @@ def draw(screen, view, interval, error=None):
             put(screen, top + row, left, " " * box_width, curses.A_REVERSE, box_width)
         put(screen, top, left, "+" + "-" * (box_width - 2) + "+", accent, box_width)
         put(screen, top + box_height - 1, left, "+" + "-" * (box_width - 2) + "+", accent, box_width)
+        option_index = view.modal.get('offset', 0)
         for index, line in enumerate(lines[:box_height - 3]):
+            if view.modal['stage'] == 'hardware_menu' and (line.startswith('> ') or line.startswith('- ')):
+                view.modal_regions[top + 1 + index] = (left, left + box_width, option_index)
+                option_index += 1
+            if view.modal['stage'] == 'hardware_confirm' and line.startswith(('[ Apply ]', '[ Cancel ]')):
+                view.modal_regions[top + 1 + index] = (left, left + box_width, 'apply' if line.startswith('[ Apply ]') else 'cancel')
             put(screen, top + 1 + index, left + 2, line, curses.A_REVERSE | (curses.A_BOLD if index == 0 else 0), content_width)
     screen.refresh()
 

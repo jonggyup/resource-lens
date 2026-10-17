@@ -1,3 +1,22 @@
+# 0.3.0 CPU hardware control validation
+
+85 automated tests pass, including an actual curses pseudo-terminal session
+opening the bulk menu and right-clicking CPU 0 using SGR mouse input. The full
+existing telemetry/workload/controls suite also passes. New fixture tests cover
+policy deduplication, shared-policy scope, socket scope, unavailable governors,
+stale previews, partial writes and restoration, external conflicts, hotplug
+switch absence, last-online-CPU protection, read-only gating and small previews.
+
+A real JSON sample on the development host reports eight present/online logical
+CPUs, socket 1, four physical cores and no cpufreq policies. Possible CPUs 8-31
+are correctly excluded. No host governor changes were possible; no live CPU was
+offlined on this working server. Actual hardware governor transitions and hotplug
+remain unverified on hardware; fixture tests are not a substitute for that check.
+
+Run: `python3 -m unittest discover -s tests -v` from the project directory.
+
+---
+
 # Validation
 
 ## 0.2.0: workload inspection and runtime CPU controls

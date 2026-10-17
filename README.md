@@ -5,10 +5,11 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.2.0 is a preview with optional temporary CPU controls.** Monitoring
+**Version 0.3.0 is a preview with optional temporary CPU controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
-quota changes for supported systemd services/scopes. Disk/memory controls,
-nice/affinity editing, CPU online state and frequency changes are future work.
+quota changes for supported systemd services/scopes, plus CPU governors and
+logical CPU online/offline controls. Disk/memory controls, direct frequency
+limits and nice/affinity editing remain future work.
 It does not claim functionality is unique to Linux tools.
 
 ## Run immediately
@@ -98,6 +99,51 @@ percentages; disk/GPU histories show the busiest device, whose identity may
 change. Sampling defaults to one second. Frozen intervals are omitted from
 display history, so it is a sequence of samples rather than a continuous
 wall-clock axis.
+
+## CPU governors and online/offline controls
+
+```bash
+python3 -m resourcelens --control
+```
+
+Press **2** for CPU details. Right-click a CPU row to open its settings, or
+click **All CPUs / sockets settings**. Press **g** for the same menu without a
+mouse. Choose with Up/Down + Enter or left-click. The all-CPU menu includes
+socket and individual CPU choices; scroll through choices with Up/Down.
+
+- Set a governor for one logical CPU's shared policy, one socket, or all CPUs
+  across all sockets. Choices come from the kernel's available governors.
+- Bring present logical CPUs online or take them offline. This is scheduler
+  hotplug, not physical hardware removal. Taking an entire physical core offline
+  requires taking all its SMT threads offline; rows show `S` socket and `C` core IDs.
+- Review the affected logical CPUs and old/new settings, then click Apply or
+  press Enter. Esc or Cancel leaves settings alone. A shared frequency policy
+  can affect CPUs outside the selected socket or CPU; the preview includes them.
+- Press **u** on the CPU page to restore the latest hardware change in this
+  session. Workloads has its own Undo history. The exit dialog undoes hardware
+  entries first, then workload entries.
+
+Hardware writes use the existing permissions on `/sys/devices/system/cpu`.
+`--control` does not grant permission and the app never invokes sudo. Standard
+unprivileged sessions normally receive permission errors; an administrator must
+provide access or run the application with appropriate privileges. Systemd
+workload authorization is separate. Containers, virtual machines and some
+hardware/drivers expose no governor controls; the UI reports this explicitly.
+CPU0 often lacks a hotplug switch. Requests that include a CPU without a required
+switch, or that would offline every online CPU, are rejected before writing.
+
+Changes are machine-wide and remain after exiting. No boot configuration is
+written. Power management daemons may overwrite governors. Batches are sequential,
+not atomic: an error can leave some entries changed. The UI reports partial
+failure and retains an Undo record. Undo checks topology and current values and
+stops on external conflicts; it is best-effort and cannot eliminate races with
+other administrators. Undo history is lost on exit or crash. Hotplug can alter
+CPU affinity and driver behavior; Undo restores the CPU setting, not those
+secondary effects. All-offline governor policies may disappear from sysfs,
+preventing automatic Undo until the topology/policy is restored.
+
+Kernel references: [CPUFreq policies and governors](https://docs.kernel.org/admin-guide/pm/cpufreq.html)
+and [CPU hotplug](https://docs.kernel.org/core-api/cpu_hotplug.html).
 
 ## Inspect and control a workload
 
@@ -297,7 +343,7 @@ Architecture:
 - `resourcelens/__main__.py`: CLI and text/JSON modes.
 
 Further resource controls should retain capability detection, effective-setting
-feedback and explicit Undo. Hardware-wide controls and per-application
+feedback and explicit Undo. Further hardware controls and per-application
 allocation must remain distinguishable. See
 [docs/ROADMAP.md](docs/ROADMAP.md) and the proposed
 [feature sequence](docs/FEATURE_PLAN.md), which distinguishes the implemented

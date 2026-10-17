@@ -1,3 +1,10 @@
+# 0.3.0
+
+- CPU topology with present/offline CPUs, sockets and physical core IDs.
+- Right-click CPU menus and mouse/keyboard bulk governor and hotplug controls.
+- Shared-policy previews, verified writes, partial-failure recovery and session Undo.
+- Hardware support and permissions are detected from sysfs; monitoring stays read-only by default.
+
 # Changelog
 
 ## 0.2.0

@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--count", type=int, help="number of JSON samples (default: stream until interrupted)")
     parser.add_argument("--no-nvidia", action="store_true", help="do not invoke nvidia-smi")
     parser.add_argument("--ascii", action="store_true", help="use ASCII charts and borders in the terminal")
-    parser.add_argument("--control", action="store_true", help="enable previewed runtime CPU controls on the Workloads page")
+    parser.add_argument("--control", action="store_true", help="enable previewed CPU governor/hotplug and systemd workload controls")
     args = parser.parse_args()
     if not math.isfinite(args.interval) or not 0.2 <= args.interval <= 60:
         parser.error("--interval must be between 0.2 and 60 seconds")

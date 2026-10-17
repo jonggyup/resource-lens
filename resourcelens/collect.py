@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import time
+from .hardware import Hardware
 
 
 def read(path):
@@ -294,7 +295,7 @@ class Collector:
         return {"schema_version": 1, "timestamp": time.time(), "elapsed_s": elapsed,
                 "hostname": os.uname().nodename, "cpu_model": self.model,
                 "cpu": cpu, "memory": memory, "disks": disks, "gpus": self.gpus(),
-                "network": network,
+                "network": network, "cpu_hardware": Hardware(self.sys / "devices/system/cpu").snapshot(),
                 "workloads": workloads,
                 "pressure": self.pressure(), "temperatures": self.temperatures(),
                 "processes": processes, "processes_skipped": skipped,

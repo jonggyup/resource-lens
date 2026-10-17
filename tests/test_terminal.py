@@ -51,6 +51,40 @@ class TerminalTests(unittest.TestCase):
         self.assertIn("RX history", text)
         self.assertNotIn("Traceback", text)
 
+    def test_hardware_menu_in_real_terminal(self):
+        master, slave = pty.openpty()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, slave)
+        fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 35, 120, 0, 0))
+        child = subprocess.Popen([sys.executable, "-m", "resourcelens", "--control", "--no-nvidia"],
+                                 stdin=slave, stdout=slave, stderr=slave,
+                                 env={**os.environ, "TERM": "xterm-256color"})
+        self.addCleanup(lambda: child.poll() is None and child.kill())
+        output = bytearray()
+        def drain(duration=0.4):
+            deadline = time.monotonic() + duration
+            while time.monotonic() < deadline:
+                ready, _, _ = select.select([master], [], [], 0.03)
+                if ready:
+                    output.extend(os.read(master, 65536))
+        drain(0.8)
+        os.write(master, b"2g")
+        drain()
+        self.assertIn(b"CPU settings: All CPUs / all sockets", output)
+        os.write(master, b"\x1b")
+        drain(1.2)
+        # SGR right-button press on the first logical CPU row.
+        os.write(master, b"\x1b[<2;5;15M")
+        drain()
+        self.assertIn(b"CPU settings: ID 0", output)
+        os.write(master, b"\x1b")
+        drain(1.2)
+        os.write(master, b"q")
+        drain()
+        child.wait(timeout=3)
+        self.assertEqual(child.returncode, 0, output.decode(errors="replace")[-2000:])
+        self.assertNotIn(b"Traceback", output)
+
     def test_json_cli_measured_sample(self):
         output = subprocess.check_output([sys.executable, "-m", "resourcelens", "--json", "--count", "2",
                                           "--interval", "0.2", "--no-nvidia"], text=True, timeout=5)
