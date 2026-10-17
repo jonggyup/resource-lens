@@ -1,8 +1,21 @@
+# 0.8.0
+
+- Add a Capabilities page with collection wall/CPU time, peak RSS, permissions hints,
+  source availability and collector errors.
+- Add workload CPU/RAM/name/I/O sorting, stable selection with replacement notices,
+  process trees and workload-to-disk navigation.
+- Save presentation preferences explicitly; name markers and export redacted reports.
+- Add verified per-service disk read/write limits with preview, conflict checks and Undo.
+- Capture sustained PSI/quota incidents with bounded prehistory, posthistory and file budgets.
+- Add an optional isolated privileged helper with exact-unit policy, root-owned
+  receipts, restricted CPU/disk operations and interrupted-attempt recovery.
+- Retain 35 ms Escape recognition and bounded read-only collector shutdown.
+
 ## Usability priorities
 
 See [USABILITY.md](USABILITY.md) for ordered real-world tasks and acceptance checks.
-0.7.1 addresses measured Escape/shutdown delays. Next: explain machine capabilities,
-make workload navigation stable, then implement verified per-service disk limits.
+0.7.1 addresses measured Escape/shutdown delays. 0.8.0 implements capabilities, workload navigation and verified per-service disk limits.
+Next: broader hardware/storage testing, large-host performance and finer incident configuration.
 
 # 0.7.0
 
@@ -45,10 +58,10 @@ Actual system-service enforcement and terminal edits were verified on Linux
 host has no usable current-user manager. Undo is session-only, best effort for
 concurrent writers, and restores values rather than exact runtime-file bytes.
 
-## Next: disk bandwidth and process controls
+## Disk bandwidth — implemented in 0.8.0; process/memory controls remain planned
 
-Per-service, per-device read/write limits with explicit backing-device mapping,
-enforcement observations and Undo. Add nice/affinity as clearly separate
+Per-service, per-device read/write limits, backing-device relationships,
+enforcement observations and Undo are implemented. Add nice/affinity as clearly separate
 per-process operations. Memory budgets follow once their failure/reclaim/OOM
 behavior can be presented clearly.
 

@@ -1,3 +1,38 @@
+# 0.8.0 usability and control validation
+
+149 automated tests pass. New checks cover presentation-only preference validation,
+private/atomic saving, redacted reports, missing/reordered/replaced workload identity,
+process-tree cycles and depth, bounded sustained incident capture, missing-sample
+resets, disk stale-preview/Undo conflicts and false-success handling, clipped
+confirmation, helper policy/receipt ownership and recovery after interrupted apply.
+
+Live checks:
+
+- [Terminal evidence](usability-ui-evidence.json): capability view, process tree,
+  selected-service disk preview/apply/Undo, named marker, report export and preference
+  restoration on a second launch, plus live incident-to-Timeline delivery and replay after early exit. Temporary XDG directories kept user settings intact.
+- [Disk enforcement](disk-enforcement-evidence.json): a disposable service wrote
+  8 MiB to its own temporary file with direct I/O. Baseline 0.091 s; a 2 MiB/s
+  limit took 3.981 s; after verified Undo, 0.064 s. `io.max` and `io.stat` agreed.
+  No raw device writes occurred. This demonstrates this host/device workload,
+  not every buffered or layered storage configuration.
+- [Incident evidence](incident-live-evidence.json): a disposable service limited
+  to 1% CPU produced sustained CPU PSI. The live CLI captured 52 samples, an alert
+  and 10.04 seconds after the trigger, in a replayable 0600 file. Quota trigger
+  logic and missing signals additionally have fixture coverage. The service was stopped.
+- [Helper evidence](helper-live-evidence.json): real CPU/disk prepare/apply/Undo
+  through the privileged dispatcher, exact-unit policy and foreign-receipt refusal.
+  The isolated archive refused privileged execution as an unprivileged user.
+  No persistent sudo policy was installed; administrator-specific authentication
+  remains deployment validation.
+
+External telemetry query cancellation is tested with a real sleeping subprocess.
+The full suite retains local Escape latency, split-key/mouse and resize checks.
+General recording, replay and installed-package checks remain part of release validation.
+No collection-overhead guarantee for 1k/10k-process or 64/256-CPU machines is made.
+
+---
+
 # 0.7.1 responsiveness validation
 
 Local PTY measurements, three trials per case, from bare Escape to process exit:

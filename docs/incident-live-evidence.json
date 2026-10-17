@@ -1,0 +1,10 @@
+{
+  "method": "Disposable CPUQuota=1% service; live CLI capture, threshold 20, sustained 1 second. CPU PSI triggered before the quota signal; service stopped after test.",
+  "files": 1,
+  "samples": 52,
+  "event_label": "Sustained cpu PSI",
+  "event_status": "alert",
+  "post_event_seconds": 10.040767192840576,
+  "mode": "0o600",
+  "bytes": 3769252
+}

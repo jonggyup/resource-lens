@@ -11,10 +11,13 @@ from . import __version__
 from .collect import Collector
 from .ui import View, run
 from .recording import Recorder, Replay, RecordingError
+from .usability import load_preferences, export_report
+from .incidents import IncidentCapture
+from .controls import ControlError
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Live Linux resource dashboard with optional temporary systemd CPU controls.")
+    parser = argparse.ArgumentParser(description="Live Linux resource dashboard with optional verified runtime resource controls.")
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--interval", type=float, default=1, help="sample interval in seconds (0.2-60; default 1)")
     parser.add_argument("--once", action="store_true", help="print one measured text snapshot and exit")
@@ -22,10 +25,18 @@ def main():
     parser.add_argument("--count", type=int, help="number of JSON samples (default: stream until interrupted)")
     parser.add_argument("--no-nvidia", action="store_true", help="do not invoke nvidia-smi")
     parser.add_argument("--ascii", action="store_true", help="use ASCII charts and borders in the terminal")
-    parser.add_argument("--control", action="store_true", help="enable previewed CPU placement, governor/hotplug and systemd workload controls")
+    parser.add_argument("--control", action="store_true", help="enable previewed CPU and per-service disk bandwidth controls")
     parser.add_argument('--record', metavar='FILE', help='record samples and UI events to a new private JSONL file')
     parser.add_argument('--record-max-mb', type=int, default=256, help='recording size cap in MiB (default 256)')
     parser.add_argument('--replay', metavar='FILE', help='inspect a recording without accessing live telemetry or controls')
+    parser.add_argument('--no-config', action='store_true', help='ignore saved presentation preferences')
+    parser.add_argument('--report', metavar='FILE', help='export a private JSON investigation report and exit')
+    parser.add_argument('--report-identifiers', action='store_true', help='include host and event identifiers in --report')
+    parser.add_argument('--incidents', metavar='DIR', help='opt-in bounded sustained-pressure capture directory')
+    parser.add_argument('--alert-threshold', type=float, default=20, help='PSI percent or quota throttled time percent (default 20)')
+    parser.add_argument('--alert-duration', type=float, default=10, help='sustained threshold seconds (default 10)')
+    parser.add_argument('--alert-cooldown', type=float, default=60, help='minimum seconds between captures (default 60)')
+    parser.add_argument('--helper', metavar='PATH', help='explicit root-owned helper zipapp; requires configured sudo and unit allowlist')
     args = parser.parse_args()
     if not math.isfinite(args.interval) or not 0.2 <= args.interval <= 60:
         parser.error("--interval must be between 0.2 and 60 seconds")
@@ -37,17 +48,45 @@ def main():
         parser.error("--control is interactive only; text/JSON snapshots are read-only")
     if args.record_max_mb < 1:
         parser.error('--record-max-mb must be positive')
+    if args.report_identifiers and not args.report:
+        parser.error("--report-identifiers requires --report")
+    if args.helper and not args.control:
+        parser.error("--helper requires --control")
+    if args.incidents and args.replay:
+        parser.error("--incidents is live-only")
+    if args.report and (args.control or args.record or args.incidents or args.json or args.once):
+        parser.error("--report cannot be combined with control/record/incidents/json/once")
     if args.replay and (args.control or args.record):
         parser.error('--replay is read-only and cannot be combined with --control or --record')
     if sys.platform != "linux":
         parser.error("Resource Lens requires Linux /proc and /sys")
-    if not (args.once or args.json) and not (sys.stdin.isatty() and sys.stdout.isatty()):
+    if not (args.once or args.json or args.report) and not (sys.stdin.isatty() and sys.stdout.isatty()):
         parser.error("interactive mode requires a terminal; use --once or --json --count 1")
-    recorder, replay = None, None
+    recorder, replay, incidents, collector = None, None, None, None
     try:
         replay = Replay(args.replay) if args.replay else None
         recorder = Recorder(args.record, args.record_max_mb * 1024 * 1024) if args.record else None
         collector = None if replay else Collector(nvidia=not args.no_nvidia)
+        prefs = {}
+        if not args.no_config:
+            try:
+                prefs = load_preferences()
+            except (OSError,ValueError) as exc:
+                print('Preferences ignored: '+str(exc),file=sys.stderr)
+        if args.incidents:
+            incidents = IncidentCapture(args.incidents,args.alert_threshold,args.alert_duration,args.alert_cooldown,interval=args.interval)
+        if args.report:
+            view = View()
+            if replay:
+                view.investigation.events = list(replay.events)
+                for index in range(max(0,len(replay.offsets)-600),len(replay.offsets)):
+                    view.update(replay.sample_at(index))
+            else:
+                collector.sample()
+                time.sleep(args.interval)
+                view.update(collector.sample())
+            print(export_report(view,args.report,redact=not args.report_identifiers))
+            return 0
         if args.once or args.json:
             if collector:
                 collector.sample()  # Prime cumulative counters; do not report lifetime averages.
@@ -58,6 +97,8 @@ def main():
                 else:
                     time.sleep(args.interval)
                     sample = collector.sample()
+                if incidents:
+                    incidents.observe(sample)
                 if recorder:
                     recorder.write('sample', sample)
                 if args.json:
@@ -79,16 +120,20 @@ def main():
                 if args.once or (args.count is not None and count >= args.count) or (replay and count >= len(replay.offsets)):
                     break
         else:
-            run(collector, args.interval, ascii=args.ascii, control=args.control, recorder=recorder, replay=replay)
+            run(collector, args.interval, ascii=args.ascii, control=args.control, recorder=recorder, replay=replay, preferences=prefs, incidents=incidents, helper=args.helper)
     except (KeyboardInterrupt, BrokenPipeError):
         return 0
-    except (OSError, RecordingError, json.JSONDecodeError) as exc:
+    except (OSError, ValueError, ControlError) as exc:
         print(f'Resource Lens: {exc}', file=sys.stderr)
         return 1
     except curses.error as exc:
         print(f"Terminal unavailable: {exc}. Try TERM=xterm-256color or --once.", file=sys.stderr)
         return 1
     finally:
+        if collector:
+            collector.close()
+        if incidents and (args.once or args.json):
+            incidents.close()
         if recorder:
             if recorder.error:
                 print(recorder.error, file=sys.stderr)

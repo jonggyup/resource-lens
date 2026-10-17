@@ -151,7 +151,7 @@ class MetricsTests(unittest.TestCase):
         target = self.sys / "bus/drivers/nvidia"
         target.mkdir(parents=True)
         (self.sys / "class/drm/card0/device/driver").symlink_to(target)
-        with patch("resourcelens.collect.subprocess.run", side_effect=subprocess.TimeoutExpired("nvidia-smi", 0.8)):
+        with patch.object(self.collector, "run_query", side_effect=subprocess.TimeoutExpired("nvidia-smi", 0.8)):
             sample = self.collector.sample()
         self.assertIsNotNone(sample["memory"]["total"])
         self.assertIn("timed out", sample["gpus"][0]["status"])
@@ -160,10 +160,10 @@ class MetricsTests(unittest.TestCase):
     def test_nvidia_backend_without_drm_and_nonzero_exit(self):
         self.collector.nvidia = "/fixture/nvidia-smi"
         completed = subprocess.CompletedProcess([], 0, "Test, PCI:0, 90, 50, 100, 40, 10, 900\n", "")
-        with patch("resourcelens.collect.subprocess.run", return_value=completed):
+        with patch.object(self.collector, "run_query", return_value=completed):
             self.assertEqual(self.collector.sample()["gpus"][0]["busy_pct"], 90)
         completed.returncode = 1
-        with patch("resourcelens.collect.subprocess.run", return_value=completed):
+        with patch.object(self.collector, "run_query", return_value=completed):
             self.assertEqual(self.collector.sample()["gpus"], [])
 
     def test_json_is_finite(self):

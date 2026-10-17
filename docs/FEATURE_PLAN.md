@@ -1,3 +1,16 @@
+# 0.8.0
+
+- Add a Capabilities page with collection wall/CPU time, peak RSS, permissions hints,
+  source availability and collector errors.
+- Add workload CPU/RAM/name/I/O sorting, stable selection with replacement notices,
+  process trees and workload-to-disk navigation.
+- Save presentation preferences explicitly; name markers and export redacted reports.
+- Add verified per-service disk read/write limits with preview, conflict checks and Undo.
+- Capture sustained PSI/quota incidents with bounded prehistory, posthistory and file budgets.
+- Add an optional isolated privileged helper with exact-unit policy, root-owned
+  receipts, restricted CPU/disk operations and interrupted-attempt recovery.
+- Retain 35 ms Escape recognition and bounded read-only collector shutdown.
+
 # 0.7.0
 
 - Focus individual sockets, memory nodes, disks, GPUs and interfaces while keeping
@@ -17,7 +30,7 @@ sysfs data. Resource controls remain explicit, separate actions.
 **0.4.0 status:** workload inspection and runtime CPU weight/quota with preview,
 verification and session Undo are implemented. Real system-service kernel and
 terminal-UI checks passed; see [VALIDATION.md](VALIDATION.md). Per-process
-nice/affinity edits, disk/memory changes remain planned. Persistent event recording is implemented in 0.7.0.
+nice/affinity edits and memory changes remain planned. Disk bandwidth controls are implemented in 0.8.0. Persistent event recording is implemented in 0.7.0.
 Service CPU placement now has a socket/NUMA/core selector, verified systemd/cpuset
 application and Undo. CPU governors and logical CPU hotplug have mouse menus, bulk scopes, verified
 sysfs writes and session Undo; hardware transition validation remains outstanding. Monitoring stays read-only unless `--control`
@@ -133,11 +146,11 @@ The read-only workload view and temporary CPU quota/weight complete an initial
 “inspect, adjust, observe, restore” workflow. Undo restores settings through
 systemd, is session-only, and cannot atomically exclude concurrent external
 writers; see README for lifetime and limitations. Timestamped control events
-appear in workload details but are not yet durable recordings or chart markers.
+appear in workload details and the durable recording/marker workflow introduced in 0.7.0.
 
-Next, implement per-service **disk read/write bandwidth controls** using the
-same preview/identity/verification/Undo workflow and per-device enforcement
-tests. Per-process nice/affinity can follow as distinct process-level controls.
+0.8.0 implements per-service **disk read/write bandwidth controls** using the
+same preview/identity/verification/Undo workflow, with a real direct-I/O enforcement
+test. Per-process nice/affinity can follow as distinct process-level controls.
 
 Kernel references: [cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html),
 [CPU frequency policies](https://docs.kernel.org/admin-guide/pm/cpufreq.html).

@@ -1,3 +1,17 @@
+# 0.8.0
+
+- Add a Capabilities page with collection wall/CPU time, peak RSS, permissions hints,
+  source availability and collector errors.
+- Add workload CPU/RAM/name/I/O sorting, stable selection with replacement notices,
+  process trees and workload-to-disk navigation.
+- Save presentation preferences explicitly; name markers and export redacted reports.
+- Add verified per-service disk read/write limits with preview, conflict checks and Undo.
+- Capture sustained PSI/quota incidents with bounded prehistory, posthistory and file budgets.
+- Add an optional isolated privileged helper with exact-unit policy, root-owned
+  receipts, restricted CPU/disk operations and interrupted-attempt recovery.
+- Retain 35 ms Escape recognition and bounded read-only collector shutdown;
+  cancel an in-flight read-only GPU query on exit.
+
 # 0.7.1
 
 - Reduce default Escape recognition delay to 35 ms; honor positive ESCDELAY overrides.

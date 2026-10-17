@@ -19,6 +19,8 @@ from .resource_panels import resource_lines, expanded_overview
 from .navigation import NavigationView, actions, context_help
 from .focus import FocusView, KINDS
 from .investigation import Investigation, indicators
+from .usability_ui import UsabilityView
+from .usability import tree_rows
 
 
 def clean(value):
@@ -70,10 +72,11 @@ def pressure(snapshot, kind):
     return f"{kind.upper()} pressure (10s): {pct(value)}"
 
 
-class View(HardwareView, PlacementView, NavigationView, FocusView):
-    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Workloads", "Timeline")
+class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView):
+    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Workloads", "Timeline", "Capabilities")
 
     def __init__(self, unicode=False, control=False, session=None):
+        self.usability_init()
         self.hardware_init()
         self.placement_init()
         self.overview_expanded = False
@@ -179,11 +182,26 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
         groups = self.snapshot.get("workloads", []) if self.snapshot else []
         groups = [group for group in groups if self.workload_filter.casefold() in
                   f"{group.get('unit') or ''} {group['id']}".casefold()]
-        rows = sorted(groups,
-                      key=lambda group: group["cpu_pct"] if group["cpu_pct"] is not None else -1, reverse=True)
-        if self.workload_id not in {group["id"] for group in rows}:
-            self.workload_id = rows[0]["id"] if rows else None
+        def order(group):
+            if self.workload_sort == 'name':
+                return (group.get('unit') or group['id']).casefold()
+            if self.workload_sort == 'io':
+                return sum((d.get('read_bps') or 0)+(d.get('write_bps') or 0) for d in group.get('io_devices', []))
+            value = group.get('memory_current' if self.workload_sort == 'memory' else 'cpu_pct')
+            return value if value is not None else -1
+        rows = sorted(groups, key=order, reverse=self.workload_sort != 'name')
+        if self.workload_id is None:
+            self.workload_id = rows[0]['id'] if rows else None
+        elif self.workload_id not in {group['id'] for group in rows}:
+            self.workload_notice = 'Selection exited or is filtered out; use arrows to select another workload.'
             self.workload_detail = False
+        group = next((g for g in rows if g['id'] == self.workload_id), None)
+        identity = (group['id'], group.get('inode')) if group else None
+        if self.workload_identity and identity and identity[0] == self.workload_identity[0] and identity != self.workload_identity:
+            self.workload_notice = 'Selected service restarted/replaced; review its new identity before controlling it.'
+            self.workload_detail = False
+        if identity is not None:
+            self.workload_identity = identity
         return rows
 
     def selected_workload(self):
@@ -196,7 +214,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
         if not self.workload_detail or group is None:
             name_width = max(12, min(45, width - 32))
             lines = [f"{len(rows)} workloads | / find | Enter inspect | Filter: {clean(self.workload_filter) or '(none)'}", mode,
-                     "Accounting includes descendants; nested rows may overlap.",
+                     self.workload_notice or f"Sort: {self.workload_sort} | c CPU / m RAM / n name / i I/O | b disk limits / B Undo",
                      f"  {'UNIT / GROUP':<{name_width}} {'CPU':>7} {'MEMORY':>10} {'PIDS':>5}"]
             for row in rows:
                 name = clean(row["unit"] or row["id"])
@@ -209,7 +227,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
         local = limits["ancestors"][0] if limits["ancestors"] else {}
         lines = [f"{clean(group['unit'] or group['id'])} | {group['kind']}",
                  f"Manager: {group['manager'] or 'unknown'} | owner UID: {group['owner_uid'] if group['owner_uid'] is not None else 'system'}",
-                 mode, "Esc: workload list | runtime changes remain after exit",
+                 mode, "Esc: list | d: device | b: disk limit | B: Undo disk | runtime settings remain",
+                 self.workload_notice or "Nested workload accounting may overlap.",
                  f"CPU {pct(group['cpu_pct'])} (100% = one CPU) | memory {size(group['memory_current'])}"]
         lines.extend(textwrap.wrap("Cgroup: " + clean(group["path"] or "unattributed"), width))
         values = self.history["workload:" + group["id"]]
@@ -261,8 +280,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
             lines.append("  No changes")
         return lines
 
-    def job(self, kind, function, *args):
-        if self.replay:
+    def job(self, kind, function, *args, allow_replay=False):
+        if self.replay and not allow_replay:
             self.modal = {'stage': 'result', 'message': 'Replay is read-only; live control operations are disabled.'}
             return
         self.pending_action = {'plan': args[0] if args and isinstance(args[0], dict) else {}, 'timestamp': time.time(), 'target': args[0].get('target') if args and isinstance(args[0], dict) else None}
@@ -277,6 +296,9 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
     def poll_actions(self):
         while not self.results.empty():
             kind, result, error = self.results.get()
+            if kind.startswith("utility_"):
+                self.utility_result(kind, result, error)
+                continue
             if kind in ('apply', 'undo', 'hardware_apply', 'hardware_undo', 'placement_apply', 'placement_undo'):
                 target = (result or {}).get('target') or self.pending_action.get('target')
                 identity = {'id': target['path'], 'inode': target.get('inode')} if target and target.get('path') else None
@@ -315,6 +337,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
 
     def modal_lines(self):
         modal = self.modal
+        if modal['stage'].startswith('utility_'):
+            return self.utility_lines()
         if modal['stage'] == 'focus':
             return self.focus_lines()
         if modal['stage'] == 'navigate':
@@ -324,7 +348,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
         if modal["stage"].startswith("hardware_"):
             return self.hardware_lines()
         if modal["stage"] == "busy":
-            return ["Applying or checking CPU settings...", "The dashboard continues collecting data.", "Please wait for a confirmed result."]
+            return ["Running the requested action...", "The dashboard continues collecting data.", "Please wait for a confirmed result."]
         if modal["stage"] == "input":
             property = modal["property"]
             return [f"Set CPU {property} for {modal['target']['unit']}",
@@ -347,11 +371,13 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
         if modal["stage"] == "quit":
             return ["CPU changes may still be active.", "Runtime settings remain after leaving this dashboard.",
                     "This session's Undo history is lost when you exit.",
-                    "Enter: exit and keep settings | Esc: return | u: Undo (placement, hardware, workload)"]
+                    "Enter: exit and keep settings | Esc: return | u: Undo (disk, placement, hardware, workload)"]
         return [modal["message"], "", "Enter or Esc: close | 8: inspect workloads"]
 
     def modal_key(self, key):
         stage = self.modal["stage"]
+        if stage.startswith("utility_"):
+            return self.utility_modal_key(key)
         if stage == 'focus':
             return self.focus_key(key)
         if stage == 'navigate':
@@ -368,7 +394,9 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
             if key in (10, 13):
                 return False
             if key == ord("u"):
-                if any(e['status'] != 'undone' for e in self.placement_session.events):
+                if any(e['status'] != 'undone' for e in self.disk_session.events):
+                    self.job("utility_disk_undo", self.disk_session.undo)
+                elif any(e['status'] != 'undone' for e in self.placement_session.events):
                     self.job('placement_undo', self.placement_session.undo)
                 elif any(e['status'] != 'undone' for e in self.hardware.events):
                     self.job('hardware_undo', self.hardware.undo)
@@ -472,12 +500,13 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
         rows.sort(key=lambda p: p[key] if p[key] is not None else -1,
                   reverse=self.sort in ("cpu", "memory"))
         name_width = max(10, min(30, width - 32))
-        lines = [f"Sort: {self.sort} | Filter: {clean(self.filter) or '(none)'} | {len(rows)} visible",
+        lines = [f"Sort: {self.sort} | t tree={self.process_tree} | Filter: {clean(self.filter) or '(none)'} | {len(rows)} visible",
                  "CPU: 100% = one logical CPU; memory: resident pages (RSS).",
                  f"{'NAME':<{name_width}} {'PID':>7} {'CPU':>7} {'MEMORY':>10}" +
                  (f" {'RAM':>6} {'NICE':>4} STATE" if width >= 85 else "")]
-        for p in rows:
-            lines.append(f"{clean(p['name'])[:name_width]:<{name_width}} {p['pid']:>7} {pct(p['cpu_pct']):>7} {size(p['memory']):>10}" +
+        for p, depth in (tree_rows(rows) if self.process_tree else [(p,0) for p in rows]):
+            label = ("  " * min(depth, 8) + p["name"])
+            lines.append(f"{clean(label)[:name_width]:<{name_width}} {p['pid']:>7} {pct(p['cpu_pct']):>7} {size(p['memory']):>10}" +
                          (f" {pct(p['memory_pct']):>6} {p['nice']:>4} {p['state']:>5}" if width >= 85 else ""))
         lines.append(f"Skipped/exited/unreadable processes: {self.snapshot['processes_skipped']}")
         return lines
@@ -487,7 +516,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
             return [piece for line in context_help(self)
                     for piece in (textwrap.wrap(line, max(20, width)) or [''])]
         return {1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
-                4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines, 8: lambda width: [piece for line in self.investigation.lines() for piece in (textwrap.wrap(line, width) or [''])]}.get(self.page, self.process_lines)(width)
+                9: self.capability_lines, 4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines, 8: lambda width: [piece for line in self.investigation.lines() for piece in (textwrap.wrap(line, width) or [''])]}.get(self.page, self.process_lines)(width)
 
     def mouse(self, x, y, state):
         left = state & (getattr(curses, "BUTTON1_CLICKED", 0) | getattr(curses, "BUTTON1_PRESSED", 0))
@@ -508,7 +537,9 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
                     self.placement_confirm_key(10)
                 elif self.modal['stage'] == 'hardware_confirm' and hit[2] == 'apply':
                     self.hardware_key(10)
-                elif self.modal['stage'] in ('hardware_confirm', 'placement_confirm') and hit[2] == 'cancel':
+                elif self.modal['stage'] == 'utility_disk_confirm' and hit[2] == 'apply':
+                    self.utility_modal_key(10)
+                elif self.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm') and hit[2] == 'cancel':
                     self.modal = None
             return
         if left and y == self.screen_size[0] - 1:
@@ -535,6 +566,14 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
                     self.page, self.scroll = page, 0
                     self.focus = None
                     return
+        if self.page == 7 and not self.workload_detail and left and y >= 7:
+            rows = self.workload_rows()
+            index = y - 3 + self.scroll - 4
+            if 0 <= index < len(rows):
+                group = rows[index]
+                self.workload_id, self.workload_identity = group['id'], (group['id'],group.get('inode'))
+                self.workload_notice = ''
+                return
         if self.page == 1 and not self.help and (left or right):
             for start, end, kind, ids in self.topology_regions.get(y, []):
                 if start <= x - 1 < end:
@@ -624,6 +663,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
             return True
         if self.placement:
             return self.placement_key(key)
+        if self.utility_key(key):
+            return True
         if self.replay and key in (curses.KEY_LEFT, curses.KEY_RIGHT, ord(' '), ord('('), ord(')'), ord(','), ord('.')):
             if key == ord(' '):
                 self.replay_playing = not self.replay_playing
@@ -664,7 +705,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
             if key == 27 and self.page == 7 and self.workload_detail:
                 self.workload_detail, self.scroll = False, 0
                 return True
-            if any(event["status"] in ("confirmed", "unconfirmed") for event in self.session.events + self.hardware.events + self.placement_session.events):
+            if any(event["status"] in ("confirmed", "unconfirmed") for event in self.session.events + self.hardware.events + self.placement_session.events + self.disk_session.events):
                 self.modal = {"stage": "quit"}
                 return True
             return False
@@ -701,7 +742,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
         if self.page == 7 and not self.workload_detail:
             rows = self.workload_rows()
             if rows and key in (curses.KEY_DOWN, curses.KEY_UP, curses.KEY_NPAGE, curses.KEY_PPAGE, curses.KEY_HOME, curses.KEY_END):
-                index = next(i for i, row in enumerate(rows) if row["id"] == self.workload_id)
+                index = next((i for i, row in enumerate(rows) if row["id"] == self.workload_id), -1)
                 step = max(1, height - 9) if key in (curses.KEY_NPAGE, curses.KEY_PPAGE) else 1
                 if key in (curses.KEY_DOWN, curses.KEY_NPAGE):
                     index = min(len(rows) - 1, index + step)
@@ -710,10 +751,12 @@ class View(HardwareView, PlacementView, NavigationView, FocusView):
                 else:
                     index = 0 if key == curses.KEY_HOME else len(rows) - 1
                 self.workload_id = rows[index]["id"]
+                self.workload_identity = (rows[index]["id"], rows[index].get("inode"))
+                self.workload_notice = ""
                 line, capacity = index + 4, max(1, height - 5)
                 self.scroll = min(self.scroll, line) if line < self.scroll else max(self.scroll, line - capacity + 1)
                 return True
-            if key in (10, 13) and rows:
+            if key in (10, 13) and self.selected_workload():
                 self.workload_detail, self.scroll = True, 0
                 return True
         if ord("1") <= key <= ord("9"):
@@ -782,18 +825,18 @@ def draw(screen, view, interval, error=None):
     put(screen, 0, 1, f"RESOURCE LENS  {state}  {interval:g}s  |  {stamp}", accent)
     if s and w >= 95:
         put(screen, 0, 60, s["hostname"], muted)
-    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net", "Work", "Time")
+    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net", "Work", "Time", "Status")
     view.tab_regions = []
     x = 1
     for page, label in enumerate(labels):
-        text = f" {page + 1} {label} " if w >= 90 else f" {page + 1} "
+        text = f" {(page + 1) % 10} {label} " if w >= 105 else f" {(page + 1) % 10} "
         attr = accent | curses.A_REVERSE if page == view.page else muted
         put(screen, 1, x, text, attr)
         view.tab_regions.append((x, x + len(text), page))
         x += len(text) + 1
-    if w < 90:
+    if w < 105:
         put(screen, 1, x + 1, view.names[view.page], accent)
-    mode = "Runtime CPU controls enabled" if view.control else "Read-only"
+    mode = "Runtime resource controls enabled" if view.control else "Read-only"
     status = mode + " | newest samples at right"
     if not s:
         put(screen, 4, 2, "Collecting the first sample...", muted)
@@ -891,6 +934,8 @@ def draw(screen, view, interval, error=None):
         status = f'REPLAY {view.replay.index + 1}/{len(view.replay.offsets)} | Left/Right step | Space play/pause | ' + status
     if view.recorder:
         status = (view.recorder.error or 'REC ' + view.recorder.path) + ' | ' + status
+    if view.incident_status:
+        status = view.incident_status + " | " + status
     message = error or ("; ".join(s["warnings"]) if s else "") or status
     if view.editing_filter:
         value = view.workload_filter if view.filter_context == "workloads" else view.filter
@@ -908,7 +953,7 @@ def draw(screen, view, interval, error=None):
     if view.modal:
         content_width = max(20, min(76, w - 8))
         lines = [piece for line in view.modal_lines() for piece in (textwrap.wrap(clean(line), content_width) or [""])]
-        if view.modal["stage"] in ("confirm", "hardware_confirm", "placement_confirm") and len(lines) > h - 5:
+        if view.modal["stage"] in ("confirm", "hardware_confirm", "placement_confirm", "utility_disk_confirm") and len(lines) > h - 5:
             lines = ["The full target preview does not fit this terminal.",
                      "Resize larger to review and confirm, or Esc to cancel.",
                      "Enter is disabled until the complete preview is visible."]
@@ -924,15 +969,16 @@ def draw(screen, view, interval, error=None):
             if view.modal['stage'] in ('hardware_menu', 'navigate', 'focus') and (line.startswith('> ') or line.startswith('- ')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, option_index)
                 option_index += 1
-            if view.modal['stage'] in ('hardware_confirm', 'placement_confirm') and line.startswith(('[ Apply ]', '[ Cancel ]')):
+            if view.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm') and line.startswith(('[ Apply ]', '[ Cancel ]')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, 'apply' if line.startswith('[ Apply ]') else 'cancel')
             put(screen, top + 1 + index, left + 2, line, curses.A_REVERSE | (curses.A_BOLD if index == 0 else 0), content_width)
     screen.refresh()
 
 
-def run(collector, interval, ascii=False, control=False, recorder=None, replay=None):
+def run(collector, interval, ascii=False, control=False, recorder=None, replay=None, preferences=None, incidents=None, helper=None):
     latest = {"snapshot": None, "sequence": 0, "error": None}
     lock, stop = threading.Lock(), threading.Event()
+    alerts = queue.SimpleQueue()
 
     def collect():
         while not stop.is_set():
@@ -941,6 +987,13 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
                 snapshot = collector.sample()
                 if stop.is_set():
                     break  # Discard an unfinished final read; do not publish after exit.
+                if incidents:
+                    try:
+                        event = incidents.observe(snapshot)
+                        if event:
+                            alerts.put(event)
+                    except (OSError, ValueError) as exc:
+                        incidents.status = 'Incident recording failed: ' + str(exc)
                 if recorder:
                     recorder.write('sample', snapshot)
                 with lock:
@@ -949,6 +1002,8 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
                 with lock:
                     latest["error"] = f"Collection failed: {type(exc).__name__}: {exc}"
             stop.wait(max(0.05, interval - (time.monotonic() - started)))
+        if incidents:
+            incidents.close()
 
     def terminal(screen):
         try:
@@ -970,6 +1025,12 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             pass
         encoding = (sys.stdout.encoding or "").lower().replace("-", "")
         view, sequence = View(unicode=not ascii and encoding == "utf8", control=control and replay is None), -1
+        for name,value in (preferences or {}).items():
+            setattr(view, name, value)
+        if helper:
+            from .helper import RemoteSession
+            view.session = RemoteSession(helper, 'cpu')
+            view.disk_session = RemoteSession(helper, 'disk')
         view.colors = palette()
         view.recorder, view.replay = recorder, replay
         replay_position, replay_deadline = -1, time.monotonic()
@@ -979,6 +1040,9 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
         previous_render = None
         while True:
             view.poll_actions()
+            while not alerts.empty():
+                event = alerts.get()
+                view.mark_event(event["label"], event["status"], event.get("target"), event["timestamp"])
             if replay:
                 desired = replay.index + view.replay_delta
                 view.replay_delta = 0
@@ -1000,10 +1064,12 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             if current["snapshot"] is not None and current["sequence"] != sequence:
                 view.update(current["snapshot"])
                 sequence = current["sequence"]
+            view.collector_error = current['error']
+            view.incident_status = incidents.status if incidents else None
             stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing)
+                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render
@@ -1018,7 +1084,12 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
     finally:
         stop.set()
         if not replay:
+            close = getattr(collector, "close", None)
+            if close:
+                close()
             # Collection is read-only and the worker is a daemon. A slow kernel
             # read or GPU query must not hold the terminal application open.
             # Recorder.close serializes with any write already in progress.
             worker.join(timeout=0.1)
+            if incidents and not worker.is_alive():
+                incidents.close()

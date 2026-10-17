@@ -1,0 +1,17 @@
+{
+  "method": "Root dispatcher with real disposable systemd unit, exact-unit policy and root-owned temporary receipts. No sudo policy installed.",
+  "results": [
+    {
+      "domain": "cpu",
+      "apply": "confirmed",
+      "foreign_receipt": "rejected",
+      "undo": "verified"
+    },
+    {
+      "domain": "disk",
+      "apply": "confirmed",
+      "foreign_receipt": "rejected",
+      "undo": "verified"
+    }
+  ]
+}

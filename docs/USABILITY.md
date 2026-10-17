@@ -1,3 +1,18 @@
+# 0.8.0 delivery status
+
+All six areas below now have an implementation. Capabilities and overhead use
+`0`; workload sorts use `c/m/n/i`, process trees `t`, disk control/Undo `b/B`,
+preferences `S`, named markers `N`, and redacted reports `R`. Incident capture is
+opt-in via `--incidents`. The optional helper requires an administrator's explicit
+installation and exact-unit policy; no sudo grant is installed automatically.
+
+Current limits: tree parents use visible PIDs; disk mapping cannot automatically
+resolve every layered storage path; incident triggers cover PSI/quota, not application
+latency/network errors. Saved settings cover presentation only. Helper operations
+cover CPU weight/quota and disk bandwidth, not hotplug/governors/placement.
+Per-process nice/affinity, memory limits, named filter collections and hardware
+coverage beyond the current host remain future work. See README for exact usage.
+
 # Everyday usability priorities
 
 Resource Lens should make three tasks reliable: find the workload behind a

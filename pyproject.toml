@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "resource-lens"
-version = "0.7.1"
-description = "A live Linux resource dashboard with temporary systemd CPU controls"
+version = "0.8.0"
+description = "A live Linux resource dashboard with verified runtime CPU and disk controls"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [{name = "Resource Lens contributors"}]

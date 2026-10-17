@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import resource
+import threading
 import time
 from .hardware import Hardware
 from .resource_topology import topology
@@ -69,6 +71,9 @@ def parse_nvidia(text):
 class Collector:
     def __init__(self, proc="/proc", sys="/sys", nvidia=True, clock=time.monotonic):
         self.proc, self.sys = Path(proc), Path(sys)
+        self.query_lock = threading.Lock()
+        self.active_query = None
+        self.closed = False
         self.clock = clock
         self.last_time = None
         self.last_cpu, self.last_disk, self.last_process = {}, {}, {}
@@ -217,7 +222,7 @@ class Collector:
                 resident = max(0, int(v[21])) * self.pages
                 counters[identity] = ticks
                 cpu = delta(ticks, self.last_process.get(identity), elapsed)
-                result.append({"pid": identity[0], "name": name, "state": v[0],
+                result.append({"pid": identity[0], "ppid": int(v[1]), "starttime": identity[1], "name": name, "state": v[0],
                                "nice": int(v[16]), "memory": resident,
                                "cpu_pct": cpu / self.ticks * 100 if cpu is not None else None,
                                "memory_pct": 100 * resident / total_memory if total_memory else None,
@@ -239,6 +244,34 @@ class Collector:
                     result.append({"name": read(sensor.with_name(sensor.name.replace("_input", "_label")))
                                    or f"{driver}/{sensor.stem}", "temperature_c": value})
         return result
+
+    def close(self):
+        """Cancel only our read-only external telemetry query, never control jobs."""
+        with self.query_lock:
+            self.closed = True
+            if self.active_query is not None and self.active_query.poll() is None:
+                self.active_query.kill()
+
+    def run_query(self, command, **options):
+        timeout = options.pop('timeout')
+        options.pop('capture_output', None)
+        with self.query_lock:
+            if self.closed:
+                raise OSError('Collector is closed')
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **options)
+            self.active_query = process
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+            return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                try:
+                    process.communicate(timeout=.1)
+                except subprocess.TimeoutExpired:
+                    pass  # A kernel-blocked process cannot be synchronously reaped.
+            with self.query_lock:
+                self.active_query = None
 
     def gpus(self):
         result = []
@@ -266,7 +299,7 @@ class Collector:
         error = "nvidia-smi not installed or disabled"
         if self.nvidia:
             try:
-                completed = subprocess.run([self.nvidia,
+                completed = self.run_query([self.nvidia,
                     "--query-gpu=name,pci.bus_id,utilization.gpu,memory.used,memory.total,temperature.gpu,power.draw,clocks.gr",
                     "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=0.8,
                     env={**os.environ, "LC_ALL": "C"})
@@ -300,6 +333,7 @@ class Collector:
         return rows
 
     def sample(self):
+        wall_start, cpu_start = time.monotonic(), time.thread_time()
         now = self.clock()
         elapsed = now - self.last_time if self.last_time is not None else 0
         cpu = self.cpus()
@@ -315,7 +349,7 @@ class Collector:
         except OSError:
             root_fs = None
         loads = read(self.proc / "loadavg").split()
-        return {"schema_version": 1, "timestamp": time.time(), "elapsed_s": elapsed,
+        sample = {"schema_version": 1, "timestamp": time.time(), "elapsed_s": elapsed,
                 "hostname": os.uname().nodename, "cpu_model": self.model,
                 "cpu": cpu, "memory": memory, "disks": disks, "gpus": self.gpus(),
                 "network": network, "cpu_hardware": Hardware(self.sys / "devices/system/cpu").snapshot(),
@@ -326,3 +360,13 @@ class Collector:
                 "load": [number(x) for x in loads[:3]], "root_filesystem": root_fs,
                 "warnings": (["CPU counters unavailable"] if not cpu else []) +
                             (["Memory counters unavailable"] if memory["total"] is None else [])}
+
+        cpu_root = self.sys / 'devices/system/cpu'
+        sample['capabilities'] = dict(cgroup_v2=(self.sys/'fs/cgroup/cgroup.controllers').exists(),
+            controllers=read(self.sys/'fs/cgroup/cgroup.controllers'), systemctl=bool(shutil.which('systemctl')),
+            writable_governors=sum(os.access(p, os.W_OK) for p in cpu_root.glob('cpufreq/policy*/scaling_governor')),
+            writable_online=sum(os.access(p, os.W_OK) for p in cpu_root.glob('cpu[0-9]*/online')))
+        sample['collector'] = dict(duration_ms=(time.monotonic()-wall_start)*1000,
+            cpu_ms=(time.thread_time()-cpu_start)*1000,
+            rss_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024)
+        return sample

@@ -1,0 +1,10 @@
+{
+  "baseline_s": 0.09080163401085883,
+  "limited_s": 3.981491651968099,
+  "restored_s": 0.06431078491732478,
+  "bytes_per_trial": 8388608,
+  "limit_bytes_per_s": 2097152,
+  "kernel_limit": "8:0 rbps=max wbps=2097152 riops=max wiops=max\n",
+  "io_stat": "8:0 rbytes=0 wbytes=8388608 rios=0 wios=1564 dbytes=0 dios=0\n",
+  "method": "Disposable service, 8 MiB writes to its own temporary file, dd oflag=direct; no raw device writes"
+}

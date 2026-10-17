@@ -5,10 +5,10 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.7.1 is a preview with optional temporary CPU controls.** Monitoring
+**Version 0.8.0 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
-CPU governors and logical CPU online/offline controls. Disk/memory controls, direct frequency
+CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
 limits and nice/per-process affinity editing remain future work.
 It does not claim functionality is unique to Linux tools.
 
@@ -110,12 +110,116 @@ ESCDELAY=150 python3 -m resourcelens
 require the existing exit acknowledgement; a control operation in progress is
 not cancelled by Escape. Read-only collection runs separately from input and
 shutdown waits at most 100 ms for that worker. A final unfinished sample may be
-discarded. A recording write already in progress is allowed to finish, so slow
+discarded; an in-flight external GPU query is cancelled on exit. A recording write already in progress is allowed to finish, so slow
 recording storage can still delay exit. Input wakes the UI immediately; changing
 `--interval` changes sampling frequency, not keyboard responsiveness.
 
 See [real-world usability priorities](docs/USABILITY.md) and
 [measured responsiveness](docs/VALIDATION.md).
+
+## Everyday workflows (0.8.0)
+
+| Key | Workflow |
+| --- | --- |
+| `0` | Capabilities, permissions hints, collector wall/CPU time, process peak RSS, errors and missing-data explanations |
+| Workloads `c` / `m` / `n` / `i` | Sort by CPU, memory, name or observed I/O |
+| Workloads mouse click | Select a row; Enter inspects it |
+| Workloads `d` | Open the first accounting device that maps to a visible whole disk |
+| Processes `t` | Toggle a process tree; sorting applies within branches |
+| `S` | Save presentation preferences explicitly |
+| `N` | Name a baseline marker |
+| `R` | Export a private, redacted JSON comparison report |
+| Workloads `b` / `B` | Preview/apply disk bandwidth / Undo latest disk change |
+
+Selection follows a cgroup identity across sorting. If it exits or is filtered
+out, controls require another selection; replacement is reported explicitly.
+Process trees use visible parent PIDs; missing parents become roots. Collector
+CPU time excludes external helper processes such as nvidia-smi. Peak RSS describes
+the entire monitor, not just its collector. These are observed costs, not an
+accuracy guarantee at large process counts.
+
+Preferences are read from `$XDG_CONFIG_HOME/resource-lens/preferences.json`
+(default `~/.config/resource-lens/preferences.json`). `S` atomically saves view,
+process/workload sort/filter, tree and overview expansion. `--no-config` ignores
+saved preferences. Control enablement, limits, helper paths and automatic capture
+are never restored from presentation preferences.
+
+`R` writes reports under `$XDG_STATE_HOME/resource-lens/reports` (default
+`~/.local/state/resource-lens/reports`), with mode 0600. Redacted reports omit host
+names, cgroup paths and event labels. Reports retain metric values and timestamps;
+review even redacted data before sharing. CLI export can optionally retain identifiers:
+
+```bash
+python3 -m resourcelens --replay session.jsonl --report comparison.json
+python3 -m resourcelens --replay session.jsonl --report private.json --report-identifiers
+```
+
+Report files must be new. Interactive reports use the retained comparison samples;
+CLI replay reports use the last 600 samples. Older events without retained samples
+remain listed with no invented comparison data. Reports include current aggregate
+metrics; a fresh live report has no before/after history yet.
+
+### Per-service disk bandwidth
+
+Launch with `--control`, select a service on Workloads (`8`), and press `b`.
+Enter a block device, direction, and rate, for example `sda write 10M`.
+`K/M/G` mean powers of 1024 bytes/sec; `max` removes that device's limit in the
+chosen direction. Review the device major/minor, backing devices, holders, old
+and new settings; Enter or click Apply confirms. `B` undoes the latest disk change.
+A clipped preview cannot be applied.
+
+Limits use systemd `IOReadBandwidthMax` / `IOWriteBandwidthMax` and verify `io.max`.
+Other device limits are preserved. Preview/apply/Undo reject changed cgroup,
+invocation, device identity or settings. Limits affect descendants and remain
+active after exit. Undo restores effective values; an explicit unlimited entry
+may remain in the runtime systemd configuration. Concurrent writers are detected
+when observed, but systemd does not provide a transactional compare-and-set API.
+
+Use whole-disk or device-mapper names exposed under `/dev` (such as `sda` or
+`dm-0`), not arbitrary file paths. The correct layer depends on the storage stack;
+`d` is a convenience link, not automatic attribution for every layered/partition
+layout. Cache hits bypass block I/O; buffered writeback attribution depends on the
+filesystem and workload. Read-back verification establishes configured limits;
+measure the workload to establish enforcement. See [live enforcement evidence](docs/VALIDATION.md).
+
+### Sustained incident capture
+
+```bash
+python3 -m resourcelens --incidents ./incidents \
+  --alert-threshold 20 --alert-duration 10 --alert-cooldown 60
+```
+
+Opt-in capture triggers when host CPU/memory/I/O PSI avg10 reaches the threshold
+for the specified duration, or a visible workload's quota-throttled microseconds
+per second / 10000 reaches that numeric threshold. Quota throttling is a cgroup
+counter rate, not CPU utilization. These signals may overlap and are not added.
+Missing signals or sample gaps reset the sustained interval. A restart changes
+workload identity. Defaults: 20 threshold, 10 seconds sustained, 60 seconds cooldown.
+
+Files contain up to 120 pre-trigger samples (also bounded to 8 MiB of serialized
+prehistory), the triggering event and 10 seconds after it. Each file caps at
+16 MiB; the directory stops creating files at 10 `incident-*.jsonl` files. Move
+old captures to re-arm; existing captures are never deleted automatically.
+Capture status appears in the footer; triggers appear on the live Timeline. Replay a file with `--replay`.
+Recordings contain identifiers, are created mode 0600, and are **not redacted**.
+The current implementation watches PSI/quota signals; it does not yet trigger
+on application latency or network errors. It needs the monitor running and is
+not a background service.
+
+### Unprivileged dashboard with optional helper
+
+Existing systemd authorization remains the default. For an administrator-approved
+set of system services, the optional isolated helper performs CPU weight/quota
+and disk bandwidth operations while the UI stays unprivileged:
+
+```bash
+python3 -m resourcelens --control --helper /usr/local/libexec/resource-lens-helper
+```
+
+This requires explicit installation, exact-unit policy and sudo authorization.
+Nothing is installed or granted automatically. The helper cannot change CPU
+hotplug/governors/placement; those retain their existing authorization paths.
+See [helper installation, policy and recovery](docs/HELPER.md).
 
 ## Views
 
@@ -128,6 +232,7 @@ See [real-world usability priorities](docs/USABILITY.md) and
 | `5` | GPU | Detected GPUs, available utilization, VRAM, temperature and power |
 | `6` | Processes | PID, name, CPU, resident memory, nice value and state |
 | `7` | Network | Per-interface RX/TX rates and histories, transfer totals, packet rates, link state/speed, errors and drops |
+| `0` | Capabilities | Collection cost/health, supported sources, permission hints and missing-data explanations |
 | `9` | Timeline | Markers, control outcomes and measured before/after comparisons |
 | `8` | Workloads | Grouped service/cgroup CPU, memory, I/O, members, pressure, throttling and inherited limits; optional CPU controls |
 
