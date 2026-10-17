@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.4.0 is a preview with optional temporary CPU controls.** Monitoring
+**Version 0.5.0 is a preview with optional temporary CPU controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Disk/memory controls, direct frequency
@@ -99,6 +99,48 @@ percentages; disk/GPU histories show the busiest device, whose identity may
 change. Sampling defaults to one second. Frozen intervals are omitted from
 display history, so it is a sequence of samples rather than a continuous
 wall-clock axis.
+
+## Expand the overview and inspect resource panels
+
+The default overview keeps its six existing summary cards. Press **e** or click
+**[ + Expand overview ]** to switch to a scrollable overview containing CPU
+topology, memory nodes, all disks, GPUs and network interfaces, followed by the
+top six workloads and the process table. Press **e** again or click Collapse to
+restore the summary cards. Expansion state is retained while navigating pages,
+but is not saved after exit.
+
+- Scroll with arrows, PgUp/PgDn, Home/End or the mouse wheel.
+- Click a summary card or an expanded section heading to open its detail page.
+- Press `1` to return to the overview. The expanded view adapts to terminal width;
+  it scrolls rather than silently omitting devices.
+- The expand/collapse control works in read-only mode and does not change any
+  resource settings. CPU controls remain on their dedicated pages.
+
+Resource details now use responsive visual panels:
+
+| Page | Visual information |
+| --- | --- |
+| `2` CPU | Socket/NUMA/core tiles, SMT threads, utilization, governors, clocks and offline state |
+| `3` Memory | RAM used/available, cache and swap, per-NUMA-node memory gauges and local CPU lists |
+| `4` Disks | Per-device activity and read/write metrics, queue depth, capacity, backing/holder relationships, partitions and PCI/NUMA attachment |
+| `5` GPU | Per-GPU usage and VRAM gauges, temperature, power, clock, driver and available PCI/NUMA attachment |
+| `7` Network | Per-interface RX/TX histories, rates, totals, errors/drops, link speed, master/lower links and attachment |
+
+Topology comes from readable sysfs relationships. Unknown PCI or NUMA placement
+stays unknown; memory DIMM slots/channels, board layout and network routes are
+not inferred. GPU attachment is matched through DRM PCI information when it is
+available. Block backing/holder relationships describe kernel device layering,
+not filesystem-to-disk attribution. A panel for `/` reports its capacity separately.
+
+RAM used is total minus available; node gauges show total minus free, which
+includes reclaimable pages. Cache and available overlap. GPU utilization is
+reported device busy time, not a claim about a particular compute engine.
+Disk active time is not saturation; stacked disks and network interfaces can
+count the same traffic more than once. Each network direction is scaled to its
+visible peak, not automatically to link capacity. Missing counters remain N/A.
+
+See [captured terminal panels](docs/resource-panels-evidence.json) for the actual
+summary, expanded overview, and resource detail screens used in validation.
 
 ## Visual CPU topology and service placement
 

@@ -14,6 +14,7 @@ from .hardware_ui import HardwareView
 from .placement_ui import PlacementView
 from .topology import topology_map
 from .placement import format_cpus
+from .resource_panels import resource_lines, expanded_overview
 
 
 def clean(value):
@@ -71,6 +72,9 @@ class View(HardwareView, PlacementView):
     def __init__(self, unicode=False, control=False, session=None):
         self.hardware_init()
         self.placement_init()
+        self.overview_expanded = False
+        self.overview_links = {}
+        self.overview_cards_regions = []
         self.page = 0
         self.scroll = 0
         self.sort = "cpu"
@@ -352,56 +356,13 @@ class View(HardwareView, PlacementView):
         return lines
 
     def memory_lines(self, width=60):
-        m = self.snapshot["memory"]
-        lines = [bar(ratio(m["used"], m["total"]), max(8, min(30, width - 13))),
-                 f"Used {size(m['used'])} / {size(m['total'])}",
-                 f"Available {size(m['available'])}",
-                 f"Cache {size(m['cache'])}  Buffers {size(m['buffers'])}",
-                 f"Swap {size(m['swap_used'])} / {size(m['swap_total'])}",
-                 pressure(self.snapshot, "memory"),
-                 "History " + self.trend(self.history["memory"], max(8, width - 10)),
-                 "Used = total - available; reclaimable cache is useful."]
-        return lines
+        return resource_lines(self, "memory", width)
 
     def disk_lines(self, width=60):
-        lines = [pressure(self.snapshot, "io"), "Active time history " + self.trend(self.history["disk"], max(8, width - 22))]
-        fs = self.snapshot["root_filesystem"]
-        if fs:
-            lines.append(f"/ capacity: {size(fs['used'])} / {size(fs['total'])} ({pct(ratio(fs['used'], fs['total']))})")
-        for d in self.snapshot["disks"]:
-            lines.append(f"{clean(d['name'])}  R {size(d['read_bps'])}/s  W {size(d['write_bps'])}/s")
-            lines.append(f"  Active {pct(d['active_pct'])}  In flight {d['in_flight']}  Avg queue " +
-                         (f"{d['queue_depth']:.2f}" if d['queue_depth'] is not None else "N/A"))
-            if self.page == 3:
-                lines.append(f"  {clean(d['model'])} | read/write IOPS " +
-                             "/".join("N/A" if d[k] is None else f"{d[k]:.1f}"
-                                      for k in ("read_iops", "write_iops")))
-        if not self.snapshot["disks"]:
-            lines.append("No readable block devices (loop/ram excluded).")
-        if self.page == 3:
-            lines.extend(["", "Per-device counters; stacked devices may count the same I/O.",
-                          "Active time is NOT a saturation score, especially for NVMe.",
-                          "Throughput measures block I/O, not cached application reads."])
-        return lines
+        return resource_lines(self, "disk", width)
 
     def gpu_lines(self, width=60):
-        lines = []
-        for g in self.snapshot["gpus"]:
-            lines.extend([f"{clean(g['id'])}: {clean(g['name'])} ({clean(g['driver'])})",
-                          bar(g["busy_pct"], max(8, min(30, width - 13))),
-                          f"VRAM {size(g['memory_used'])} / {size(g['memory_total'])}",
-                          "Temp " + (f"{g['temperature_c']:.1f}C" if g['temperature_c'] is not None else "N/A") +
-                          "  Power " + (f"{g['power_w']:.1f}W" if g['power_w'] is not None else "N/A"),
-                          clean(g["status"])])
-        if not lines:
-            lines = ["No GPUs detected by DRM or nvidia-smi.", "GPU usage: N/A (not zero)."]
-        lines.append("History " + self.trend(self.history["gpu"], max(8, width - 10)))
-        if self.page == 4:
-            lines.extend(["", "AMD: available sysfs busy/VRAM/hwmon counters.",
-                          "NVIDIA: nvidia-smi, when installed and accessible.",
-                          "Intel/other: detected; busy may be unavailable.",
-                          "Integrated/shared memory is not total system RAM."])
-        return lines
+        return resource_lines(self, "gpu", width)
 
     def primary_network(self):
         entries = self.snapshot["network"]
@@ -410,42 +371,13 @@ class View(HardwareView, PlacementView):
             entry["state"] == "up", (entry["rx_bps"] or 0) + (entry["tx_bps"] or 0)), default=None)
 
     def network_lines(self, width=60):
-        entries = self.snapshot["network"]
-        others = 0
-        if self.page == 0:
-            primary = self.primary_network()
-            entries = [primary] if primary else []
-            others = len(self.snapshot["network"]) - len(entries)
-        lines = []
-        for entry in entries:
-            lines.append(f"{clean(entry['name'])} ({clean(entry['state'])})  "
-                         f"RX {size(entry['rx_bps'])}/s  TX {size(entry['tx_bps'])}/s")
-            if self.page == 6:
-                lines.append(f"  Totals RX {size(entry['rx_bytes'])} / TX {size(entry['tx_bytes'])}")
-                speed = f"{entry['speed_mbps']:g} Mb/s" if entry["speed_mbps"] else "N/A"
-                packets = "/".join("N/A" if entry[k] is None else f"{entry[k]:.1f}"
-                                   for k in ("rx_pps", "tx_pps"))
-                lines.append(f"  Link speed {speed} | RX/TX packets/s {packets}")
-                lines.append(f"  Errors RX/TX {entry['rx_errors']}/{entry['tx_errors']} | "
-                             f"Drops RX/TX {entry['rx_dropped']}/{entry['tx_dropped']}")
-            for direction in ("rx", "tx"):
-                values = self.history[(entry["name"], entry["ifindex"], direction)]
-                visible = list(values)[-max(8, width - 30):]
-                peak = max((v for v in visible if v is not None), default=None)
-                lines.append(f"  {direction.upper()} history {self.trend(visible, max(8, width - 30), peak or 1)}"
-                             f" peak {size(peak)}/s")
-            if self.page == 6:
-                lines.append("")
-        if not entries:
-            lines.append("Network: N/A (no readable interface counters)")
-        elif self.page == 0:
-            lines.append(f"{others} other interfaces | 7 Network: all interfaces and totals")
-        if self.page == 6:
-            lines.extend(["History scale: each direction's visible peak, NOT link utilization.",
-                          "Totals/errors/drops: since interface counter initialization.",
-                          "Includes loopback and virtual interfaces; never sum layered traffic.",
-                          "Interface counters only; no per-process or Internet-only attribution."])
-        return lines
+        if self.page == 0 and not self.overview_expanded:
+            net = self.primary_network()
+            if not net:
+                return ['Network: N/A (no readable interface counters)']
+            return [f"{clean(net['name'])} ({clean(net['state'])}) RX {size(net['rx_bps'])}/s TX {size(net['tx_bps'])}/s",
+                    f"{len(self.snapshot['network']) - 1} other interfaces | 7 Network: all interfaces and totals"]
+        return resource_lines(self, "network", width)
 
     def process_lines(self, width=100):
         rows = [p for p in self.snapshot["processes"] if self.filter.casefold() in
@@ -469,7 +401,9 @@ class View(HardwareView, PlacementView):
         if self.help:
             return ["RESOURCE LENS - Linux resource dashboard", "",
                     "1 Overview  2 CPU  3 Memory  4 Disks  5 GPU  6 Processes  7 Network  8 Workloads",
-                    "Tab / Shift-Tab: next / previous page; click a tab to select", "Up/Down, PgUp/PgDn, Home/End: scroll details",
+                    "Tab / Shift-Tab: next / previous page; click a tab to select",
+                    "Overview: e or Expand button toggles topology/resource panels.",
+                    "Click overview cards or expanded section headings for details.", "Up/Down, PgUp/PgDn, Home/End: scroll details",
                     "Space: freeze/unfreeze display (collection continues)",
                     "c/m/n/p: process sort by CPU/memory/name/PID",
                     "/: filter processes by name or PID; Enter: finish; Esc: clear",
@@ -510,6 +444,18 @@ class View(HardwareView, PlacementView):
                 elif self.modal['stage'] in ('hardware_confirm', 'placement_confirm') and hit[2] == 'cancel':
                     self.modal = None
             return
+        if self.page == 0 and not self.help and left:
+            if y == 2 and 1 <= x <= 26:
+                self.overview_expanded = not self.overview_expanded
+                self.scroll = 0
+                return
+            if y in self.overview_links:
+                self.page, self.scroll = self.overview_links[y], 0
+                return
+            for top, start, height, width, page in self.overview_cards_regions:
+                if top <= y < top + height and start <= x < start + width:
+                    self.page, self.scroll = page, 0
+                    return
         if self.page == 1 and not self.help and (left or right):
             for start, end, kind, ids in self.topology_regions.get(y, []):
                 if start <= x - 1 < end:
@@ -580,6 +526,10 @@ class View(HardwareView, PlacementView):
                 self.modal = {"stage": "quit"}
                 return True
             return False
+        if self.page == 0 and not self.help and key == ord('e'):
+            self.overview_expanded = not self.overview_expanded
+            self.scroll = 0
+            return True
         if self.page == 1 and key in (ord('g'), ord('u')):
             if key == ord('g') or not self.control:
                 self.hardware_menu()
@@ -666,6 +616,8 @@ def draw(screen, view, interval, error=None):
     screen.erase()
     h, w = screen.getmaxyx()
     view.screen_size = h, w
+    view.overview_links = {}
+    view.overview_cards_regions = []
     view.topology_regions = {}
     view.cpu_regions = {}
     view.modal_regions = {}
@@ -700,11 +652,24 @@ def draw(screen, view, interval, error=None):
     status = mode + " | newest samples at right"
     if not s:
         put(screen, 4, 2, "Collecting the first sample...", muted)
+    elif view.page == 0 and not view.help and view.overview_expanded:
+        lines, links = expanded_overview(view, w - 3)
+        capacity = h - 5
+        view.scroll = min(view.scroll, max(0, len(lines) - capacity))
+        for i, line in enumerate(lines[view.scroll:view.scroll + capacity]):
+            index = view.scroll + i
+            if index in links:
+                view.overview_links[i + 3] = links[index]
+            section_page = next((links[key] for key in sorted(links, reverse=True) if key <= index), 1)
+            color = view.colors[{1: 'cpu', 2: 'memory', 3: 'disk', 4: 'gpu', 6: 'network'}.get(section_page, 'accent')]
+            put(screen, i + 3, 1, line, color | (curses.A_BOLD if index in links else 0))
+        status = f"Expanded overview | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows/wheel scroll"
     elif view.page == 0 and not view.help:
         layout = card_layout(h, w)
         if layout:
             first = layout[0]
             cards = overview_cards(view, first[3], first[2], view.colors)
+            view.overview_cards_regions = [(*geometry, page) for geometry, page in zip(layout, (1, 2, 3, 4, 6, 5))]
             for geometry, (title, hint, color, content) in zip(layout, cards):
                 draw_card(screen, put, geometry, title, hint, color, content, view.unicode)
             status = mode + " | 2-8 details | newest samples at right"
@@ -739,6 +704,8 @@ def draw(screen, view, interval, error=None):
                 attribute = accent | curses.A_REVERSE if line.startswith(">") or index == 3 else 0
             else:
                 attribute = color if index < 5 else (accent if i == 0 else 0)
+            if view.page in (2, 3, 4, 6) and not view.help and line.startswith('+'):
+                attribute = view.colors[{2: 'memory', 3: 'disk', 4: 'gpu', 6: 'network'}[view.page]] | curses.A_BOLD
             if view.page == 1 and not view.help:
                 view.topology_regions[i + 3] = view.topology_line_regions.get(index, [])
                 if line.startswith('[ All CPUs'):
@@ -759,12 +726,16 @@ def draw(screen, view, interval, error=None):
                     put(screen, i + 3, start + 1, line[start:end], attr, end - start)
 
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
+    if view.page == 0 and not view.help:
+        put(screen, 2, 1, '[ - Collapse overview ] e' if view.overview_expanded else '[ + Expand overview ] e', accent)
     message = error or ("; ".join(s["warnings"]) if s else "") or status
     if view.editing_filter:
         value = view.workload_filter if view.filter_context == "workloads" else view.filter
         message = f"Filter: {value}_ ({view.filter_context})  Enter: apply  Esc: clear"
     put(screen, h - 2, 1, message, view.colors["warning"] if error else muted)
     footer = "Tab next | 1-8 views | Space freeze | / find task | ? help | q quit"
+    if view.page == 0:
+        footer = "e expand/collapse | click section/card for details | arrows scroll | q quit"
     if view.page == 1:
         footer = "Right-click CPU | g all/socket/core menu | u hardware Undo | q quit"
     if view.page == 7:
@@ -772,7 +743,7 @@ def draw(screen, view, interval, error=None):
     if view.placement:
         footer = "Arrows focus | Space toggle | a all | n none | r inherit | Enter preview | Esc"
     if w < 76:
-        footer = "Tab next | / find | ? help | q quit"
+        footer = "e expand | arrows scroll | q quit" if view.page == 0 else "Tab next | / find | ? help | q quit"
     put(screen, h - 1, 1, footer, accent)
     if view.modal:
         content_width = max(20, min(76, w - 8))
@@ -840,7 +811,7 @@ def run(collector, interval, ascii=False, control=False):
             stale = bool(view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement))
+                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render

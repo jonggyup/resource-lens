@@ -33,7 +33,7 @@ class TerminalTests(unittest.TestCase):
                     output.extend(os.read(master, 65536))
 
         drain(0.7)
-        for key in (b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"w", b"\r", b"/ssh\r", b"1",
+        for key in (b"e", b"e", b"2", b"3", b"4", b"5", b"6", b"7", b"8", b"w", b"\r", b"/ssh\r", b"1",
                     b"/python\r", b"m", b"?", b"?", b" ", b" ", b"1"):
             os.write(master, key)
             drain()
@@ -48,6 +48,8 @@ class TerminalTests(unittest.TestCase):
         self.assertIn("RESOURCE LENS", text)
         self.assertIn("Read-only", text)
         self.assertIn("Filter:", text)
+        self.assertIn("CPU TOPOLOGY", text)
+        self.assertIn("Collapse overview", text)
         self.assertIn("RX history", text)
         self.assertNotIn("Traceback", text)
 

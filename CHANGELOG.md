@@ -1,3 +1,12 @@
+# 0.5.0
+
+- Keep the six-card overview by default; add mouse/`e` expansion into a scrollable
+  topology and resource overview, plus clickable cards/section navigation.
+- Responsive memory, disk, GPU and network panels with gauges and clear metrics.
+- Read NUMA memory nodes, block backing/holder/partition relationships, network
+  master/lower links and available PCI/NUMA attachment from sysfs.
+- Additive JSON `resource_topology` field; monitoring remains read-only.
+
 # 0.4.0
 
 - Responsive socket/NUMA/core topology tiles with SMT siblings, utilization,

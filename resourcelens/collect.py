@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import time
 from .hardware import Hardware
+from .resource_topology import topology
 
 
 def read(path):
@@ -296,7 +297,7 @@ class Collector:
                 "hostname": os.uname().nodename, "cpu_model": self.model,
                 "cpu": cpu, "memory": memory, "disks": disks, "gpus": self.gpus(),
                 "network": network, "cpu_hardware": Hardware(self.sys / "devices/system/cpu").snapshot(),
-                "workloads": workloads,
+                "workloads": workloads, "resource_topology": topology(self.sys),
                 "pressure": self.pressure(), "temperatures": self.temperatures(),
                 "processes": processes, "processes_skipped": skipped,
                 "load": [number(x) for x in loads[:3]], "root_filesystem": root_fs,

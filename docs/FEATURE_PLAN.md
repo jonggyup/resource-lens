@@ -1,3 +1,8 @@
+**0.5.0 visualization update:** the original overview remains the default;
+`e` expands it into CPU topology and responsive resource panels. Memory NUMA,
+block layering, GPU attachment and network link relationships use available
+sysfs data. Resource controls remain explicit, separate actions.
+
 # Functionality and implementation sequence
 
 **0.4.0 status:** workload inspection and runtime CPU weight/quota with preview,

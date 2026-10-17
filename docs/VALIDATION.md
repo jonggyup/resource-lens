@@ -1,3 +1,24 @@
+# 0.5.0 resource visualization validation
+
+106 automated tests pass. New tests cover NUMA memory parsing, backing/holder
+and partition relationships, network master/lower links, missing topology,
+responsive panel bounds and retained content, free-versus-available semantics,
+overview toggle/click navigation and all expanded sections. The real PTY test
+also expands and collapses the overview before navigating existing pages.
+
+A separate live curses session verified mouse expansion/collapse, clicking the
+CPU section to open its detail view, returning to the preserved expansion state,
+and memory/disk/GPU/network panels. It exercised scrolling and resize at 80x24,
+40x12 and 120x35. [Captured screens](resource-panels-evidence.json) record the
+actual terminal output. All checks in this release were read-only.
+
+Physical test coverage: one NUMA node, two SATA devices and a Matrox GPU with no
+utilization counter. Layered block/network relationships have fixture coverage;
+unknown attachment and usage are displayed explicitly. No new hardware support
+for GPU utilization, DIMM topology or per-process network attribution is claimed.
+
+---
+
 # 0.4.0 topology and placement validation
 
 101 automated tests pass. New coverage includes socket/SMT grouping, unknown
