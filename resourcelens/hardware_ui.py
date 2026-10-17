@@ -10,6 +10,9 @@ class HardwareView:
         self.modal_regions = {}
 
     def hardware_menu(self, scope=('all', None)):
+        if getattr(self, 'replay', None):
+            self.modal = dict(stage='result', message='Replay is read-only; resource controls are disabled.')
+            return
         if not self.control:
             self.modal = dict(stage='result', message='Restart with --control to enable CPU settings.')
             return

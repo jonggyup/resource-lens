@@ -1,6 +1,7 @@
 """Responsive device panels shared by details and expanded overview."""
 import textwrap
 from .placement import format_cpus
+from .investigation import indicators
 
 
 def panels(cards, width):
@@ -33,9 +34,19 @@ def panels(cards, width):
 def resource_lines(view, kind, width):
     from .ui import size, pct, ratio, bar, pressure
     s = view.snapshot
+    focus = view.focus[1] if view.focus and view.focus[0] == kind else None
+    if focus is not None and kind in ('disk', 'gpu', 'network'):
+        field = {'disk': 'disks', 'gpu': 'gpus', 'network': 'network'}[kind]
+        s = {**s, field: [item for item in s[field] if (item['id'] if kind == 'gpu' else item['name']) == focus]}
     topology = s.get('resource_topology', {})
     cards = []
     plot_width = max(8, min(30, width - 17))
+    def history(resource, item, field, label, maximum=None, unit=''):
+        values = list(view.device_history(resource, item, field))[-plot_width:]
+        peak = max((value for value in values if value is not None), default=None)
+        scale = maximum or peak or 1
+        caption = f'0-{maximum:g}' if maximum else ('N/A' if peak is None else f'{peak:.1f}')
+        return label + ' ' + view.trend(values, plot_width, scale) + ' | scale ' + caption + unit
     def number(value, places=1):
         return 'N/A' if value is None else f'{value:.{places}f}'
     def gauge(value):
@@ -58,13 +69,18 @@ def resource_lines(view, kind, width):
             cards.append((node['id'].upper() + ' MEMORY', [gauge(ratio(occupied, total)),
                 f"Total {size(total)} | Free {size(free)}", 'Gauge = non-free, including reclaimable pages.',
                 'Local CPUs: ' + (format_cpus(node['cpus']) or 'none reported')]))
-        if not topology.get('memory_nodes'):
+        if focus is not None:
+            cards = cards[:2] if focus == 'system' else [card for card in cards if card[0] == focus.upper() + ' MEMORY']
+        if not topology.get('memory_nodes') and focus is None:
             cards.append(('NUMA TOPOLOGY', ['Node memory counters unavailable.', 'DIMM slots/channels are not inferred.']))
     elif kind == 'disk':
         for d in s['disks']:
             info = topology.get('disks', {}).get(d['name'], {})
             cards.append((d['name'] + ' | ' + d['model'], [
                 'Active ' + gauge(d['active_pct']),
+                history('disk', d, 'active_pct', 'Active history', 100, '%'),
+                history('disk', d, 'read_bps', 'Read history', unit=' B/s'),
+                history('disk', d, 'write_bps', 'Write history', unit=' B/s'),
                 f"READ  {size(d['read_bps'])}/s | {number(d['read_iops'])} IOPS",
                 f"WRITE {size(d['write_bps'])}/s | {number(d['write_iops'])} IOPS",
                 f"In flight {d['in_flight']} | Avg queue {number(d['queue_depth'], 2)}",
@@ -73,7 +89,7 @@ def resource_lines(view, kind, width):
                 'Used by: ' + (', '.join(info.get('holders', [])) or 'none reported'),
                 'Partitions: ' + (', '.join(info.get('partitions', [])) or 'none reported'), attach(info)]))
         fs = s.get('root_filesystem')
-        if fs:
+        if fs and focus is None:
             cards.append(('/ FILESYSTEM', [gauge(ratio(fs['used'], fs['total'])),
                 f"Used {size(fs['used'])} / {size(fs['total'])}", pressure(s, 'io'),
                 'Filesystem capacity is separate from device traffic.']))
@@ -89,6 +105,9 @@ def resource_lines(view, kind, width):
                 except (ValueError, TypeError):
                     pass
             cards.append((g['id'] + ' | ' + g['name'], ['GPU busy ' + gauge(g['busy_pct']),
+                history('gpu', g, 'busy_pct', 'Busy history', 100, '%'),
+                history('gpu', g, 'memory_used', 'VRAM history', unit=' bytes'),
+                history('gpu', g, 'power_w', 'Power history', unit=' W'),
                 'VRAM ' + gauge(ratio(g['memory_used'], g['memory_total'])),
                 f"VRAM {size(g['memory_used'])} / {size(g['memory_total'])}",
                 f"Temperature {g['temperature_c'] if g['temperature_c'] is not None else 'N/A'} C",
@@ -116,8 +135,9 @@ def resource_lines(view, kind, width):
              'disk': 'Active time is not saturation. Stacked devices may count the same I/O.',
              'gpu': 'Unknown usage is not zero. Shared GPU memory is not total system RAM.',
              'network': 'Each RX/TX history scales to its visible peak, not link utilization. Do not sum layered interfaces.'}
-    history = ['History ' + view.trend(view.history['gpu'], plot_width)] if kind == 'gpu' else []
-    return panels(cards, width) + history + textwrap.wrap(notes[kind], width)
+    history_lines = ['History ' + view.trend(view.history['gpu'], plot_width)] if kind == 'gpu' and focus is None else []
+    tail = [view.marker_line(plot_width), *indicators(s), *view.overlay_lines()]
+    return panels(cards, width) + history_lines + [piece for line in tail + [notes[kind]] for piece in (textwrap.wrap(line, width) or [''])]
 
 
 def expanded_overview(view, width):

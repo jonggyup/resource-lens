@@ -1,3 +1,12 @@
+# 0.7.0
+
+- Focus individual sockets, memory nodes, disks, GPUs and interfaces while keeping
+  the overview summaries; add per-device disk and GPU histories.
+- Pin a service to its effective CPU set with resource and pressure accounting.
+- Add timeline markers, control outcomes and descriptive before/after comparisons.
+- Record bounded private JSONL sessions and replay them without live controls.
+- Show host/service pressure, quota throttling and exposed thermal counter events.
+
 # 0.6.0
 
 - Adopt established TUI interaction patterns after reviewing htop, btop, k9s and

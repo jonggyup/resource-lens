@@ -73,6 +73,7 @@ class Collector:
         self.last_time = None
         self.last_cpu, self.last_disk, self.last_process = {}, {}, {}
         self.last_network = {}
+        self.last_thermal = {}
         from .workloads import WorkloadCollector
         self.workloads = WorkloadCollector(self.sys / "fs/cgroup")
         self.ticks = os.sysconf("SC_CLK_TCK")
@@ -155,11 +156,16 @@ class Collector:
                 value = delta(v[index], previous[index] if previous else None, elapsed)
                 return value * scale if value is not None else None
             active = rate(9, 0.1)
+            try:
+                device_inode = (self.sys / 'block' / name).stat().st_ino
+            except OSError:
+                continue  # Device disappeared during the sample.
             result.append({"name": name, "read_bps": rate(2, 512), "write_bps": rate(6, 512),
                            "read_iops": rate(0), "write_iops": rate(4),
                            "active_pct": min(100, active) if active is not None else None,
                            "queue_depth": rate(10, 0.001), "in_flight": v[8],
-                           "model": read(self.sys / "block" / name / "device/model") or name})
+                           "model": read(self.sys / "block" / name / "device/model") or name,
+                           "identity": read(self.sys / "block" / name / "dev") + ":" + str(device_inode)})
         self.last_disk = counters
         return result
 
@@ -277,6 +283,22 @@ class Collector:
                            "power_w": None, "clock_mhz": None, "status": error})
         return result
 
+    def thermal_throttling(self):
+        values, rows = {}, []
+        for path in (self.sys / 'devices/system/cpu').glob('cpu[0-9]*/thermal_throttle'):
+            row = {'cpu': path.parent.name}
+            for kind in ('core', 'package'):
+                raw = read(path / (kind + '_throttle_count'))
+                key = (path.parent.name, kind)
+                count = int(raw) if raw.isdigit() else None
+                previous = self.last_thermal.get(key)
+                row[kind + '_events'] = count - previous if count is not None and previous is not None and count >= previous else None
+                row[kind + '_total'] = count
+                values[key] = count
+            rows.append(row)
+        self.last_thermal = values
+        return rows
+
     def sample(self):
         now = self.clock()
         elapsed = now - self.last_time if self.last_time is not None else 0
@@ -298,6 +320,7 @@ class Collector:
                 "cpu": cpu, "memory": memory, "disks": disks, "gpus": self.gpus(),
                 "network": network, "cpu_hardware": Hardware(self.sys / "devices/system/cpu").snapshot(),
                 "workloads": workloads, "resource_topology": topology(self.sys),
+                "thermal_throttling": self.thermal_throttling(),
                 "pressure": self.pressure(), "temperatures": self.temperatures(),
                 "processes": processes, "processes_skipped": skipped,
                 "load": [number(x) for x in loads[:3]], "root_filesystem": root_fs,

@@ -16,6 +16,8 @@ from .topology import topology_map
 from .placement import format_cpus
 from .resource_panels import resource_lines, expanded_overview
 from .navigation import NavigationView, actions, context_help
+from .focus import FocusView, KINDS
+from .investigation import Investigation, indicators
 
 
 def clean(value):
@@ -67,8 +69,8 @@ def pressure(snapshot, kind):
     return f"{kind.upper()} pressure (10s): {pct(value)}"
 
 
-class View(HardwareView, PlacementView, NavigationView):
-    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Workloads")
+class View(HardwareView, PlacementView, NavigationView, FocusView):
+    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Workloads", "Timeline")
 
     def __init__(self, unicode=False, control=False, session=None):
         self.hardware_init()
@@ -76,6 +78,15 @@ class View(HardwareView, PlacementView, NavigationView):
         self.overview_expanded = False
         self.overview_links = {}
         self.overview_cards_regions = []
+        self.focus = None
+        self.overlay = None
+        self.investigation = Investigation()
+        self.sample_times = deque(maxlen=120)
+        self.recorder = None
+        self.replay = None
+        self.replay_delta = 0
+        self.replay_playing = False
+        self.pending_action = {}
         self.page = 0
         self.scroll = 0
         self.sort = "cpu"
@@ -104,9 +115,23 @@ class View(HardwareView, PlacementView, NavigationView):
         return spark(values, width, maximum, unicode=self.unicode)
 
     def update(self, snapshot):
+        self.investigation.observe(snapshot)
         if self.paused:
             return
         self.snapshot = snapshot
+        self.sample_times.append(snapshot['timestamp'])
+        active_devices = set()
+        for kind, items, fields in [('disk', snapshot['disks'], ('active_pct', 'read_bps', 'write_bps')),
+                                    ('gpu', snapshot['gpus'], ('busy_pct', 'memory_used', 'power_w'))]:
+            for item in items:
+                identity = str(item.get('identity', item.get('id', item.get('name'))))
+                for field in fields:
+                    key = f'device:{kind}:{identity}:{field}'
+                    active_devices.add(key)
+                    self.history[key].append(item.get(field))
+        for key in list(self.history):
+            if isinstance(key, str) and key.startswith('device:') and key not in active_devices:
+                del self.history[key]
         aggregate = next((c for c in snapshot["cpu"] if c["id"] == "cpu"), {})
         self.history["cpu"].append(aggregate.get("busy_pct"))
         memory = snapshot["memory"]
@@ -128,6 +153,26 @@ class View(HardwareView, PlacementView, NavigationView):
                 del self.history[key]
         for group in snapshot.get("workloads", []):
             self.history["workload:" + group["id"]].append(group["cpu_pct"])
+
+    def device_history(self, kind, item, field):
+        identity = str(item.get('identity', item.get('id', item.get('name'))))
+        return self.history[f'device:{kind}:{identity}:{field}']
+
+    def marker_line(self, width):
+        times = list(self.sample_times)[-width:]
+        marks = [' '] * len(times)
+        if times:
+            for event in self.investigation.events:
+                if times[0] <= event['timestamp'] <= times[-1]:
+                    index = min(range(len(times)), key=lambda i: abs(times[i] - event['timestamp']))
+                    marks[index] = '|'
+        return 'Marks ' + ''.join(marks).rjust(width) + ' (M mark; 9 compare)'
+
+    def mark_event(self, label, status='marker', target=None, timestamp=None):
+        event = self.investigation.mark(label, timestamp, target, status)
+        if self.recorder:
+            self.recorder.write('event', event)
+        return event
 
     def workload_rows(self):
         groups = self.snapshot.get("workloads", []) if self.snapshot else []
@@ -216,6 +261,10 @@ class View(HardwareView, PlacementView, NavigationView):
         return lines
 
     def job(self, kind, function, *args):
+        if self.replay:
+            self.modal = {'stage': 'result', 'message': 'Replay is read-only; live control operations are disabled.'}
+            return
+        self.pending_action = {'plan': args[0] if args and isinstance(args[0], dict) else {}, 'timestamp': time.time(), 'target': args[0].get('target') if args and isinstance(args[0], dict) else None}
         self.modal = {"stage": "busy", "kind": kind}
         def execute():
             try:
@@ -227,6 +276,21 @@ class View(HardwareView, PlacementView, NavigationView):
     def poll_actions(self):
         while not self.results.empty():
             kind, result, error = self.results.get()
+            if kind in ('apply', 'undo', 'hardware_apply', 'hardware_undo', 'placement_apply', 'placement_undo'):
+                target = (result or {}).get('target') or self.pending_action.get('target')
+                identity = {'id': target['path'], 'inode': target.get('inode')} if target and target.get('path') else None
+                label = kind.replace('_', ' ') + (': ' + target['unit'] if target and target.get('unit') else '')
+                detail = result or self.pending_action.get('plan', {})
+                plan = detail.get('plan', detail)
+                if 'setting' in plan:
+                    label += f" {plan['setting']}={plan.get('value')} scope={plan.get('scope')}"
+                elif 'property' in detail:
+                    value = detail.get('before', {}).get(detail['property']) if kind == 'undo' else detail.get('requested', detail.get('value'))
+                    label += f" {detail['property']}={value}"
+                elif kind.startswith('placement'):
+                    value = detail.get('before', {}).get('allowed') if kind.endswith('undo') else detail.get('requested', detail.get('value'))
+                    label += ' CPUs=' + (format_cpus(value) if value else 'inherit')
+                self.mark_event(label, 'unconfirmed' if error else 'verified', identity, self.pending_action.get('timestamp'))
             if error:
                 self.modal = {"stage": "result", "message": error}
             elif kind == 'placement_open':
@@ -250,6 +314,8 @@ class View(HardwareView, PlacementView, NavigationView):
 
     def modal_lines(self):
         modal = self.modal
+        if modal['stage'] == 'focus':
+            return self.focus_lines()
         if modal['stage'] == 'navigate':
             return self.navigation_lines()
         if modal['stage'] == 'placement_confirm':
@@ -285,6 +351,8 @@ class View(HardwareView, PlacementView, NavigationView):
 
     def modal_key(self, key):
         stage = self.modal["stage"]
+        if stage == 'focus':
+            return self.focus_key(key)
         if stage == 'navigate':
             return self.navigation_key(key)
         if stage == 'hardware_menu':
@@ -334,6 +402,8 @@ class View(HardwareView, PlacementView, NavigationView):
         s = self.snapshot
         aggregate = next((c for c in s['cpu'] if c['id'] == 'cpu'), {})
         data = s.get('cpu_hardware', {'cpus': [], 'policies': {}})
+        if self.focus and self.focus[0] == 'cpu' and not self.placement:
+            data = {**data, 'cpus': [c for c in data['cpus'] if str(c['socket']) == self.focus[1]]}
         metrics = {c['id']: c for c in s['cpu']}
         p = self.placement
         if p:
@@ -351,8 +421,13 @@ class View(HardwareView, PlacementView, NavigationView):
                      '[ All CPUs / sockets settings ]  g menu | right-click thread',
                      'Linux topology grouping; tile positions are not chip coordinates.']
             self.topology_line_regions = {}
+        if not p:
+            lines += self.overlay_lines()
+            lines += indicators(s)
+            lines.append(self.marker_line(max(8, min(50, width - 30))))
+        overlay_cpus = self.overlay_cpus() if self.overlay else None
         tiles, hits = topology_map(data, metrics, width,
-            p['selected'] if p else None, set(p['info']['eligible']) if p else None, p['focus'] if p else None)
+            p['selected'] if p else overlay_cpus, set(p['info']['eligible']) if p else {c['id'] for c in data['cpus']}, p['focus'] if p else None)
         offset = len(lines)
         self.topology_line_regions.update({row + offset: value for row, value in hits.items()})
         lines.extend(tiles)
@@ -411,7 +486,7 @@ class View(HardwareView, PlacementView, NavigationView):
             return [piece for line in context_help(self)
                     for piece in (textwrap.wrap(line, max(20, width)) or [''])]
         return {1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
-                4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines}.get(self.page, self.process_lines)(width)
+                4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines, 8: lambda width: [piece for line in self.investigation.lines() for piece in (textwrap.wrap(line, width) or [''])]}.get(self.page, self.process_lines)(width)
 
     def mouse(self, x, y, state):
         left = state & (getattr(curses, "BUTTON1_CLICKED", 0) | getattr(curses, "BUTTON1_PRESSED", 0))
@@ -419,7 +494,10 @@ class View(HardwareView, PlacementView, NavigationView):
         if self.modal:
             hit = self.modal_regions.get(y)
             if left and hit and hit[0] <= x < hit[1]:
-                if self.modal['stage'] == 'navigate':
+                if self.modal['stage'] == 'focus':
+                    self.modal['selected'] = hit[2]
+                    self.focus_key(10)
+                elif self.modal['stage'] == 'navigate':
                     self.modal['selected'] = hit[2]
                     self.navigation_key(10)
                 elif self.modal['stage'] == 'hardware_menu':
@@ -449,10 +527,12 @@ class View(HardwareView, PlacementView, NavigationView):
                 return
             if y in self.overview_links:
                 self.page, self.scroll = self.overview_links[y], 0
+                self.focus = None
                 return
             for top, start, height, width, page in self.overview_cards_regions:
                 if top <= y < top + height and start <= x < start + width:
                     self.page, self.scroll = page, 0
+                    self.focus = None
                     return
         if self.page == 1 and not self.help and (left or right):
             for start, end, kind, ids in self.topology_regions.get(y, []):
@@ -478,6 +558,7 @@ class View(HardwareView, PlacementView, NavigationView):
             for start, end, page in self.tab_regions:
                 if start <= x < end:
                     self.page, self.scroll = page, 0
+                    self.focus = None
                     return
         if state & getattr(curses, "BUTTON4_PRESSED", 0):
             self.scroll = max(0, self.scroll - 3)
@@ -542,6 +623,38 @@ class View(HardwareView, PlacementView, NavigationView):
             return True
         if self.placement:
             return self.placement_key(key)
+        if self.replay and key in (curses.KEY_LEFT, curses.KEY_RIGHT, ord(' '), ord('('), ord(')'), ord(','), ord('.')):
+            if key == ord(' '):
+                self.replay_playing = not self.replay_playing
+            else:
+                self.replay_delta += {curses.KEY_LEFT: -1, curses.KEY_RIGHT: 1, ord('('): -len(self.replay.offsets), ord(')'): len(self.replay.offsets), ord(','): -10, ord('.'): 10}[key]
+                self.replay_playing = False
+            return True
+        if key == ord('f') and self.page in (0, 1, 2, 3, 4, 6):
+            self.open_focus()
+            return True
+        if key in (ord('['), ord(']')) and self.focus:
+            self.cycle_focus(-1 if key == ord('[') else 1)
+            return True
+        if key == ord('o'):
+            if self.page == 7:
+                group = self.selected_workload()
+                if group:
+                    self.overlay = {'id': group['id'], 'inode': group.get('inode')}
+                    self.focus = None
+                    self.page, self.scroll = 1, 0
+            else:
+                self.overlay = None
+            return True
+        if key == ord('M') and self.snapshot:
+            self.mark_event('Manual baseline', target=self.overlay, timestamp=self.snapshot['timestamp'])
+            return True
+        if self.page == 8 and key in (curses.KEY_UP, curses.KEY_DOWN, ord('j'), ord('k')):
+            count = len(self.investigation.events)
+            if count:
+                self.investigation.selected = (self.investigation.selected + (1 if key in (curses.KEY_DOWN, ord('j')) else -1)) % count
+                self.scroll = 0
+            return True
         if key == ord(':'):
             self.modal = dict(stage='navigate', query='', selected=0)
             return True
@@ -602,10 +715,12 @@ class View(HardwareView, PlacementView, NavigationView):
             if key in (10, 13) and rows:
                 self.workload_detail, self.scroll = True, 0
                 return True
-        if ord("1") <= key <= ord("8"):
+        if ord("1") <= key <= ord("9"):
             self.page, self.scroll = key - ord("1"), 0
+            self.focus = None
         elif key in (9, curses.KEY_BTAB):
             self.page = (self.page + (1 if key == 9 else -1)) % len(self.names)
+            self.focus = None
             self.scroll = 0
         elif key == ord("?"):
             self.help, self.scroll = not self.help, 0
@@ -656,31 +771,41 @@ def draw(screen, view, interval, error=None):
         return
     s = view.snapshot
     stamp = time.strftime("%H:%M:%S", time.localtime(s["timestamp"])) if s else "waiting"
-    state = "FROZEN" if view.paused else "LIVE"
+    state = "REPLAY" if view.replay else "FROZEN" if view.paused else "LIVE"
     if error:
         state = "COLLECTOR ERROR"
-    elif s and not view.paused and time.time() - s["timestamp"] > max(5, interval * 3):
+    elif s and not view.replay and not view.paused and time.time() - s["timestamp"] > max(5, interval * 3):
         state = "STALE"
     accent = view.colors["accent"] | curses.A_BOLD
     muted = view.colors["muted"] | curses.A_DIM
     put(screen, 0, 1, f"RESOURCE LENS  {state}  {interval:g}s  |  {stamp}", accent)
     if s and w >= 95:
         put(screen, 0, 60, s["hostname"], muted)
-    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net", "Work")
+    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net", "Work", "Time")
     view.tab_regions = []
     x = 1
     for page, label in enumerate(labels):
-        text = f" {page + 1} {label} " if w >= 76 else f" {page + 1} "
+        text = f" {page + 1} {label} " if w >= 90 else f" {page + 1} "
         attr = accent | curses.A_REVERSE if page == view.page else muted
         put(screen, 1, x, text, attr)
         view.tab_regions.append((x, x + len(text), page))
         x += len(text) + 1
-    if w < 76:
+    if w < 90:
         put(screen, 1, x + 1, view.names[view.page], accent)
     mode = "Runtime CPU controls enabled" if view.control else "Read-only"
     status = mode + " | newest samples at right"
     if not s:
         put(screen, 4, 2, "Collecting the first sample...", muted)
+    elif view.page == 0 and not view.help and view.focus:
+        kind, identity = view.focus
+        summary = compact_overview(view)
+        lines = summary[:summary.index('')] + [f'FOCUS {kind}: {identity} | f restore | [ / ] switch']
+        lines += view.cpu_lines(w - 3) if kind == 'cpu' else resource_lines(view, kind, w - 3)
+        capacity = h - 5
+        view.scroll = min(view.scroll, max(0, len(lines) - capacity))
+        for i, line in enumerate(lines[view.scroll:view.scroll + capacity]):
+            put(screen, i + 3, 1, line, accent if i < 5 else 0)
+        status = 'Focused overview | other resources summarized above'
     elif view.page == 0 and not view.help and view.overview_expanded:
         lines, links = expanded_overview(view, w - 3)
         capacity = h - 5
@@ -713,7 +838,7 @@ def draw(screen, view, interval, error=None):
         lines = view.lines(w - 3)
         # Put a readable multi-row chart above percentage-based detail pages.
         kinds = {2: "memory", 3: "disk", 4: "gpu"}
-        if not view.help and view.page in kinds:
+        if not view.help and view.page in kinds and not view.focus:
             kind = kinds[view.page]
             color = view.colors[kind]
             plot = chart(view.history[kind], max(1, w - 9), 3, unicode=view.unicode)
@@ -745,6 +870,8 @@ def draw(screen, view, interval, error=None):
                     attr = view.colors['cpu']
                     if kind in ('core', 'socket'):
                         attr |= curses.A_BOLD
+                    if view.overlay and kind == 'cpu' and ids[0] in (view.overlay_cpus() or set()):
+                        attr |= curses.A_REVERSE
                     if view.placement and kind == 'cpu':
                         if ids[0] in view.placement['selected']:
                             attr |= curses.A_REVERSE
@@ -757,6 +884,12 @@ def draw(screen, view, interval, error=None):
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     if view.page == 0 and not view.help:
         put(screen, 2, 1, '[ - Collapse overview ] e' if view.overview_expanded else '[ + Expand overview ] e', accent)
+    if view.focus:
+        status += f' | focus {view.focus[1]} (f restores)'
+    if view.replay:
+        status = f'REPLAY {view.replay.index + 1}/{len(view.replay.offsets)} | Left/Right step | Space play/pause | ' + status
+    if view.recorder:
+        status = (view.recorder.error or 'REC ' + view.recorder.path) + ' | ' + status
     message = error or ("; ".join(s["warnings"]) if s else "") or status
     if view.editing_filter:
         value = view.workload_filter if view.filter_context == "workloads" else view.filter
@@ -787,7 +920,7 @@ def draw(screen, view, interval, error=None):
         put(screen, top + box_height - 1, left, "+" + "-" * (box_width - 2) + "+", accent, box_width)
         option_index = view.modal.get('offset', 0)
         for index, line in enumerate(lines[:box_height - 3]):
-            if view.modal['stage'] in ('hardware_menu', 'navigate') and (line.startswith('> ') or line.startswith('- ')):
+            if view.modal['stage'] in ('hardware_menu', 'navigate', 'focus') and (line.startswith('> ') or line.startswith('- ')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, option_index)
                 option_index += 1
             if view.modal['stage'] in ('hardware_confirm', 'placement_confirm') and line.startswith(('[ Apply ]', '[ Cancel ]')):
@@ -796,7 +929,7 @@ def draw(screen, view, interval, error=None):
     screen.refresh()
 
 
-def run(collector, interval, ascii=False, control=False):
+def run(collector, interval, ascii=False, control=False, recorder=None, replay=None):
     latest = {"snapshot": None, "sequence": 0, "error": None}
     lock, stop = threading.Lock(), threading.Event()
 
@@ -805,6 +938,8 @@ def run(collector, interval, ascii=False, control=False):
             started = time.monotonic()
             try:
                 snapshot = collector.sample()
+                if recorder:
+                    recorder.write('sample', snapshot)
                 with lock:
                     latest.update(snapshot=snapshot, sequence=latest["sequence"] + 1, error=None)
             except Exception as exc:
@@ -824,20 +959,41 @@ def run(collector, interval, ascii=False, control=False):
         except curses.error:
             pass
         encoding = (sys.stdout.encoding or "").lower().replace("-", "")
-        view, sequence = View(unicode=not ascii and encoding == "utf8", control=control), -1
+        view, sequence = View(unicode=not ascii and encoding == "utf8", control=control and replay is None), -1
         view.colors = palette()
+        view.recorder, view.replay = recorder, replay
+        replay_position, replay_deadline = -1, time.monotonic()
+        if replay:
+            view.investigation.events = list(replay.events)
+
         previous_render = None
         while True:
             view.poll_actions()
+            if replay:
+                desired = replay.index + view.replay_delta
+                view.replay_delta = 0
+                if view.replay_playing and time.monotonic() >= replay_deadline:
+                    desired += 1
+                    replay_deadline = time.monotonic() + interval
+                desired = max(0, min(len(replay.offsets) - 1, desired))
+                if desired != replay_position:
+                    view.history.clear()
+                    view.sample_times.clear()
+                    view.investigation.samples.clear()
+                    for sample in replay.window(desired):
+                        view.update(sample)
+                    replay_position = desired
+                if desired == len(replay.offsets) - 1:
+                    view.replay_playing = False
             with lock:
                 current = latest.copy()
             if current["snapshot"] is not None and current["sequence"] != sequence:
                 view.update(current["snapshot"])
                 sequence = current["sequence"]
-            stale = bool(view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
+            stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded)
+                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render
@@ -845,9 +1001,11 @@ def run(collector, interval, ascii=False, control=False):
                 break
 
     worker = threading.Thread(target=collect, daemon=True)
-    worker.start()
+    if not replay:
+        worker.start()
     try:
         curses.wrapper(terminal)
     finally:
         stop.set()
-        worker.join(timeout=2)
+        if not replay:
+            worker.join(timeout=2)

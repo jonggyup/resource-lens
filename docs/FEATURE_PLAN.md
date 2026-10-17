@@ -1,3 +1,12 @@
+# 0.7.0
+
+- Focus individual sockets, memory nodes, disks, GPUs and interfaces while keeping
+  the overview summaries; add per-device disk and GPU histories.
+- Pin a service to its effective CPU set with resource and pressure accounting.
+- Add timeline markers, control outcomes and descriptive before/after comparisons.
+- Record bounded private JSONL sessions and replay them without live controls.
+- Show host/service pressure, quota throttling and exposed thermal counter events.
+
 **0.5.0 visualization update:** the original overview remains the default;
 `e` expands it into CPU topology and responsive resource panels. Memory NUMA,
 block layering, GPU attachment and network link relationships use available
@@ -8,7 +17,7 @@ sysfs data. Resource controls remain explicit, separate actions.
 **0.4.0 status:** workload inspection and runtime CPU weight/quota with preview,
 verification and session Undo are implemented. Real system-service kernel and
 terminal-UI checks passed; see [VALIDATION.md](VALIDATION.md). Per-process
-nice/affinity edits, disk/memory changes and persistent event recording remain planned.
+nice/affinity edits, disk/memory changes remain planned. Persistent event recording is implemented in 0.7.0.
 Service CPU placement now has a socket/NUMA/core selector, verified systemd/cpuset
 application and Undo. CPU governors and logical CPU hotplug have mouse menus, bulk scopes, verified
 sysfs writes and session Undo; hardware transition validation remains outstanding. Monitoring stays read-only unless `--control`

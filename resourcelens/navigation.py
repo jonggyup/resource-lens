@@ -3,7 +3,7 @@ import curses
 
 ALIASES = ('home overview dashboard', 'cpu processor topology', 'ram memory numa',
            'disk storage io', 'gpu graphics video', 'tasks processes pid',
-           'net network interfaces', 'workloads services cgroups')
+           'net network interfaces', 'workloads services cgroups', 'timeline events changes comparison')
 
 
 def actions(view):
@@ -23,7 +23,11 @@ def actions(view):
             ('w Weight', ord('w')), ('l Quota', ord('l')), ('U Undo place', ord('U'))],
     }.get(view.page, [('Space Freeze', ord(' '))])
     # Quit stays discoverable even when only the first local action fits.
-    return common + [('F10 Quit', ord('q'))] + local
+    extra = [('f Focus', ord('f'))] if view.page in (0, 1, 2, 3, 4, 6) else []
+    if view.page == 7:
+        extra = [('o Overlay', ord('o'))]
+    extra += [('M Mark', ord('M')), ('9 Timeline', ord('9'))]
+    return common + [('F10 Quit', ord('q'))] + extra + local
 
 
 def context_help(view):
@@ -49,9 +53,13 @@ def context_help(view):
                 'U undoes CPU placement. Controls require --control and permission.'],
         }.get(view.page, ['Scroll to inspect every device, node and metric.',
                           'N/A means unavailable, not idle. Resource panels are read-only.'])
+    details += ['f focuses a resource; [ / ] switch devices; f restores all panels.',
+                'o on Workloads pins a service overlay; o elsewhere clears it.',
+                'M marks a baseline; 9 opens changes and before/after comparisons.',
+                'Replay: Left/Right step samples; Space plays/pauses (read-only).']
     return ['HELP / ' + title, 'Esc, F1 or ?: return to the same view', '', *details, '',
             'GLOBAL NAVIGATION', ': opens the searchable view switcher; type cpu, net, services, etc.',
-            '1-8 select views; Tab / Shift-Tab switch views; tabs are clickable.',
+            '1-9 select views; Tab / Shift-Tab switch views; tabs are clickable.',
             'Up/Down or j/k scroll; PgUp/PgDn, Home/End cover longer pages.',
             'Space freezes/unfreezes displayed samples (except in the CPU selector).',
             'F1 or ? opens context help. The bottom action labels are clickable.',
@@ -86,6 +94,7 @@ class NavigationView:
             items = self.navigation_items()
             if items:
                 self.page = items[self.modal['selected'] % len(items)][0]
+                self.focus = None
                 self.scroll, self.help, self.modal = 0, False, None
         elif key in (curses.KEY_UP, curses.KEY_DOWN):
             count = len(self.navigation_items())

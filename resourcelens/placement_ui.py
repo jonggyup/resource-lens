@@ -12,6 +12,9 @@ class PlacementView:
         self.topology_line_regions = {}
 
     def open_placement(self):
+        if getattr(self, 'replay', None):
+            self.modal = dict(stage='result', message='Replay is read-only; resource controls are disabled.')
+            return
         group = self.selected_workload()
         if not self.control or not group or not group.get('controllable'):
             self.modal = dict(stage='result', message='Select a controllable service/scope on Workloads and launch with --control.')
@@ -22,6 +25,7 @@ class PlacementView:
 
     def placement_ready(self, result):
         info = result['info']
+        self.focus = None
         self.placement = dict(target=result['target'], info=info, selected=set(info['effective']),
                               inherit=not info['allowed'], focus=next(iter(info['eligible']), None))
         self.page, self.scroll, self.modal, self.help = 1, 0, None, False

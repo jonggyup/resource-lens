@@ -1,3 +1,30 @@
+# 0.7.0 investigation validation
+
+129 tests pass, including bounded/exclusive recordings, interrupted-tail recovery,
+replay without a collector, control rejection, per-device histories and identity
+handling, service overlay identity guards, sampled comparisons, markers, failed
+control events and thermal counter increments/reset/missing values.
+
+A live tmux session exercised socket focus, disk focus/history, service overlay,
+manual baseline, verified CPU placement and Undo on a disposable systemd service,
+Timeline, recording and read-only replay. Replay was resized to 80x24, 40x12 and
+120x40. See [captured evidence](investigation-ui-evidence.json). The test service
+was stopped and its runtime settings cleaned up. No existing service was changed.
+The overlay correctly reported unavailable effective cpuset information before
+placement; known-set highlighting also has fixture coverage.
+
+The installed 0.7.0 package was checked from outside the source directory:
+version, two-sample live recording, identical replay JSON and replay text export.
+The full automated suite includes real pseudo-terminal navigation checks.
+
+Limitations: this host exposes no cpufreq governor policies or GPU utilization.
+Thermal zero/missing behavior was observed; nonzero/reset transitions use fixtures.
+Comparisons are sampled observations, not controlled performance experiments;
+no latency improvement or causal effect is claimed. Replay reconstructs the last
+120 samples at its cursor; live analysis retains up to 600 UI-observed samples.
+
+---
+
 # 0.6.0 navigation validation
 
 114 tests pass. Context help, action-bar bounds and clicks, filter editing,

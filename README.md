@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.6.0 is a preview with optional temporary CPU controls.** Monitoring
+**Version 0.7.0 is a preview with optional temporary CPU controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Disk/memory controls, direct frequency
@@ -40,6 +40,62 @@ Installation isn't required for the source command. On Debian/Ubuntu, missing
 `venv` support can be supplied by the `python3-venv` package; the source command
 also works without it.
 
+## Focus, investigate, and replay
+
+Press `f` on Overview or a resource page to choose a socket, memory node,
+disk, GPU, or network interface. Other resources remain summarized on Overview.
+Press `[` / `]` to cycle devices of the same kind; `f` restores the full view.
+Disk panels show separate activity/read/write histories; GPU panels show busy,
+VRAM and power histories when exposed. Percentage charts use 0–100%; throughput,
+VRAM and power charts scale to the visible peak. Missing readings stay unknown.
+
+On Workloads (`8`), select a service and press `o` to pin it to the CPU map.
+The overlay shows group CPU, memory, I/O, pressure and quota throttling, and
+highlights its effective cgroup CPU set. This is allowed placement, not measured
+per-core service execution; thread affinity and child cgroups may narrow it.
+Press `o` outside Workloads to clear it. Exited/replaced cgroups are not reattached.
+
+Press `M` to mark a baseline; `9` opens Timeline. Up/Down selects an event.
+Control apply/Undo attempts also create events with verified or unconfirmed outcomes.
+Charts include a separate marker row. Comparisons report available sample means
+in the 30 seconds before/after an event, with per-metric counts and absolute changes.
+A pinned-service baseline compares that service; otherwise it compares the host.
+These are descriptive observations, not causal attribution or latency predictions.
+Live comparisons retain up to 600 UI-observed samples; collection can outpace UI updates.
+
+```bash
+# Record to a NEW file (existing files are never overwritten).
+python3 -m resourcelens --record session.jsonl
+# Optional controls and their events can be recorded too.
+python3 -m resourcelens --control --record tuning.jsonl --record-max-mb 128
+# Replay without live collection or resource controls.
+python3 -m resourcelens --replay session.jsonl
+# Headless recording and replay export.
+python3 -m resourcelens --record batch.jsonl --json --count 30
+python3 -m resourcelens --replay batch.jsonl --json
+```
+
+Replay: Left/Right steps one sample, `,` / `.` skips ten, `(` / `)` jumps to
+start/end, and Space plays/pauses. Playback uses `--interval`, not original timing.
+Graphs/comparisons rebuild from up to 120 samples ending at the cursor; advance
+past an event to see its after-window. Replay markers are temporary and do not
+modify the recording. Replay cannot be combined with `--control` or `--record`.
+
+Recordings contain host/process names, cgroup paths and telemetry; review them
+before sharing. Files are created with mode 0600. The default cap is 256 MiB;
+reaching it stops recording while monitoring continues. Samples are recorded even
+when the live display is frozen. An interrupted final JSON line is skipped with
+a warning. The versioned JSONL reader bounds line size and sample/event counts;
+recordings should come from Resource Lens, not arbitrary hand-edited JSON.
+
+Resource details show CPU/memory/I/O PSI and kernel-exposed thermal event counters;
+the service overlay adds quota throttling. PSI measures time with stalled tasks,
+not utilization. Thermal events indicate counter transitions during a sample,
+not current throttle duration or a complete machine-wide health assessment.
+Missing counters are unknown; repeated package counters are not summed.
+See the kernel's [PSI documentation](https://docs.kernel.org/accounting/psi.html)
+and [thermal counter documentation](https://cdn.kernel.org/doc/html/latest/admin-guide/thermal/intel_thermal_throttle.html).
+
 ## Views
 
 | Key | View | What it shows |
@@ -51,6 +107,7 @@ also works without it.
 | `5` | GPU | Detected GPUs, available utilization, VRAM, temperature and power |
 | `6` | Processes | PID, name, CPU, resident memory, nice value and state |
 | `7` | Network | Per-interface RX/TX rates and histories, transfer totals, packet rates, link state/speed, errors and drops |
+| `9` | Timeline | Markers, control outcomes and measured before/after comparisons |
 | `8` | Workloads | Grouped service/cgroup CPU, memory, I/O, members, pressure, throttling and inherited limits; optional CPU controls |
 
 Overview uses six colored cards at 76+ columns and 23+ rows. Each resource has
