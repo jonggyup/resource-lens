@@ -1,0 +1,175 @@
+{
+  "unit": "rlplacement-6be02dce2840.service",
+  "slice": "rlplacement-6be02dce2840.slice",
+  "before": {
+    "path": "/rlplacement.slice/rlplacement-6be02dce2840.slice/rlplacement-6be02dce2840.service",
+    "inode": 9870,
+    "invocation": "85a19425b7fd43b09df6b153a15fab71",
+    "allowed": [],
+    "kernel": null,
+    "effective": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "eligible": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "online": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  "applied": {
+    "path": "/rlplacement.slice/rlplacement-6be02dce2840.slice/rlplacement-6be02dce2840.service",
+    "inode": 9870,
+    "invocation": "85a19425b7fd43b09df6b153a15fab71",
+    "allowed": [
+      0
+    ],
+    "kernel": [
+      0
+    ],
+    "effective": [
+      0
+    ],
+    "eligible": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "online": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  "process_affinities": {
+    "178506": [
+      0
+    ],
+    "178507": [
+      0
+    ]
+  },
+  "undo": {
+    "path": "/rlplacement.slice/rlplacement-6be02dce2840.slice/rlplacement-6be02dce2840.service",
+    "inode": 9870,
+    "invocation": "85a19425b7fd43b09df6b153a15fab71",
+    "allowed": [],
+    "kernel": null,
+    "effective": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "eligible": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "online": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  "undo_status": "undone",
+  "restored_process_affinities": {
+    "178506": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "178507": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  "ancestor_exclusion_rejected": true,
+  "explicit_restore": {
+    "path": "/rlplacement.slice/rlplacement-6be02dce2840.slice/rlplacement-6be02dce2840.service",
+    "inode": 9870,
+    "invocation": "85a19425b7fd43b09df6b153a15fab71",
+    "allowed": [
+      0,
+      1
+    ],
+    "kernel": [
+      0,
+      1
+    ],
+    "effective": [
+      0,
+      1
+    ],
+    "eligible": [
+      0,
+      1
+    ],
+    "online": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  }
+}

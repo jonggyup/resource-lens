@@ -5,11 +5,11 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.3.0 is a preview with optional temporary CPU controls.** Monitoring
+**Version 0.4.0 is a preview with optional temporary CPU controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
-quota changes for supported systemd services/scopes, plus CPU governors and
-logical CPU online/offline controls. Disk/memory controls, direct frequency
-limits and nice/affinity editing remain future work.
+quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
+CPU governors and logical CPU online/offline controls. Disk/memory controls, direct frequency
+limits and nice/per-process affinity editing remain future work.
 It does not claim functionality is unique to Linux tools.
 
 ## Run immediately
@@ -100,13 +100,81 @@ change. Sampling defaults to one second. Frozen intervals are omitted from
 display history, so it is a sequence of samples rather than a continuous
 wall-clock axis.
 
+## Visual CPU topology and service placement
+
+The CPU page (`2`) groups **socket → NUMA node → physical core → SMT threads**.
+Each core is a box containing its logical CPUs, live utilization bars, governor
+and reported MHz (in thread-row order). Offline threads remain visible. Linux's
+thread-sibling lists determine which CPUs share a core; CPU numbering alone does
+not. Die IDs help identify cores on multi-die packages. Unknown topology is shown
+as unknown. Tiles wrap to fit the terminal; arrows or the mouse wheel scroll.
+
+For example, this host reports CPU 0 and CPU 4 as siblings:
+
+```text
+[ SOCKET 1 ]
+  NUMA 0
++ Core 0 / Die 0-----------+ + Core 1 / Die 0-----------+
+|   CPU0   [##...]  40%    | |   CPU1   [.....]   0%    |
+|   CPU4   [#....]  20%    | |   CPU5   [.....]   0%    |
+| gov: N/A                 | | gov: N/A                 |
+| MHz: N/A/N/A             | | MHz: N/A/N/A             |
++--------------------------+ +--------------------------+
+```
+
+This depicts topology relationships, not physical silicon coordinates or socket
+locations on a motherboard. NUMA information is displayed; memory placement is
+not changed. See the [captured live terminal](docs/CPU_TOPOLOGY.txt).
+
+To place a service on selected CPUs:
+
+```bash
+python3 -m resourcelens --control
+```
+
+1. Open Workloads (`8`), select a service/scope with arrows or `/` to filter,
+   then press **p**.
+2. Click logical CPU rows to toggle them. Click a core header to toggle its
+   eligible SMT threads, or a socket header to toggle its eligible CPUs.
+   Selected CPUs are highlighted and marked `x`; `-` means eligible/unselected,
+   `!` means excluded by parent restrictions or offline.
+3. Use the buttons **All**, **None**, **Inherit**, **Preview**, **Cancel**.
+   Keyboard equivalents: arrows focus, Space toggles, `a` all eligible, `n` none,
+   `r` inherit, Enter previews, Esc cancels. Inherit removes the local restriction;
+   selecting All writes an explicit set of the currently eligible CPUs.
+4. Review the service, previous set and expected effective set, then Apply.
+5. Workload details show the effective cpuset. Press uppercase **U** there to
+   undo the latest placement change. Lowercase `u` still undoes weight/quota;
+   `u` on CPU undoes hardware changes.
+
+Placement uses systemd's runtime `AllowedCPUs=` and cgroup v2 `cpuset`, covering
+existing threads and future members of the service's descendant hierarchy.
+The parent cgroup and online CPU set constrain the selection. Per-thread affinity
+and child cgroup settings can further narrow execution. The UI does not directly
+edit per-thread affinity, but the kernel may adjust affinity when cpusets change.
+Undo restores cgroup placement, not an archive of every thread's affinity mask. Placement does not reserve CPUs exclusively, change CPU quota,
+or move memory between NUMA nodes. It currently supports systemd services/scopes,
+not arbitrary individual processes or container-runtime APIs.
+
+The preview is rechecked before writing, and success requires matching systemd,
+`cpuset.cpus`, and `cpuset.cpus.effective` values. Undo refuses unit replacement,
+external configuration changes or changed ancestor availability. Requests that
+fail verification remain unconfirmed; inspect the effective cpuset before retrying.
+Some systemd versions have a reported empty-AllowedCPUs reset issue; a successful
+API response alone is never considered successful restoration. Runtime settings
+survive UI exit; session Undo history does not. There is no automatic elevation.
+
+References: [systemd resource controls](https://github.com/systemd/systemd/blob/main/man/systemd.resource-control.xml),
+[kernel cpuset behavior](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpuset),
+[reported systemd reset issue](https://github.com/systemd/systemd/issues/43846).
+
 ## CPU governors and online/offline controls
 
 ```bash
 python3 -m resourcelens --control
 ```
 
-Press **2** for CPU details. Right-click a CPU row to open its settings, or
+Press **2** for CPU details. Right-click a logical CPU row inside a core box to open its settings, or
 click **All CPUs / sockets settings**. Press **g** for the same menu without a
 mouse. Choose with Up/Down + Enter or left-click. The all-CPU menu includes
 socket and individual CPU choices; scroll through choices with Up/Down.
@@ -120,8 +188,8 @@ socket and individual CPU choices; scroll through choices with Up/Down.
   press Enter. Esc or Cancel leaves settings alone. A shared frequency policy
   can affect CPUs outside the selected socket or CPU; the preview includes them.
 - Press **u** on the CPU page to restore the latest hardware change in this
-  session. Workloads has its own Undo history. The exit dialog undoes hardware
-  entries first, then workload entries.
+  session. Workloads has its own Undo history. The exit dialog undoes placement
+  entries first, then hardware entries, then weight/quota entries.
 
 Hardware writes use the existing permissions on `/sys/devices/system/cpu`.
 `--control` does not grant permission and the app never invokes sudo. Standard

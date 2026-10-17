@@ -1,3 +1,13 @@
+# 0.4.0
+
+- Responsive socket/NUMA/core topology tiles with SMT siblings, utilization,
+  governor, clocks and offline state; preserve right-click hardware menus.
+- Workloads: `p` opens visual service CPU placement; click threads, core headers
+  or socket headers, preview, apply and verify systemd/cgroup settings.
+- Parent-aware selection, explicit versus inherited sets, session placement Undo
+  (`U`), and conflict/restart protection.
+- Live disposable-service tests verified placement and both forms of restoration.
+
 # 0.3.0
 
 - CPU topology with present/offline CPUs, sockets and physical core IDs.

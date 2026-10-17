@@ -1,0 +1,32 @@
+ RESOURCE LENS  LIVE  0.2s  |  18:16:10                     node0.jonggyu-319338.tasrdma.emulab.net
+  1 Home   2 CPU   3 RAM   4 Disk   5 GPU   6 Tasks   7 Net   8 Work
+
+ Intel(R) Xeon(R) CPU           E5530  @ 2.40GHz
+ CPU [#.................] 5.0% | CPU pressure (10s): 0.0%
+ History  ···
+ [ All CPUs / sockets settings ]  g menu | right-click thread
+ Linux topology grouping; tile positions are not chip coordinates.
+ [ SOCKET 1 ]  8/8 logical CPUs online
+   NUMA 0 | boxes = physical cores; rows = SMT threads
+ + Core 0 / Die 0-----------+ + Core 1 / Die 0-----------+ + Core 2 / Die 0-----------+
+ |   CPU0   [.....]   0%    | |   CPU1   [.....]   0%    | |   CPU2   [.....]   0%    |
+ |   CPU4   [.....]   0%    | |   CPU5   [.....]   0%    | |   CPU6   [.....]   0%    |
+ | gov: N/A                 | | gov: N/A                 | | gov: N/A                 |
+ | MHz: N/A/N/A             | | MHz: N/A/N/A             | | MHz: N/A/N/A             |
+ +--------------------------+ +--------------------------+ +--------------------------+
+ + Core 3 / Die 0-----------+
+ |   CPU3   [##...]  35%    |
+ |   CPU7   [.....]   0%    |
+ | gov: N/A                 |
+ | MHz: N/A/N/A             |
+ +--------------------------+
+
+ Frequency governors: unavailable on this system.
+ Core 1: 22.0 C
+ Core 2: 27.0 C
+ Core 3: 29.0 C
+ Core 0: 27.0 C
+
+
+ CPU | 1-25 of 25 | arrows scroll
+ Right-click CPU | g all/socket/core menu | u hardware Undo | q quit

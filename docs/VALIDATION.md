@@ -1,3 +1,28 @@
+# 0.4.0 topology and placement validation
+
+101 automated tests pass. New coverage includes socket/SMT grouping, unknown
+core identities, responsive tile bounds and click targets, CPU-list parsing,
+parent/offline exclusions, stale units, external changes, false API success,
+reset versus explicit restoration, small-terminal confirmation blocking and
+selection controls. Existing real pseudo-terminal tests include right-clicking
+a logical CPU in its new core tile.
+
+Live integration: `python3 scripts/verify_placement.py --run` created only a new,
+bounded disposable service and slice. Both service processes were constrained
+to CPU 0, then regained CPUs 0-7 after Undo. A temporary parent restriction to
+CPUs 0-1 rejected selection of CPU 7. A second change restored an explicit 0-1
+set. See [kernel evidence](placement-evidence.json). Created units/drop-ins were
+cleaned up. No existing service's configuration or hardware online state changed.
+
+The actual curses UI was driven through service selection, topology editing,
+preview, Apply and Undo, and resized to 80x24, 40x12 and 120x35. See
+[UI evidence](placement-ui-evidence.json) and [CPU view](CPU_TOPOLOGY.txt).
+Multiple sockets/NUMA nodes and unusual SMT layouts have fixture coverage;
+the available physical host has one reported socket, one NUMA node and two
+threads per core. This is not validation on every kernel/systemd version.
+
+---
+
 # 0.3.0 CPU hardware control validation
 
 85 automated tests pass, including an actual curses pseudo-terminal session

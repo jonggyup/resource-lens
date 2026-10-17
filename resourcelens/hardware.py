@@ -44,7 +44,9 @@ class Hardware:
                 value = read(path / 'topology' / name)
                 return int(value) if value.isdigit() else None
             cpus.append(dict(id=cpu, online=cpu in online, socket=topology('physical_package_id'),
-                core=topology('core_id'), hotplug=(path / 'online').exists(),
+                core=topology('core_id'), die=topology('die_id'),
+                siblings=cpulist(read(path / 'topology/thread_siblings_list')),
+                nodes=sorted(int(p.name[4:]) for p in path.glob('node[0-9]*') if p.name[4:].isdigit()), hotplug=(path / 'online').exists(),
                 policy=next((name for name, p in policies.items() if cpu in p['cpus']), None)))
         return dict(cpus=cpus, policies=policies)
 

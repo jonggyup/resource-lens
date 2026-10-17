@@ -1,10 +1,11 @@
 # Functionality and implementation sequence
 
-**0.3.0 status:** workload inspection and runtime CPU weight/quota with preview,
+**0.4.0 status:** workload inspection and runtime CPU weight/quota with preview,
 verification and session Undo are implemented. Real system-service kernel and
 terminal-UI checks passed; see [VALIDATION.md](VALIDATION.md). Per-process
 nice/affinity edits, disk/memory changes and persistent event recording remain planned.
-CPU governors and logical CPU hotplug now have mouse menus, bulk scopes, verified
+Service CPU placement now has a socket/NUMA/core selector, verified systemd/cpuset
+application and Undo. CPU governors and logical CPU hotplug have mouse menus, bulk scopes, verified
 sysfs writes and session Undo; hardware transition validation remains outstanding. Monitoring stays read-only unless `--control`
 is explicitly enabled.
 

@@ -74,7 +74,7 @@ class TerminalTests(unittest.TestCase):
         os.write(master, b"\x1b")
         drain(1.2)
         # SGR right-button press on the first logical CPU row.
-        os.write(master, b"\x1b[<2;5;15M")
+        os.write(master, b"\x1b[<2;5;12M")
         drain()
         self.assertIn(b"CPU settings: ID 0", output)
         os.write(master, b"\x1b")

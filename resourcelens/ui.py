@@ -11,6 +11,9 @@ import time
 from .presentation import GLYPHS, card_layout, chart, compact_overview, draw_card, overview_cards, palette
 from .controls import ControlSession
 from .hardware_ui import HardwareView
+from .placement_ui import PlacementView
+from .topology import topology_map
+from .placement import format_cpus
 
 
 def clean(value):
@@ -62,11 +65,12 @@ def pressure(snapshot, kind):
     return f"{kind.upper()} pressure (10s): {pct(value)}"
 
 
-class View(HardwareView):
+class View(HardwareView, PlacementView):
     names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Workloads")
 
     def __init__(self, unicode=False, control=False, session=None):
         self.hardware_init()
+        self.placement_init()
         self.page = 0
         self.scroll = 0
         self.sort = "cpu"
@@ -135,7 +139,7 @@ class View(HardwareView):
     def workload_lines(self, width=100):
         rows = self.workload_rows()
         group = self.selected_workload()
-        mode = "CPU controls enabled: w weight | l quota | u Undo" if self.control else "Read-only | use --control to enable runtime CPU changes"
+        mode = "CPU controls enabled: p placement | U undo placement | w weight | l quota | u Undo" if self.control else "Read-only | use --control to enable runtime CPU changes"
         if not self.workload_detail or group is None:
             name_width = max(12, min(45, width - 32))
             lines = [f"{len(rows)} workloads | / find | Enter inspect | Filter: {clean(self.workload_filter) or '(none)'}", mode,
@@ -166,6 +170,11 @@ class View(HardwareView):
         if not limits["quota_complete"]:
             lines.append("Ancestor CPU quota inspection is incomplete.")
         lines.append("Quota is a ceiling, not a guaranteed allocation.")
+        lines.append('Effective CPU placement: ' + (local.get('cpuset.cpus.effective') or 'unavailable/inactive'))
+        lines.append('p: select CPUs on the topology map | U: Undo placement')
+        for event in self.placement_session.events[-5:]:
+            if event['target']['path'] == group['path']:
+                lines.append('Placement ' + (format_cpus(event['requested']) or 'inherit') + ' [' + event['status'] + ']')
         if limits["memory_max"] is not None:
             lines.extend(textwrap.wrap(f"Tightest memory.max: {size(limits['memory_max'])} at {limits['memory_source']}", width))
         else:
@@ -213,6 +222,14 @@ class View(HardwareView):
             kind, result, error = self.results.get()
             if error:
                 self.modal = {"stage": "result", "message": error}
+            elif kind == 'placement_open':
+                self.placement_ready(result)
+            elif kind == 'placement_prepare':
+                self.modal = dict(stage='placement_confirm', plan=result)
+            elif kind in ('placement_apply', 'placement_undo'):
+                self.placement = None
+                self.page, self.workload_detail, self.scroll = 7, True, 0
+                self.modal = dict(stage='result', message='CPU placement restored and verified.' if kind == 'placement_undo' else 'CPU placement verified in systemd and the kernel. U on Workloads: Undo placement.')
             elif kind == "hardware_prepare":
                 self.modal = {"stage": "hardware_confirm", "plan": result}
             elif kind.startswith("hardware_"):
@@ -226,6 +243,8 @@ class View(HardwareView):
 
     def modal_lines(self):
         modal = self.modal
+        if modal['stage'] == 'placement_confirm':
+            return self.placement_lines()
         if modal["stage"].startswith("hardware_"):
             return self.hardware_lines()
         if modal["stage"] == "busy":
@@ -252,11 +271,13 @@ class View(HardwareView):
         if modal["stage"] == "quit":
             return ["CPU changes may still be active.", "Runtime settings remain after leaving this dashboard.",
                     "This session's Undo history is lost when you exit.",
-                    "Enter: exit and keep settings | Esc: return | u: Undo (hardware first)"]
+                    "Enter: exit and keep settings | Esc: return | u: Undo (placement, hardware, workload)"]
         return [modal["message"], "", "Enter or Esc: close | 8: inspect workloads"]
 
     def modal_key(self, key):
         stage = self.modal["stage"]
+        if stage == 'placement_confirm':
+            return self.placement_confirm_key(key)
         if stage.startswith("hardware_"):
             return self.hardware_key(key)
         if stage == "busy":
@@ -265,7 +286,9 @@ class View(HardwareView):
             if key in (10, 13):
                 return False
             if key == ord("u"):
-                if any(e['status'] != 'undone' for e in self.hardware.events):
+                if any(e['status'] != 'undone' for e in self.placement_session.events):
+                    self.job('placement_undo', self.placement_session.undo)
+                elif any(e['status'] != 'undone' for e in self.hardware.events):
                     self.job('hardware_undo', self.hardware.undo)
                 else:
                     self.job("undo", self.session.undo)
@@ -296,25 +319,35 @@ class View(HardwareView):
 
     def cpu_lines(self, width=60):
         s = self.snapshot
-        aggregate = next((c for c in s["cpu"] if c["id"] == "cpu"), {})
-        lines = [clean(s["cpu_model"]), bar(aggregate.get("busy_pct"), max(8, min(30, width - 13))),
-                 "History " + self.trend(self.history["cpu"], max(8, width - 10)),
-                 "Load " + " / ".join(f"{v:.2f}" if v is not None else "N/A" for v in s["load"]),
-                 pressure(s, "cpu"),
-                 f"I/O wait {pct(aggregate.get('iowait_pct'))}  Steal {pct(aggregate.get('steal_pct'))}"]
-        lines.append("[ All CPUs / sockets settings ]  Right-click CPU; g menu; u Undo")
-        data = s.get("cpu_hardware", {"cpus": [], "policies": {}})
-        metrics = {c["id"]: c for c in s["cpu"]}
-        for c in data["cpus"]:
-            metric = metrics.get(f"cpu{c['id']}", {})
-            policy = data["policies"].get(c['policy'], {})
-            state = bar(metric.get('busy_pct'), 8) if c['online'] else 'OFFLINE'
-            lines.append(f"cpu{c['id']} S{c['socket']} C{c['core']} {state} "
-                         f"{policy.get('governor') or 'governor N/A'} "
-                         + (f"{metric['frequency_mhz']:.0f}MHz" if metric.get('frequency_mhz') is not None else 'freq N/A'))
+        aggregate = next((c for c in s['cpu'] if c['id'] == 'cpu'), {})
+        data = s.get('cpu_hardware', {'cpus': [], 'policies': {}})
+        metrics = {c['id']: c for c in s['cpu']}
+        p = self.placement
+        if p:
+            lines = ['Place: ' + clean(p['target']['unit']),
+                     'Selected: ' + ('inherit parent' if p['inherit'] else format_cpus(p['selected']) or '(empty)'),
+                     'x selected | - eligible | ! excluded | click CPU/core/socket',
+                     '[ All ]  [ None ]  [ Inherit ]  [ Preview ]  [ Cancel ]']
+            self.topology_line_regions = {3: [(0, 7, 'action', ('a',)), (9, 17, 'action', ('n',)),
+                                             (19, 30, 'action', ('r',)), (32, 43, 'action', ('enter',)),
+                                             (45, 55, 'action', ('esc',))]}
+        else:
+            lines = [clean(s['cpu_model']),
+                     'CPU ' + bar(aggregate.get('busy_pct'), 18) + ' | ' + pressure(s, 'cpu'),
+                     'History ' + self.trend(self.history['cpu'], max(8, width - 10)),
+                     '[ All CPUs / sockets settings ]  g menu | right-click thread',
+                     'Linux topology grouping; tile positions are not chip coordinates.']
+            self.topology_line_regions = {}
+        tiles, hits = topology_map(data, metrics, width,
+            p['selected'] if p else None, set(p['info']['eligible']) if p else None, p['focus'] if p else None)
+        offset = len(lines)
+        self.topology_line_regions.update({row + offset: value for row, value in hits.items()})
+        lines.extend(tiles)
         if not data['policies']:
             lines.append('Frequency governors: unavailable on this system.')
-        for sensor in s["temperatures"]:
+        for policy, info in data['policies'].items():
+            lines.append(f"{policy}: {info['governor'] or 'N/A'} | shared CPUs {format_cpus(info['cpus'])}")
+        for sensor in s['temperatures']:
             lines.append(f"{clean(sensor['name'])}: {sensor['temperature_c']:.1f} C")
         return lines
 
@@ -446,7 +479,9 @@ class View(HardwareView):
                     "Network: per-interface RX/TX rates, scaled to each visible peak.",
                     "Overview charts: oldest left, newest right; fixed 0-100% axes.",
                     "Use --ascii for terminals without Unicode block graphics.",
-                    "2 CPU: right-click CPU or g for all/socket/CPU settings; u Undo.",
+                    "2 CPU: socket / NUMA / core tiles contain SMT thread rows.",
+                    "Right-click a thread or g for hardware settings; u hardware Undo.",
+                    "8 Workloads: p placement, U Undo placement; click cores to select.",
                     "S = socket, C = physical core; each CPU row is one logical CPU.",
                     "8 Workloads: Up/Down select, Enter inspect, Esc return.",
                     "With --control: w CPU weight, l CPU quota, u Undo latest.",
@@ -468,13 +503,32 @@ class View(HardwareView):
                 if self.modal['stage'] == 'hardware_menu':
                     self.modal['selected'] = hit[2]
                     self.hardware_choose()
+                elif self.modal['stage'] == 'placement_confirm' and hit[2] == 'apply':
+                    self.placement_confirm_key(10)
                 elif self.modal['stage'] == 'hardware_confirm' and hit[2] == 'apply':
                     self.hardware_key(10)
-                elif self.modal['stage'] == 'hardware_confirm' and hit[2] == 'cancel':
+                elif self.modal['stage'] in ('hardware_confirm', 'placement_confirm') and hit[2] == 'cancel':
                     self.modal = None
             return
+        if self.page == 1 and not self.help and (left or right):
+            for start, end, kind, ids in self.topology_regions.get(y, []):
+                if start <= x - 1 < end:
+                    if self.placement:
+                        if kind == 'action':
+                            self.placement_key({'enter': 10, 'esc': 27}.get(ids[0], ord(ids[0][0])))
+                        else:
+                            self.placement_toggle(ids)
+                    elif kind == 'cpu':
+                        self.hardware_menu(('id', ids[0]))
+                    elif kind == 'socket':
+                        cpu = next(c for c in self.snapshot['cpu_hardware']['cpus'] if c['id'] == ids[0])
+                        if cpu['socket'] is not None:
+                            self.hardware_menu(('socket', cpu['socket']))
+                    return
         if self.page == 1 and not self.help and (left or right) and y in self.cpu_regions:
             self.hardware_menu(self.cpu_regions[y])
+            return
+        if self.placement and y == 1:
             return
         if state & (getattr(curses, "BUTTON1_CLICKED", 0) | getattr(curses, "BUTTON1_PRESSED", 0)) and y == 1:
             for start, end, page in self.tab_regions:
@@ -516,11 +570,13 @@ class View(HardwareView):
             except curses.error:
                 pass
             return True
+        if self.placement:
+            return self.placement_key(key)
         if key in (ord("q"), 27):
             if key == 27 and self.page == 7 and self.workload_detail:
                 self.workload_detail, self.scroll = False, 0
                 return True
-            if any(event["status"] in ("confirmed", "unconfirmed") for event in self.session.events + self.hardware.events):
+            if any(event["status"] in ("confirmed", "unconfirmed") for event in self.session.events + self.hardware.events + self.placement_session.events):
                 self.modal = {"stage": "quit"}
                 return True
             return False
@@ -529,6 +585,12 @@ class View(HardwareView):
                 self.hardware_menu()
             else:
                 self.job('hardware_undo', self.hardware.undo)
+            return True
+        if self.page == 7 and key in (ord('p'), ord('U')):
+            if key == ord('p'):
+                self.open_placement()
+            elif self.control:
+                self.job('placement_undo', self.placement_session.undo)
             return True
         if self.page == 7 and key in (ord("w"), ord("l"), ord("u")):
             if not self.control:
@@ -604,6 +666,7 @@ def draw(screen, view, interval, error=None):
     screen.erase()
     h, w = screen.getmaxyx()
     view.screen_size = h, w
+    view.topology_regions = {}
     view.cpu_regions = {}
     view.modal_regions = {}
     if h < 10 or w < 40:
@@ -655,7 +718,7 @@ def draw(screen, view, interval, error=None):
     else:
         lines = view.lines(w - 3)
         # Put a readable multi-row chart above percentage-based detail pages.
-        kinds = {1: "cpu", 2: "memory", 3: "disk", 4: "gpu"}
+        kinds = {2: "memory", 3: "disk", 4: "gpu"}
         if not view.help and view.page in kinds:
             kind = kinds[view.page]
             color = view.colors[kind]
@@ -677,13 +740,24 @@ def draw(screen, view, interval, error=None):
             else:
                 attribute = color if index < 5 else (accent if i == 0 else 0)
             if view.page == 1 and not view.help:
-                import re
-                match = re.match(r'cpu(\d+) ', line)
-                if match:
-                    view.cpu_regions[i + 3] = ('id', int(match[1]))
-                elif line.startswith('[ All CPUs'):
+                view.topology_regions[i + 3] = view.topology_line_regions.get(index, [])
+                if line.startswith('[ All CPUs'):
                     view.cpu_regions[i + 3] = ('all', None)
             put(screen, i + 3, 1, line, attribute)
+            if view.page == 1 and not view.help:
+                for start, end, kind, ids in view.topology_regions.get(i + 3, []):
+                    attr = view.colors['cpu']
+                    if kind in ('core', 'socket'):
+                        attr |= curses.A_BOLD
+                    if view.placement and kind == 'cpu':
+                        if ids[0] in view.placement['selected']:
+                            attr |= curses.A_REVERSE
+                        if ids[0] not in view.placement['info']['eligible']:
+                            attr = muted
+                        if ids[0] == view.placement['focus']:
+                            attr |= curses.A_BOLD
+                    put(screen, i + 3, start + 1, line[start:end], attr, end - start)
+
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     message = error or ("; ".join(s["warnings"]) if s else "") or status
     if view.editing_filter:
@@ -694,14 +768,16 @@ def draw(screen, view, interval, error=None):
     if view.page == 1:
         footer = "Right-click CPU | g all/socket/core menu | u hardware Undo | q quit"
     if view.page == 7:
-        footer = "Enter inspect | w weight | l quota | u Undo | Esc back | ? help | q quit"
+        footer = "Enter inspect | p placement | U undo placement | w weight | l quota | u undo"
+    if view.placement:
+        footer = "Arrows focus | Space toggle | a all | n none | r inherit | Enter preview | Esc"
     if w < 76:
         footer = "Tab next | / find | ? help | q quit"
     put(screen, h - 1, 1, footer, accent)
     if view.modal:
         content_width = max(20, min(76, w - 8))
         lines = [piece for line in view.modal_lines() for piece in (textwrap.wrap(clean(line), content_width) or [""])]
-        if view.modal["stage"] in ("confirm", "hardware_confirm") and len(lines) > h - 5:
+        if view.modal["stage"] in ("confirm", "hardware_confirm", "placement_confirm") and len(lines) > h - 5:
             lines = ["The full target preview does not fit this terminal.",
                      "Resize larger to review and confirm, or Esc to cancel.",
                      "Enter is disabled until the complete preview is visible."]
@@ -717,7 +793,7 @@ def draw(screen, view, interval, error=None):
             if view.modal['stage'] == 'hardware_menu' and (line.startswith('> ') or line.startswith('- ')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, option_index)
                 option_index += 1
-            if view.modal['stage'] == 'hardware_confirm' and line.startswith(('[ Apply ]', '[ Cancel ]')):
+            if view.modal['stage'] in ('hardware_confirm', 'placement_confirm') and line.startswith(('[ Apply ]', '[ Cancel ]')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, 'apply' if line.startswith('[ Apply ]') else 'cancel')
             put(screen, top + 1 + index, left + 2, line, curses.A_REVERSE | (curses.A_BOLD if index == 0 else 0), content_width)
     screen.refresh()
@@ -764,7 +840,7 @@ def run(collector, interval, ascii=False, control=False):
             stale = bool(view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail)
+                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement))
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render

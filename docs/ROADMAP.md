@@ -1,3 +1,11 @@
+## Implemented in 0.4.0
+
+Socket/NUMA/core topology tiles and visual service CPU placement are available.
+Workloads `p` opens the selector; `U` restores session placement changes.
+Governor/hotplug controls from 0.3 remain available. See README for current
+capabilities and VALIDATION.md for hardware coverage. Per-process affinity,
+exclusive isolation and NUMA memory placement remain outside this release.
+
 # Roadmap
 
 The implementation sequence and acceptance criteria are in
