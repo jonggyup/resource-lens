@@ -15,6 +15,7 @@ from .placement_ui import PlacementView
 from .topology import topology_map
 from .placement import format_cpus
 from .resource_panels import resource_lines, expanded_overview
+from .navigation import NavigationView, actions, context_help
 
 
 def clean(value):
@@ -66,7 +67,7 @@ def pressure(snapshot, kind):
     return f"{kind.upper()} pressure (10s): {pct(value)}"
 
 
-class View(HardwareView, PlacementView):
+class View(HardwareView, PlacementView, NavigationView):
     names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Workloads")
 
     def __init__(self, unicode=False, control=False, session=None):
@@ -84,6 +85,8 @@ class View(HardwareView, PlacementView):
         self.editing_filter = False
         self.paused = False
         self.help = False
+        self.help_return_scroll = 0
+        self.action_regions = []
         self.history = defaultdict(lambda: deque(maxlen=120))
         self.snapshot = None
         self.unicode = unicode
@@ -247,6 +250,8 @@ class View(HardwareView, PlacementView):
 
     def modal_lines(self):
         modal = self.modal
+        if modal['stage'] == 'navigate':
+            return self.navigation_lines()
         if modal['stage'] == 'placement_confirm':
             return self.placement_lines()
         if modal["stage"].startswith("hardware_"):
@@ -280,6 +285,10 @@ class View(HardwareView, PlacementView):
 
     def modal_key(self, key):
         stage = self.modal["stage"]
+        if stage == 'navigate':
+            return self.navigation_key(key)
+        if stage == 'hardware_menu':
+            key = {ord('j'): curses.KEY_DOWN, ord('k'): curses.KEY_UP}.get(key, key)
         if stage == 'placement_confirm':
             return self.placement_confirm_key(key)
         if stage.startswith("hardware_"):
@@ -399,32 +408,8 @@ class View(HardwareView, PlacementView):
 
     def lines(self, width):
         if self.help:
-            return ["RESOURCE LENS - Linux resource dashboard", "",
-                    "1 Overview  2 CPU  3 Memory  4 Disks  5 GPU  6 Processes  7 Network  8 Workloads",
-                    "Tab / Shift-Tab: next / previous page; click a tab to select",
-                    "Overview: e or Expand button toggles topology/resource panels.",
-                    "Click overview cards or expanded section headings for details.", "Up/Down, PgUp/PgDn, Home/End: scroll details",
-                    "Space: freeze/unfreeze display (collection continues)",
-                    "c/m/n/p: process sort by CPU/memory/name/PID",
-                    "/: filter processes by name or PID; Enter: finish; Esc: clear",
-                    "?: toggle this help   q / Esc: quit", "",
-                    "History: newest on right, up to 120 displayed samples.",
-                    "CPU/memory/disk/GPU histories use 0-100%; disk/GPU: busiest device.",
-                    "Network: per-interface RX/TX rates, scaled to each visible peak.",
-                    "Overview charts: oldest left, newest right; fixed 0-100% axes.",
-                    "Use --ascii for terminals without Unicode block graphics.",
-                    "2 CPU: socket / NUMA / core tiles contain SMT thread rows.",
-                    "Right-click a thread or g for hardware settings; u hardware Undo.",
-                    "8 Workloads: p placement, U Undo placement; click cores to select.",
-                    "S = socket, C = physical core; each CPU row is one logical CPU.",
-                    "8 Workloads: Up/Down select, Enter inspect, Esc return.",
-                    "With --control: w CPU weight, l CPU quota, u Undo latest.",
-                    "History gaps are missing samples; all missing shows N/A.",
-                    "N/A means unavailable or awaiting a second sample, never zero.",
-                    "PSI = time at least some tasks waited for that resource.",
-                    "Monitoring scope: visible host counters/processes, not cgroup limits.",
-                    "CPU changes require --control and explicit preview confirmation.",
-                    "Runtime settings survive UI exit; Undo is session-only."]
+            return [piece for line in context_help(self)
+                    for piece in (textwrap.wrap(line, max(20, width)) or [''])]
         return {1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
                 4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines}.get(self.page, self.process_lines)(width)
 
@@ -434,7 +419,10 @@ class View(HardwareView, PlacementView):
         if self.modal:
             hit = self.modal_regions.get(y)
             if left and hit and hit[0] <= x < hit[1]:
-                if self.modal['stage'] == 'hardware_menu':
+                if self.modal['stage'] == 'navigate':
+                    self.modal['selected'] = hit[2]
+                    self.navigation_key(10)
+                elif self.modal['stage'] == 'hardware_menu':
                     self.modal['selected'] = hit[2]
                     self.hardware_choose()
                 elif self.modal['stage'] == 'placement_confirm' and hit[2] == 'apply':
@@ -443,6 +431,16 @@ class View(HardwareView, PlacementView):
                     self.hardware_key(10)
                 elif self.modal['stage'] in ('hardware_confirm', 'placement_confirm') and hit[2] == 'cancel':
                     self.modal = None
+            return
+        if left and y == self.screen_size[0] - 1:
+            for start, end, key in self.action_regions:
+                if start <= x < end:
+                    return self.key(key, self.screen_size[0])
+        if self.help:
+            if state & getattr(curses, 'BUTTON4_PRESSED', 0):
+                self.scroll = max(0, self.scroll - 3)
+            elif state & getattr(curses, 'BUTTON5_PRESSED', 0):
+                self.scroll += 3
             return
         if self.page == 0 and not self.help and left:
             if y == 2 and 1 <= x <= 26:
@@ -497,6 +495,14 @@ class View(HardwareView, PlacementView):
                 return True
             return self.modal_key(key)
         if self.editing_filter:
+            if key == curses.KEY_MOUSE:
+                try:
+                    _, x, y, _, state = curses.getmouse()
+                    if y == self.screen_size[0] - 1:
+                        self.mouse(x, y, state)
+                except curses.error:
+                    pass
+                return True
             field = "workload_filter" if self.filter_context == "workloads" else "filter"
             if key in (10, 13):
                 self.editing_filter = False
@@ -512,12 +518,34 @@ class View(HardwareView, PlacementView):
         if key == curses.KEY_MOUSE:
             try:
                 _, x, y, _, state = curses.getmouse()
-                self.mouse(x, y, state)
+                if self.mouse(x, y, state) is False:
+                    return False
             except curses.error:
                 pass
             return True
+        key = {curses.KEY_F1: ord('?'), curses.KEY_F4: ord('/'), curses.KEY_F10: ord('q')}.get(key, key)
+        if key == ord('?') or self.help and key == 27:
+            if self.help:
+                self.help, self.scroll = False, self.help_return_scroll
+            else:
+                self.help_return_scroll, self.scroll, self.help = self.scroll, 0, True
+            return True
+        if self.help:
+            if key in (curses.KEY_DOWN, ord('j'), curses.KEY_NPAGE):
+                self.scroll += max(1, height - 5) if key == curses.KEY_NPAGE else 1
+            elif key in (curses.KEY_UP, ord('k'), curses.KEY_PPAGE):
+                self.scroll = max(0, self.scroll - (max(1, height - 5) if key == curses.KEY_PPAGE else 1))
+            elif key == curses.KEY_HOME:
+                self.scroll = 0
+            elif key == curses.KEY_END:
+                self.scroll = 10**9
+            return True
         if self.placement:
             return self.placement_key(key)
+        if key == ord(':'):
+            self.modal = dict(stage='navigate', query='', selected=0)
+            return True
+        key = {ord('j'): curses.KEY_DOWN, ord('k'): curses.KEY_UP}.get(key, key)
         if key in (ord("q"), 27):
             if key == 27 and self.page == 7 and self.workload_detail:
                 self.workload_detail, self.scroll = False, 0
@@ -616,6 +644,7 @@ def draw(screen, view, interval, error=None):
     screen.erase()
     h, w = screen.getmaxyx()
     view.screen_size = h, w
+    view.action_regions = []
     view.overview_links = {}
     view.overview_cards_regions = []
     view.topology_regions = {}
@@ -732,19 +761,16 @@ def draw(screen, view, interval, error=None):
     if view.editing_filter:
         value = view.workload_filter if view.filter_context == "workloads" else view.filter
         message = f"Filter: {value}_ ({view.filter_context})  Enter: apply  Esc: clear"
+    message = ("[CONTROL] " if view.control else "[Read-only] ") + message
     put(screen, h - 2, 1, message, view.colors["warning"] if error else muted)
-    footer = "Tab next | 1-8 views | Space freeze | / find task | ? help | q quit"
-    if view.page == 0:
-        footer = "e expand/collapse | click section/card for details | arrows scroll | q quit"
-    if view.page == 1:
-        footer = "Right-click CPU | g all/socket/core menu | u hardware Undo | q quit"
-    if view.page == 7:
-        footer = "Enter inspect | p placement | U undo placement | w weight | l quota | u undo"
-    if view.placement:
-        footer = "Arrows focus | Space toggle | a all | n none | r inherit | Enter preview | Esc"
-    if w < 76:
-        footer = "e expand | arrows scroll | q quit" if view.page == 0 else "Tab next | / find | ? help | q quit"
-    put(screen, h - 1, 1, footer, accent)
+    x = 1
+    for label, key in actions(view):
+        text = ' ' + label + ' '
+        if x + len(text) > w - 1:
+            continue
+        put(screen, h - 1, x, text, accent | curses.A_REVERSE, len(text))
+        view.action_regions.append((x, x + len(text), key))
+        x += len(text) + 1
     if view.modal:
         content_width = max(20, min(76, w - 8))
         lines = [piece for line in view.modal_lines() for piece in (textwrap.wrap(clean(line), content_width) or [""])]
@@ -761,7 +787,7 @@ def draw(screen, view, interval, error=None):
         put(screen, top + box_height - 1, left, "+" + "-" * (box_width - 2) + "+", accent, box_width)
         option_index = view.modal.get('offset', 0)
         for index, line in enumerate(lines[:box_height - 3]):
-            if view.modal['stage'] == 'hardware_menu' and (line.startswith('> ') or line.startswith('- ')):
+            if view.modal['stage'] in ('hardware_menu', 'navigate') and (line.startswith('> ') or line.startswith('- ')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, option_index)
                 option_index += 1
             if view.modal['stage'] in ('hardware_confirm', 'placement_confirm') and line.startswith(('[ Apply ]', '[ Cancel ]')):

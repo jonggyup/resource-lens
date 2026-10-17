@@ -1,3 +1,13 @@
+# 0.6.0 navigation validation
+
+114 tests pass. Context help, action-bar bounds and clicks, filter editing,
+view aliases, typing isolation and exit acknowledgements have automated coverage.
+A live read-only terminal session exercised help via mouse, the view switcher,
+network/workload navigation, j/k and 40x12 / 80x24 / 120x35 resizing. See
+[navigation captures](navigation-evidence.json) and [design review](TUI_REVIEW.md).
+
+---
+
 # 0.5.0 resource visualization validation
 
 106 automated tests pass. New tests cover NUMA memory parsing, backing/holder

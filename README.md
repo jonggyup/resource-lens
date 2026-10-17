@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.5.0 is a preview with optional temporary CPU controls.** Monitoring
+**Version 0.6.0 is a preview with optional temporary CPU controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Disk/memory controls, direct frequency
@@ -99,6 +99,26 @@ percentages; disk/GPU histories show the busiest device, whose identity may
 change. Sampling defaults to one second. Frozen intervals are omitted from
 display history, so it is a sequence of samples rather than a continuous
 wall-clock axis.
+
+## Navigation and contextual help
+
+- **F1 / ?** opens help for the current page or CPU placement editor. Esc, F1
+  or ? returns to your previous scroll position. Help cannot execute controls.
+- **:** opens a searchable view switcher. Type `cpu`, `ram`, `net`, `services`
+  or a view number, use Up/Down, and press Enter (or click a result). Esc cancels.
+  This switcher only navigates views; it does not execute shell commands.
+- **j/k** scroll or select workloads, alongside arrow keys. Typed filter text
+  and view-search text retain ordinary j/k characters.
+- **F4 / /** filters processes or workloads. **F10 / q** exits outside editors
+  and dialogs, retaining the existing acknowledgement for active settings.
+- Bottom action labels are clickable. They adapt to the current context and
+  available width; F1 shows the complete help when some buttons cannot fit.
+- The status line always identifies **Read-only** or **CONTROL** mode.
+
+These changes follow a review of htop, btop, k9s and lazygit. See
+[UI research and adoption decisions](docs/TUI_REVIEW.md) for primary sources,
+what was adopted and what was deferred. The original six-card overview remains
+the default.
 
 ## Expand the overview and inspect resource panels
 

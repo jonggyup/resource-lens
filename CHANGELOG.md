@@ -1,3 +1,11 @@
+# 0.6.0
+
+- Adopt established TUI interaction patterns after reviewing htop, btop, k9s and
+  lazygit: clickable contextual action bar, F1/help, F4/filter, F10/quit and j/k.
+- Add a searchable `:` view switcher with aliases and keyboard/mouse selection.
+- Context help returns to the previous position and blocks resource actions.
+- Show read-only/control mode on every page; preserve existing overview layouts.
+
 # 0.5.0
 
 - Keep the six-card overview by default; add mouse/`e` expansion into a scrollable
