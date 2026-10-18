@@ -17,7 +17,7 @@ def actions(view):
     common = [('F1 Help', ord('?')), (': Views', ord(':'))]
     local = {
         0: [('e Collapse' if view.overview_expanded else 'e Expand', ord('e'))],
-        1: [('g CPU menu', ord('g')), ('u Undo', ord('u'))],
+        1: [('g CPU menu', ord('g')), ('u Undo', ord('u')), ('a Related apps', ord('a'))],
         5: [('F4 Filter', ord('/')), ('c CPU sort', ord('c')), ('m RAM sort', ord('m'))],
         7: [('Enter Inspect', 10), ('F4 Filter', ord('/')), ('p Placement', ord('p')),
             ('w Weight', ord('w')), ('l Quota', ord('l')), ('U Undo place', ord('U'))],
@@ -27,7 +27,7 @@ def actions(view):
     if view.page == 7:
         extra = [('o Overlay', ord('o'))]
     extra += [('H Hardware',ord('H')), ('A Apps',ord('A')), ('0 Status', ord('0')), ('M Mark', ord('M')), ('9 Timeline', ord('9'))]
-    return common + [('F10 Quit', ord('q'))] + extra + local
+    return common + [('F10 Quit', ord('q'))] + local + extra
 
 
 def context_help(view):
@@ -55,7 +55,7 @@ def context_help(view):
                           'N/A means unavailable, not idle. Resource panels are read-only.'])
     details += ['H hardware workspace | A applications workspace | 1 overview',
                 'Applications: [ / ] detail tabs; Enter detail focus; Esc list focus; x clears hardware filter.',
-                'CPU tiles: left-click shows allowed applications; right-click opens CPU settings.',
+                'CPU/socket tiles: click or right-click opens settings; Shift-click shows allowed applications.',
                 'Focused CPU/disk or Memory: a shows related applications (placement/accounting, not inference).','0 capabilities | S save preferences | R export redacted report | N named marker',
                 'Workloads: c/m/n/i sort, d device, b disk limit, B Undo disk | Tasks: t tree','f focuses a resource; [ / ] switch devices; f restores all panels.',
                 'o on Workloads pins a service overlay; o elsewhere clears it.',

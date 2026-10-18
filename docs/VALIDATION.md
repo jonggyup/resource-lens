@@ -1,3 +1,21 @@
+# 0.9.1 interaction conflict audit
+
+167 tests pass. Seven new interaction tests verify original left/right CPU and
+socket menus, Shift-click application relationships, placement navigation isolation,
+application pane wheel/focus behavior, every application's control shortcuts across
+all five detail tabs, modal/filter precedence and visible contextual footer actions.
+
+Live terminal checks verified mouse CPU menus, Shift-click relationships, service
+placement navigation, and cancelled CPU offline/weight/quota/disk previews. No
+resource settings were applied. See the [full audit](INTERACTION_AUDIT.md) and
+[terminal evidence](interaction-audit-ui-evidence.json).
+
+Three local PTY trials measured navigation at 1.48–3.88 ms and Escape-to-exit at
+10.0–10.9 ms. [Raw measurements](interaction-audit-latency-evidence.json).
+These are local observations, not remote display guarantees.
+
+---
+
 # 0.9.0 workspace validation
 
 160 tests pass. New coverage checks workspace navigation and preserved overview

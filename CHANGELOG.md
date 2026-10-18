@@ -1,3 +1,15 @@
+# 0.9.1
+
+- Restore ordinary CPU/socket left-click settings; keep right-click settings and
+  move application relationships to Shift-click (or keyboard `a` for the CPU scope).
+- Block workspace mouse navigation during placement editing, matching keyboard
+  behavior; hide those buttons while the selector is active.
+- Route wide Applications wheel scrolling to the pane under the pointer and
+  let a detail-pane click focus detail scrolling.
+- Prioritize contextual footer controls over general workspace shortcuts.
+- Add interaction-routing regression tests across application tabs, control menus,
+  placement, filters, modals and mouse navigation.
+
 # 0.9.0
 
 - Add linked Hardware (`H`) and Applications (`A`/`8`) workspaces; preserve Overview.

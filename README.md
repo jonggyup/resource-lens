@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.9.0 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.9.1 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -40,6 +40,8 @@ Installation isn't required for the source command. On Debian/Ubuntu, missing
 `venv` support can be supplied by the `python3-venv` package; the source command
 also works without it.
 
+Interaction fixes and coverage: [0.9.1 audit](docs/INTERACTION_AUDIT.md).
+
 ## Hardware and Applications workspaces
 
 Press **H** for the hardware workspace, **A** (or **8**) for applications, and
@@ -62,8 +64,8 @@ counters can overlap. This is not automatic desktop application identification.
 | Enter / Esc | Focus scrollable details / return to list selection |
 | `o` on an application | Open CPU topology with its allowed placement overlay |
 | `d` on an application | Open the first accounting device mapped to a visible whole disk |
-| Left-click a CPU/core/socket in CPU view | Show applications allowed on those CPUs |
-| Right-click a CPU/socket | Open existing hardware settings |
+| Shift-click a CPU/core/socket in CPU view | Show applications allowed on those CPUs |
+| Click or right-click a CPU/socket | Open existing hardware settings |
 | `a` in CPU or Memory view | Show groups related by allowed CPUs or accounted memory |
 | `f` in Disks, select a disk, then `a` | Show groups with active I/O counters for that exact device |
 | `x` in Applications | Clear the hardware relationship filter; text search remains |

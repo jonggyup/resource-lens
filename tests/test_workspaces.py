@@ -36,7 +36,7 @@ class WorkspaceTests(unittest.TestCase):
         self.view.key(ord('x'));self.assertEqual(len(self.view.workload_rows()),1)
         self.view.page=1
         self.view.topology_regions={12:[(0,20,'core',(2,))]}
-        self.view.mouse(2,12,curses.BUTTON1_CLICKED)
+        self.view.mouse(2,12,curses.BUTTON1_CLICKED | curses.BUTTON_SHIFT)
         self.assertEqual(self.view.page,7)
         self.assertEqual(self.view.relation,('cpu',(2,)))
         self.assertIsNone(self.view.hardware_selection)

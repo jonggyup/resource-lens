@@ -6,10 +6,16 @@ select it and `[`/`]` to change the detail tab. Enter focuses details for scroll
 Esc returns to the list. Wide terminals show both panes together.
 
 For CPU placement, select a service and press `o`; CPU tiles show its allowed set.
-Left-click a CPU/core/socket to list groups allowed there. Press `x` in Applications
+Shift-click a CPU/core/socket to list groups allowed there. Press `x` in Applications
 to clear that relationship. This does not measure which threads executed there.
 For storage, focus a disk with `f`, then press `a` for matching active accounting.
 Application `d` returns to a mapped whole disk when one is available.
+
+Ordinary left/right clicks on CPU/socket tiles open the existing settings menu.
+During CPU placement, tile clicks toggle the selected CPUs; workspace navigation
+is disabled until you finish or cancel placement. In wide Applications, the mouse
+wheel selects groups over the list and scrolls details over the detail pane.
+Click the detail pane or press Enter to focus it; Esc returns to list selection.
 
 The overview remains on `1`. See the README for full shortcuts, accounting limits,
 and the opt-in preview/authorization workflow for resource controls.

@@ -401,8 +401,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             lines = [clean(s['cpu_model']),
                      'CPU ' + bar(aggregate.get('busy_pct'), 18) + ' | ' + pressure(s, 'cpu'),
                      'History ' + self.trend(self.history['cpu'], max(8, width - 10)),
-                     '[ All CPUs / sockets settings ]  g menu | right-click thread',
-                     'Linux topology grouping; tile positions are not chip coordinates.']
+                     '[ All CPUs / sockets settings ]  g menu | click/right-click thread',
+                     'Shift-click CPU/core/socket: related apps | tile positions are not chip coordinates.']
             self.topology_line_regions = {}
         if not p:
             lines += self.overlay_lines()
@@ -506,7 +506,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             elif state & getattr(curses, 'BUTTON5_PRESSED', 0):
                 self.scroll += 3
             return
-        if left:
+        if left and not self.placement:
             for start,end,row,key in self.workspace_regions:
                 if y==row and start<=x<end:
                     self.workspace_key(key)
@@ -522,6 +522,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                         self.workload_notice,self.workload_detail,self.scroll='',False,0
                         return
                 if self.app_regions and y>=5:
+                    if x > self.app_regions[0][1]:
+                        self.workload_detail = True
                     return  # Right detail pane is not a workload-list row.
         if self.page in (0,10) and not self.help and left:
             if self.page == 0 and y == 2 and 1 <= x <= 26:
@@ -553,7 +555,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                             self.placement_key({'enter': 10, 'esc': 27}.get(ids[0], ord(ids[0][0])))
                         else:
                             self.placement_toggle(ids)
-                    elif left and kind in ('cpu','core','socket'):
+                    elif left and state & getattr(curses, 'BUTTON_SHIFT', 0) and kind in ('cpu','core','socket'):
                         self.hardware_selection = tuple(ids)
                         self.open_related()
                     elif kind == 'cpu':
@@ -574,9 +576,17 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     self.page, self.scroll = page, 0
                     self.focus = None
                     return
-        if state & getattr(curses, "BUTTON4_PRESSED", 0):
+        wheel_up = state & getattr(curses, "BUTTON4_PRESSED", 0)
+        wheel_down = state & getattr(curses, "BUTTON5_PRESSED", 0)
+        if self.page == 7 and self.app_regions and (wheel_up or wheel_down):
+            self.workload_detail = x > self.app_regions[0][1]
+            if not self.workload_detail:
+                for _ in range(3):
+                    self.key(curses.KEY_UP if wheel_up else curses.KEY_DOWN, self.screen_size[0])
+                return
+        if wheel_up:
             self.scroll = max(0, self.scroll - 3)
-        elif state & getattr(curses, "BUTTON5_PRESSED", 0):
+        elif wheel_down:
             self.scroll += 3
 
     def key(self, key, height=24):
@@ -909,7 +919,7 @@ def draw(screen, view, interval, error=None):
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     if view.page == 0 and not view.help:
         put(screen, 2, 1, '[ - Collapse overview ] e' if view.overview_expanded else '[ + Expand overview ] e', accent)
-    if not view.help:
+    if not view.help and not view.placement:
         x = 29 if view.page == 0 else 1
         for label,key in [(' H Hardware ',ord('H')),(' A Applications ',ord('A'))]:
             if x+len(label)<w:
