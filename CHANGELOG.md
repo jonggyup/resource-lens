@@ -1,3 +1,10 @@
+# 0.8.2
+
+- Reduce default Escape recognition from 10 ms to 1 ms, retaining ESCDELAY overrides.
+- Remove the read-only worker join delay; retain query cancellation, recording
+  finalization and resource-change acknowledgement.
+- Tighten the real-terminal live/stalled Escape exit regression to 250 ms.
+
 # 0.8.1
 
 - Batch queued keyboard input before redraw, bounded to 64 events / 4 ms of handling.

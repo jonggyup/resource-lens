@@ -1,3 +1,10 @@
+# 0.8.2 exit responsiveness update
+
+Default Escape recognition is now 1 ms; exit no longer joins the unfinished
+read-only collector. Query cancellation and recording finalization remain.
+Use ESCDELAY=150 for slower split terminal sequences. See VALIDATION.md for
+measured exit and panel-close latency and its practical limits.
+
 # 0.8.1 responsiveness update
 
 Default Escape recognition and read-only worker shutdown waits are now 10 ms

@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.8.1 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.8.2 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -99,7 +99,7 @@ and [thermal counter documentation](https://cdn.kernel.org/doc/html/latest/admin
 ## Responsiveness and Escape
 
 Escape closes the current help/menu/filter first; at the top level it exits.
-The default escape-sequence wait is 10 ms. For a connection that delivers arrow,
+The default escape-sequence wait is 1 ms. For a connection that delivers arrow,
 function-key or mouse sequences slowly, increase it explicitly:
 
 ```bash
@@ -109,7 +109,7 @@ ESCDELAY=150 python3 -m resourcelens
 `q` / F10 exits without Escape-sequence detection. Active resource changes still
 require the existing exit acknowledgement; a control operation in progress is
 not cancelled by Escape. Read-only collection runs separately from input and
-shutdown waits at most 10 ms for that worker. A final unfinished sample may be
+shutdown does not wait for an unfinished read-only sample. A final unfinished sample may be
 discarded; an in-flight external GPU query is cancelled on exit. A recording write already in progress is allowed to finish, so slow
 recording storage can still delay exit. Input wakes the UI immediately; changing
 `--interval` changes sampling frequency, not keyboard responsiveness.
@@ -118,7 +118,7 @@ handling, then rendered once. Mouse/resize events get a rendering boundary so
 clicks use the current layout. Idle polling stays at 100 ms; an incoming key wakes
 it immediately. This avoids busy polling and unnecessary per-character redraws.
 On the reference host, a 40-character burst takes under 1 ms to reach a terminal
-flush and Escape closes a filter in about 13 ms. SSH/emulator/scheduling delays
+flush and Escape closes a filter in about 4 ms. SSH/emulator/scheduling delays
 are additional. Run `python3 scripts/benchmark_input.py` to measure your host.
 
 See [real-world usability priorities](docs/USABILITY.md) and

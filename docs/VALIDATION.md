@@ -1,3 +1,26 @@
+# 0.8.2 exit responsiveness validation
+
+153 tests pass, including a tightened 250 ms real-terminal exit regression with
+live/stalled collection, split Escape-prefixed keys under an explicit ESCDELAY
+override, mouse input and unchanged control confirmation.
+
+Three local PTY trials per version:
+
+| Measurement | 0.8.1 | 0.8.2 |
+| --- | --- | --- |
+| Escape closing a filter to terminal flush | 12.8–13.1 ms | 3.79–3.86 ms |
+| Escape to process exit, same benchmark | 18.6–19.0 ms | 9.8–10.9 ms |
+| Stalled-collector exit, separate probe | 31–36 ms | about 12 ms |
+
+[Raw evidence](exit-latency-082-evidence.json). Ordinary navigation remains roughly
+1.5–3.8 ms and typing bursts remain under 1 ms; this change specifically removes
+Escape/shutdown waits. Measurements are local observations, not hard deadlines.
+The 1 ms recognition default prioritizes local responsiveness; increase ESCDELAY
+for connections that split terminal sequences across longer delays. Resource-change
+acknowledgement and recording finalization remain; slow storage can still delay exit.
+
+---
+
 # 0.8.1 input responsiveness validation
 
 153 tests pass. Added coverage proves bounded input batches preserve every key,

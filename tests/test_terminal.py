@@ -36,10 +36,10 @@ class TerminalTests(unittest.TestCase):
                     self.assertIn(b'RESOURCE LENS', output)
                     started = time.monotonic()
                     os.write(master, b'\x1b')
-                    while child.poll() is None and time.monotonic() - started < .75:
+                    while child.poll() is None and time.monotonic() - started < .25:
                         if select.select([master], [], [], .005)[0]:
                             output.extend(os.read(master, 65536))
-                    self.assertEqual(child.poll(), 0, 'Escape exit exceeded 750 ms')
+                    self.assertEqual(child.poll(), 0, 'Escape exit exceeded 250 ms')
                     self.assertNotIn(b'Traceback', output)
                 finally:
                     if child.poll() is None:
@@ -69,7 +69,7 @@ class TerminalTests(unittest.TestCase):
                 if select.select([master], [], [], .02)[0]:
                     output.extend(os.read(master, 65536))
             self.assertIn(b'RESOURCE LENS', output)
-            # A split arrow tests the explicit SSH override beyond the default 35 ms.
+            # A split arrow tests the explicit SSH override beyond the default 1 ms.
             os.write(master, b'\x1b')
             time.sleep(.06)
             os.write(master, b'OA')

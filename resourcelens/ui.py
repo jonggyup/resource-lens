@@ -1043,10 +1043,10 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
         # A bare Escape otherwise commonly waits one second in ncurses.
         # Keep sequence decoding enabled for arrows/function keys/mouse over SSH.
         try:
-            escape_ms = int(os.environ.get('ESCDELAY', '10'))
-            curses.set_escdelay(escape_ms if escape_ms > 0 else 10)
+            escape_ms = int(os.environ.get('ESCDELAY', '1'))
+            curses.set_escdelay(escape_ms if escape_ms > 0 else 1)
         except (ValueError, curses.error):
-            curses.set_escdelay(10)
+            curses.set_escdelay(1)
         screen.timeout(100)  # Input wakes immediately; this only bounds idle polling.
         try:
             curses.mousemask(curses.ALL_MOUSE_EVENTS)
@@ -1120,6 +1120,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             # Collection is read-only and the worker is a daemon. A slow kernel
             # read or GPU query must not hold the terminal application open.
             # Recorder.close serializes with any write already in progress.
-            worker.join(timeout=0.01)
+            # Do not wait for an unfinished read-only sample. The daemon exits
+            # cooperatively; completed recording writes are still finalized.
             if incidents and not worker.is_alive():
                 incidents.close()

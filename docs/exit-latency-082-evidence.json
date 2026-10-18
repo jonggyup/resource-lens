@@ -1,0 +1,120 @@
+{
+  "before_version": "0.8.1",
+  "after_version": "0.8.2",
+  "before": {
+    "method": "Local PTY key-to-curses-flush measurements (not physical display/SSH latency).",
+    "trials": [
+      {
+        "navigation_ms": [
+          1.438,
+          3.014,
+          1.772,
+          3.763,
+          2.311
+        ],
+        "40_character_burst_ms": 0.954,
+        "burst_frames": 1,
+        "escape_to_frame_ms": 12.997,
+        "escape_to_exit_ms": 18.778
+      },
+      {
+        "navigation_ms": [
+          1.634,
+          2.936,
+          2.079,
+          3.831,
+          2.398
+        ],
+        "40_character_burst_ms": 0.887,
+        "burst_frames": 1,
+        "escape_to_frame_ms": 13.122,
+        "escape_to_exit_ms": 18.601
+      },
+      {
+        "navigation_ms": [
+          1.504,
+          3.117,
+          2.002,
+          3.674,
+          2.066
+        ],
+        "40_character_burst_ms": 0.842,
+        "burst_frames": 1,
+        "escape_to_frame_ms": 12.8,
+        "escape_to_exit_ms": 19.026
+      }
+    ]
+  },
+  "after": {
+    "method": "Local PTY key-to-curses-flush measurements (not physical display/SSH latency).",
+    "trials": [
+      {
+        "navigation_ms": [
+          1.612,
+          2.913,
+          1.971,
+          3.798,
+          2.3
+        ],
+        "40_character_burst_ms": 0.952,
+        "burst_frames": 1,
+        "escape_to_frame_ms": 3.861,
+        "escape_to_exit_ms": 10.848
+      },
+      {
+        "navigation_ms": [
+          1.53,
+          2.777,
+          1.804,
+          3.622,
+          2.173
+        ],
+        "40_character_burst_ms": 0.877,
+        "burst_frames": 1,
+        "escape_to_frame_ms": 3.804,
+        "escape_to_exit_ms": 10.936
+      },
+      {
+        "navigation_ms": [
+          1.554,
+          2.951,
+          2.035,
+          3.661,
+          2.373
+        ],
+        "40_character_burst_ms": 0.993,
+        "burst_frames": 1,
+        "escape_to_frame_ms": 3.791,
+        "escape_to_exit_ms": 9.758
+      }
+    ]
+  },
+  "exit_probe_before": {
+    "live_ms": [
+      22.6,
+      22.4,
+      20.9
+    ],
+    "stalled_ms": [
+      31.4,
+      36.2,
+      31.9
+    ]
+  },
+  "exit_probe_after": {
+    "live_ms": [
+      13.4,
+      11.9,
+      12.0
+    ],
+    "stalled_ms": [
+      11.9,
+      12.0,
+      11.7
+    ]
+  },
+  "notes": [
+    "Three local PTY trials per case, ESCDELAY unset. Not SSH or physical-display latency guarantees.",
+    "The separate exit probe polls process exit every 5 ms, so its readings have coarser timing than benchmark_input.py."
+  ]
+}
