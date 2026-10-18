@@ -3,7 +3,7 @@ import curses
 
 ALIASES = ('home overview dashboard', 'cpu processor topology', 'ram memory numa',
            'disk storage io', 'gpu graphics video', 'tasks processes pid',
-           'net network interfaces', 'workloads services cgroups', 'timeline events changes comparison', 'status capabilities permissions collector')
+           'net network interfaces', 'applications apps workloads services containers cgroups', 'timeline events changes comparison', 'status capabilities permissions collector', 'hardware machine topology resources')
 
 
 def actions(view):
@@ -26,7 +26,7 @@ def actions(view):
     extra = [('f Focus', ord('f'))] if view.page in (0, 1, 2, 3, 4, 6) else []
     if view.page == 7:
         extra = [('o Overlay', ord('o'))]
-    extra += [('0 Status', ord('0')), ('M Mark', ord('M')), ('9 Timeline', ord('9'))]
+    extra += [('H Hardware',ord('H')), ('A Apps',ord('A')), ('0 Status', ord('0')), ('M Mark', ord('M')), ('9 Timeline', ord('9'))]
     return common + [('F10 Quit', ord('q'))] + extra + local
 
 
@@ -53,7 +53,10 @@ def context_help(view):
                 'U undoes CPU placement. Controls require --control and permission.'],
         }.get(view.page, ['Scroll to inspect every device, node and metric.',
                           'N/A means unavailable, not idle. Resource panels are read-only.'])
-    details += ['0 capabilities | S save preferences | R export redacted report | N named marker',
+    details += ['H hardware workspace | A applications workspace | 1 overview',
+                'Applications: [ / ] detail tabs; Enter detail focus; Esc list focus; x clears hardware filter.',
+                'CPU tiles: left-click shows allowed applications; right-click opens CPU settings.',
+                'Focused CPU/disk or Memory: a shows related applications (placement/accounting, not inference).','0 capabilities | S save preferences | R export redacted report | N named marker',
                 'Workloads: c/m/n/i sort, d device, b disk limit, B Undo disk | Tasks: t tree','f focuses a resource; [ / ] switch devices; f restores all panels.',
                 'o on Workloads pins a service overlay; o elsewhere clears it.',
                 'M marks a baseline; 9 opens changes and before/after comparisons.',

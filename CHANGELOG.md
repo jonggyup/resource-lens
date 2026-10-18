@@ -1,3 +1,15 @@
+# 0.9.0
+
+- Add linked Hardware (`H`) and Applications (`A`/`8`) workspaces; preserve Overview.
+- Add a responsive application list/detail layout with Usage, Processes, Placement,
+  Limits and History tabs, keyboard navigation and clickable targets.
+- Link CPU tiles to allowed application groups, memory to accounted groups, and
+  focused disks to groups with matching active I/O accounting. Retain application
+  links to the CPU placement overlay and mapped disks.
+- Reset CPU history on observed cgroup replacement. Label unavailable attribution
+  and distinguish allowed placement from execution.
+- Preserve asynchronous collection, fast input handling and existing control safeguards.
+
 # 0.8.2
 
 - Reduce default Escape recognition from 10 ms to 1 ms, retaining ESCDELAY overrides.

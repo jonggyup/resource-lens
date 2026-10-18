@@ -1,3 +1,21 @@
+# Hardware and application workflows (0.9.0)
+
+Start with `python3 -m resourcelens`. Press `H` to inspect the machine, or `A`
+to investigate a workload. In Applications, use `/` to find a service, arrows to
+select it and `[`/`]` to change the detail tab. Enter focuses details for scrolling;
+Esc returns to the list. Wide terminals show both panes together.
+
+For CPU placement, select a service and press `o`; CPU tiles show its allowed set.
+Left-click a CPU/core/socket to list groups allowed there. Press `x` in Applications
+to clear that relationship. This does not measure which threads executed there.
+For storage, focus a disk with `f`, then press `a` for matching active accounting.
+Application `d` returns to a mapped whole disk when one is available.
+
+The overview remains on `1`. See the README for full shortcuts, accounting limits,
+and the opt-in preview/authorization workflow for resource controls.
+
+---
+
 # 0.8.2 exit responsiveness update
 
 Default Escape recognition is now 1 ms; exit no longer joins the unfinished

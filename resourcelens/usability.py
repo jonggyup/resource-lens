@@ -14,9 +14,9 @@ def state_dir():
     return Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'resource-lens'
 
 
-PREFERENCES = {'page': range(10), 'sort': ('cpu', 'memory', 'pid', 'name'),
+PREFERENCES = {'page': range(11), 'sort': ('cpu', 'memory', 'pid', 'name'),
                'workload_sort': ('cpu', 'memory', 'name', 'io'),
-               'filter': str, 'workload_filter': str, 'overview_expanded': bool, 'process_tree': bool}
+               'filter': str, 'workload_filter': str, 'overview_expanded': bool, 'process_tree': bool, 'app_tab': range(5)}
 
 
 def preferences(values):

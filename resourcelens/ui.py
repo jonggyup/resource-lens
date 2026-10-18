@@ -22,6 +22,7 @@ from .focus import FocusView, KINDS
 from .investigation import Investigation, indicators
 from .usability_ui import UsabilityView
 from .usability import tree_rows
+from .workspaces import Workspaces, related_groups
 
 
 UNSAFE_TEXT = re.compile('[^\x20-\x7e' + re.escape(''.join(GLYPHS)) + ']')
@@ -76,10 +77,11 @@ def pressure(snapshot, kind):
     return f"{kind.upper()} pressure (10s): {pct(value)}"
 
 
-class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView):
-    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Workloads", "Timeline", "Capabilities")
+class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView, Workspaces):
+    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Applications", "Timeline", "Capabilities", "Hardware")
 
     def __init__(self, unicode=False, control=False, session=None):
+        self.workspace_init()
         self.usability_init()
         self.hardware_init()
         self.placement_init()
@@ -160,7 +162,10 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             if isinstance(key, str) and key.startswith("workload:") and key not in active:
                 del self.history[key]
         for group in snapshot.get("workloads", []):
+            if self.app_history_identity.get(group['id']) != group.get('inode'):
+                self.history['workload:'+group['id']].clear()
             self.history["workload:" + group["id"]].append(group["cpu_pct"])
+        self.app_history_identity = {g['id']:g.get('inode') for g in snapshot.get('workloads',[])}
 
     def device_history(self, kind, item, field):
         identity = str(item.get('identity', item.get('id', item.get('name'))))
@@ -183,7 +188,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         return event
 
     def workload_rows(self):
-        groups = self.snapshot.get("workloads", []) if self.snapshot else []
+        groups = related_groups(self.snapshot, self.relation) if self.snapshot else []
         groups = [group for group in groups if self.workload_filter.casefold() in
                   f"{group.get('unit') or ''} {group['id']}".casefold()]
         def order(group):
@@ -218,71 +223,16 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         if not self.workload_detail or group is None:
             name_width = max(12, min(45, width - 32))
             lines = [f"{len(rows)} workloads | / find | Enter inspect | Filter: {clean(self.workload_filter) or '(none)'}", mode,
-                     self.workload_notice or f"Sort: {self.workload_sort} | c CPU / m RAM / n name / i I/O | b disk limits / B Undo",
+                     self.workload_notice or self.relation_label or f"Sort: {self.workload_sort} | c CPU / m RAM / n name / i I/O | b disk limits / B Undo",
                      f"  {'UNIT / GROUP':<{name_width}} {'CPU':>7} {'MEMORY':>10} {'PIDS':>5}"]
             for row in rows:
                 name = clean(row["unit"] or row["id"])
                 lines.append(f"{'>' if row['id'] == self.workload_id else ' '} {name[:name_width]:<{name_width}} "
                              f"{pct(row['cpu_pct']):>7} {size(row['memory_current']):>10} {len(row['pids']):>5}")
             if not rows:
-                lines.append("No visible workload membership. cgroup v2 is required.")
+                lines.append("No matching groups. Clear search with / and relationship with x; cgroup v2 is required.")
             return lines
-        limits = group["limits"]
-        local = limits["ancestors"][0] if limits["ancestors"] else {}
-        lines = [f"{clean(group['unit'] or group['id'])} | {group['kind']}",
-                 f"Manager: {group['manager'] or 'unknown'} | owner UID: {group['owner_uid'] if group['owner_uid'] is not None else 'system'}",
-                 mode, "Esc: list | d: device | b: disk limit | B: Undo disk | runtime settings remain",
-                 self.workload_notice or "Nested workload accounting may overlap.",
-                 f"CPU {pct(group['cpu_pct'])} (100% = one CPU) | memory {size(group['memory_current'])}"]
-        lines.extend(textwrap.wrap("Cgroup: " + clean(group["path"] or "unattributed"), width))
-        values = self.history["workload:" + group["id"]]
-        maximum = max(100, max((value for value in values if value is not None), default=100))
-        lines.extend([f"CPU history (0-{maximum:.0f}%): {self.trend(values, max(8, width - 25), maximum)}",
-                      f"Local cpu.max: {local.get('cpu.max') or 'unavailable'} | cpu.weight: {local.get('cpu.weight') or 'unavailable'}"])
-        if limits["quota_pct"] is not None:
-            lines.extend(textwrap.wrap(f"Tightest readable CPU quota: {pct(limits['quota_pct'])} at {limits['quota_source']}", width))
-        else:
-            lines.append("CPU quota: no finite value found" if limits["quota_complete"] else "CPU quota: unavailable/inactive controller; not assumed unlimited")
-        if not limits["quota_complete"]:
-            lines.append("Ancestor CPU quota inspection is incomplete.")
-        lines.append("Quota is a ceiling, not a guaranteed allocation.")
-        lines.append('Effective CPU placement: ' + (local.get('cpuset.cpus.effective') or 'unavailable/inactive'))
-        lines.append('p: select CPUs on the topology map | U: Undo placement')
-        for event in self.placement_session.events[-5:]:
-            if event['target']['path'] == group['path']:
-                lines.append('Placement ' + (format_cpus(event['requested']) or 'inherit') + ' [' + event['status'] + ']')
-        if limits["memory_max"] is not None:
-            lines.extend(textwrap.wrap(f"Tightest memory.max: {size(limits['memory_max'])} at {limits['memory_source']}", width))
-        else:
-            lines.append("Memory ceiling: no finite value found" if limits["memory_complete"] else "Memory ceiling: unavailable")
-        throttled = group["throttled_usec_per_s"]
-        lines.append(f"CPU throttling: {throttled / 1000:.1f}ms/s" if throttled is not None else "CPU throttling: unavailable or awaiting sample")
-        for kind, entry in group["pressure"].items():
-            lines.append(f"{kind.upper()} pressure (10s): {pct(entry.get('avg10'))}")
-        lines.extend(["", "Assigned visible processes (nested units are listed separately):"])
-        members = {process["pid"]: process for process in self.snapshot["processes"]}
-        for pid in group["pids"]:
-            process = members.get(pid, {})
-            lines.append(f"  {pid:<8} {clean(process.get('name', 'exited')):<25} CPU {pct(process.get('cpu_pct'))}")
-        lines.extend(["", "I/O accounting by block device:"])
-        for entry in group["io_devices"]:
-            lines.append(f"  {entry['device']} R {size(entry['read_bps'])}/s W {size(entry['write_bps'])}/s")
-        if not group["io_devices"]:
-            lines.append("  No readable I/O accounting entries")
-        lines.extend(["", "Local and ancestor settings (nearest first):"])
-        for entry in limits["ancestors"]:
-            lines.extend(textwrap.wrap(clean(entry["path"]), width))
-            for name in ("cpu.max", "cpu.weight", "memory.high", "memory.max", "io.max"):
-                lines.extend(textwrap.wrap(f"  {name}: {entry[name] or 'unavailable/empty'}", width))
-        lines.extend(["", "CPU control events this session (latest first):"])
-        for event in reversed(self.session.events[-10:]):
-            before = event["before"][event["property"]]
-            lines.append(f"  {time.strftime('%H:%M:%S', time.localtime(event['timestamp']))} {clean(event['target']['unit'])} "
-                         f"{event['property']} {cpu_setting(event['property'], before)} -> "
-                         f"{cpu_setting(event['property'], event['requested'])} [{event['status']}]")
-        if not self.session.events:
-            lines.append("  No changes")
-        return lines
+        return self.application_lines(width)
 
     def job(self, kind, function, *args, allow_replay=False):
         if self.replay and not allow_replay:
@@ -519,7 +469,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         if self.help:
             return [piece for line in context_help(self)
                     for piece in (textwrap.wrap(line, max(20, width)) or [''])]
-        return {1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
+        return {10: lambda width: expanded_overview(self,width)[0], 1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
                 9: self.capability_lines, 4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines, 8: lambda width: [piece for line in self.investigation.lines() for piece in (textwrap.wrap(line, width) or [''])]}.get(self.page, self.process_lines)(width)
 
     def mouse(self, x, y, state):
@@ -556,8 +506,25 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             elif state & getattr(curses, 'BUTTON5_PRESSED', 0):
                 self.scroll += 3
             return
-        if self.page == 0 and not self.help and left:
-            if y == 2 and 1 <= x <= 26:
+        if left:
+            for start,end,row,key in self.workspace_regions:
+                if y==row and start<=x<end:
+                    self.workspace_key(key)
+                    return
+            if self.page == 7:
+                for start,end,row,tab in self.app_tab_regions:
+                    if y==row and start<=x<end:
+                        self.app_tab,self.scroll=tab,0
+                        return
+                for start,end,row,identity,inode in self.app_regions:
+                    if y==row and start<=x<end:
+                        self.workload_id,self.workload_identity=identity,(identity,inode)
+                        self.workload_notice,self.workload_detail,self.scroll='',False,0
+                        return
+                if self.app_regions and y>=5:
+                    return  # Right detail pane is not a workload-list row.
+        if self.page in (0,10) and not self.help and left:
+            if self.page == 0 and y == 2 and 1 <= x <= 26:
                 self.overview_expanded = not self.overview_expanded
                 self.scroll = 0
                 return
@@ -586,6 +553,9 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                             self.placement_key({'enter': 10, 'esc': 27}.get(ids[0], ord(ids[0][0])))
                         else:
                             self.placement_toggle(ids)
+                    elif left and kind in ('cpu','core','socket'):
+                        self.hardware_selection = tuple(ids)
+                        self.open_related()
                     elif kind == 'cpu':
                         self.hardware_menu(('id', ids[0]))
                     elif kind == 'socket':
@@ -667,6 +637,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             return True
         if self.placement:
             return self.placement_key(key)
+        if self.workspace_key(key):
+            return True
         if self.utility_key(key):
             return True
         if self.replay and key in (curses.KEY_LEFT, curses.KEY_RIGHT, ord(' '), ord('('), ord(')'), ord(','), ord('.')):
@@ -808,6 +780,9 @@ def draw(screen, view, interval, error=None):
     h, w = screen.getmaxyx()
     view.screen_size = h, w
     view.action_regions = []
+    view.workspace_regions = []
+    view.app_regions = []
+    view.app_tab_regions = []
     view.overview_links = {}
     view.overview_cards_regions = []
     view.topology_regions = {}
@@ -829,7 +804,7 @@ def draw(screen, view, interval, error=None):
     put(screen, 0, 1, f"RESOURCE LENS  {state}  {interval:g}s  |  {stamp}", accent)
     if s and w >= 95:
         put(screen, 0, 60, s["hostname"], muted)
-    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net", "Work", "Time", "Status")
+    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net", "Apps", "Time", "Status")
     view.tab_regions = []
     x = 1
     for page, label in enumerate(labels):
@@ -844,6 +819,8 @@ def draw(screen, view, interval, error=None):
     status = mode + " | newest samples at right"
     if not s:
         put(screen, 4, 2, "Collecting the first sample...", muted)
+    elif view.page == 7 and not view.help and w >= 100 and h >= 20:
+        status = view.draw_applications(screen,w,h)
     elif view.page == 0 and not view.help and view.focus:
         kind, identity = view.focus
         summary = compact_overview(view)
@@ -854,7 +831,7 @@ def draw(screen, view, interval, error=None):
         for i, line in enumerate(lines[view.scroll:view.scroll + capacity]):
             put(screen, i + 3, 1, line, accent if i < 5 else 0)
         status = 'Focused overview | other resources summarized above'
-    elif view.page == 0 and not view.help and view.overview_expanded:
+    elif not view.help and (view.page == 10 or view.page == 0 and view.overview_expanded):
         lines, links = expanded_overview(view, w - 3)
         capacity = h - 5
         view.scroll = min(view.scroll, max(0, len(lines) - capacity))
@@ -865,7 +842,7 @@ def draw(screen, view, interval, error=None):
             section_page = next((links[key] for key in sorted(links, reverse=True) if key <= index), 1)
             color = view.colors[{1: 'cpu', 2: 'memory', 3: 'disk', 4: 'gpu', 6: 'network'}.get(section_page, 'accent')]
             put(screen, i + 3, 1, line, color | (curses.A_BOLD if index in links else 0))
-        status = f"Expanded overview | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows/wheel scroll"
+        status = f"{'Hardware workspace' if view.page == 10 else 'Expanded overview'} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows/wheel scroll"
     elif view.page == 0 and not view.help:
         layout = card_layout(h, w)
         if layout:
@@ -932,6 +909,13 @@ def draw(screen, view, interval, error=None):
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     if view.page == 0 and not view.help:
         put(screen, 2, 1, '[ - Collapse overview ] e' if view.overview_expanded else '[ + Expand overview ] e', accent)
+    if not view.help:
+        x = 29 if view.page == 0 else 1
+        for label,key in [(' H Hardware ',ord('H')),(' A Applications ',ord('A'))]:
+            if x+len(label)<w:
+                put(screen,2,x,label,accent | curses.A_REVERSE)
+                view.workspace_regions.append((x,x+len(label),2,key))
+            x += len(label)+1
     if view.focus:
         status += f' | focus {view.focus[1]} (f restores)'
     if view.replay:
@@ -1099,7 +1083,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status)
+                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.app_tab, repr(view.relation), view.hardware_selection)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render

@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.8.2 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.9.0 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -40,6 +40,47 @@ Installation isn't required for the source command. On Debian/Ubuntu, missing
 `venv` support can be supplied by the `python3-venv` package; the source command
 also works without it.
 
+## Hardware and Applications workspaces
+
+Press **H** for the hardware workspace, **A** (or **8**) for applications, and
+**1** to return to the existing overview. The workspace buttons are clickable.
+Hardware opens the expanded resource/topology view; click a section to inspect
+its CPUs, memory, disks, GPU or network devices. Your overview expansion preference
+is preserved independently.
+
+Applications shows a persistent group list beside the selected application's
+information at terminal sizes of at least 100 columns by 20 rows. On smaller
+terminals, select a group and press Enter for details. Applications means observed
+cgroup/systemd workload groups: a group can contain several programs, and nested
+counters can overlap. This is not automatic desktop application identification.
+
+| Action | Result |
+| --- | --- |
+| Up/Down, or click a group | Select an application group |
+| `/`, then a unit name or cgroup path | Filter the application list |
+| `[` / `]`, or click a visible tab | Usage, Processes, Placement, Limits, History |
+| Enter / Esc | Focus scrollable details / return to list selection |
+| `o` on an application | Open CPU topology with its allowed placement overlay |
+| `d` on an application | Open the first accounting device mapped to a visible whole disk |
+| Left-click a CPU/core/socket in CPU view | Show applications allowed on those CPUs |
+| Right-click a CPU/socket | Open existing hardware settings |
+| `a` in CPU or Memory view | Show groups related by allowed CPUs or accounted memory |
+| `f` in Disks, select a disk, then `a` | Show groups with active I/O counters for that exact device |
+| `x` in Applications | Clear the hardware relationship filter; text search remains |
+
+Usage combines CPU history, accounted memory, I/O and pressure indicators.
+Processes lists visible member processes. Placement shows allowed CPUs, and
+Limits shows observed local and ancestor settings with existing control shortcuts.
+History shows CPU samples and targeted events; pin a group with `o` before marking
+a comparison. History resets when the observed cgroup inode changes.
+
+Allowed CPUs do **not** identify which CPUs actually executed a workload. Memory
+relationships do not attribute memory to a NUMA node. Disk relationships require
+matching major/minor accounting identities and do not infer mappings through
+partitions, device mapper or other storage layers. Per-application GPU and network
+usage remain unavailable. Missing counters stay unknown. Monitoring and navigation
+remain read-only; controls retain the existing preview and authorization workflow.
+
 ## Focus, investigate, and replay
 
 Press `f` on Overview or a resource page to choose a socket, memory node,
@@ -49,11 +90,11 @@ Disk panels show separate activity/read/write histories; GPU panels show busy,
 VRAM and power histories when exposed. Percentage charts use 0–100%; throughput,
 VRAM and power charts scale to the visible peak. Missing readings stay unknown.
 
-On Workloads (`8`), select a service and press `o` to pin it to the CPU map.
+On Applications (`8`), select a service and press `o` to pin it to the CPU map.
 The overlay shows group CPU, memory, I/O, pressure and quota throttling, and
 highlights its effective cgroup CPU set. This is allowed placement, not measured
 per-core service execution; thread affinity and child cgroups may narrow it.
-Press `o` outside Workloads to clear it. Exited/replaced cgroups are not reattached.
+Press `o` outside Applications to clear it. Exited/replaced cgroups are not reattached.
 
 Press `M` to mark a baseline; `9` opens Timeline. Up/Down selects an event.
 Control apply/Undo attempts also create events with verified or unconfirmed outcomes.
@@ -129,14 +170,14 @@ See [real-world usability priorities](docs/USABILITY.md) and
 | Key | Workflow |
 | --- | --- |
 | `0` | Capabilities, permissions hints, collector wall/CPU time, process peak RSS, errors and missing-data explanations |
-| Workloads `c` / `m` / `n` / `i` | Sort by CPU, memory, name or observed I/O |
-| Workloads mouse click | Select a row; Enter inspects it |
-| Workloads `d` | Open the first accounting device that maps to a visible whole disk |
+| Applications `c` / `m` / `n` / `i` | Sort by CPU, memory, name or observed I/O |
+| Applications mouse click | Select a row; Enter inspects it |
+| Applications `d` | Open the first accounting device that maps to a visible whole disk |
 | Processes `t` | Toggle a process tree; sorting applies within branches |
 | `S` | Save presentation preferences explicitly |
 | `N` | Name a baseline marker |
 | `R` | Export a private, redacted JSON comparison report |
-| Workloads `b` / `B` | Preview/apply disk bandwidth / Undo latest disk change |
+| Applications `b` / `B` | Preview/apply disk bandwidth / Undo latest disk change |
 
 Selection follows a cgroup identity across sorting. If it exits or is filtered
 out, controls require another selection; replacement is reported explicitly.
@@ -168,7 +209,7 @@ metrics; a fresh live report has no before/after history yet.
 
 ### Per-service disk bandwidth
 
-Launch with `--control`, select a service on Workloads (`8`), and press `b`.
+Launch with `--control`, select a service on Applications (`8`), and press `b`.
 Enter a block device, direction, and rate, for example `sda write 10M`.
 `K/M/G` mean powers of 1024 bytes/sec; `max` removes that device's limit in the
 chosen direction. Review the device major/minor, backing devices, holders, old
@@ -241,7 +282,7 @@ See [helper installation, policy and recovery](docs/HELPER.md).
 | `7` | Network | Per-interface RX/TX rates and histories, transfer totals, packet rates, link state/speed, errors and drops |
 | `0` | Capabilities | Collection cost/health, supported sources, permission hints and missing-data explanations |
 | `9` | Timeline | Markers, control outcomes and measured before/after comparisons |
-| `8` | Workloads | Grouped service/cgroup CPU, memory, I/O, members, pressure, throttling and inherited limits; optional CPU controls |
+| `8` | Applications | Grouped service/cgroup CPU, memory, I/O, members, pressure, throttling and inherited limits; optional CPU controls |
 
 Overview uses six colored cards at 76+ columns and 23+ rows. Each resource has
 a prominent current value and a chart; unavailable GPU data has a plain
@@ -270,9 +311,9 @@ always sorted by CPU; sorting/filtering applies to the full Tasks page.
 | `Space` | Freeze/unfreeze the display; collection continues |
 | `c` / `m` / `n` / `p` | Sort processes by CPU / memory / name / PID |
 | `/` | Filter processes by name or PID; Enter finishes, Esc clears |
-| `/` on Workloads | Filter workloads by unit name or cgroup path |
-| Workloads: Up/Down, Enter, Esc | Select a group, inspect details, return to list |
-| Workloads with `--control`: `w`, `l`, `u` | CPU weight, CPU quota, Undo latest session change |
+| `/` on Applications | Filter workloads by unit name or cgroup path |
+| Applications: Up/Down, Enter, Esc | Select a group, inspect details, return to list |
+| Applications with `--control`: `w`, `l`, `u` | CPU weight, CPU quota, Undo latest session change |
 | `?` | Help |
 | `q` / `Esc` | Quit (Esc clears an active filter first) |
 
@@ -384,7 +425,7 @@ To place a service on selected CPUs:
 python3 -m resourcelens --control
 ```
 
-1. Open Workloads (`8`), select a service/scope with arrows or `/` to filter,
+1. Open Applications (`8`), select a service/scope with arrows or `/` to filter,
    then press **p**.
 2. Click logical CPU rows to toggle them. Click a core header to toggle its
    eligible SMT threads, or a socket header to toggle its eligible CPUs.
@@ -440,7 +481,7 @@ socket and individual CPU choices; scroll through choices with Up/Down.
   press Enter. Esc or Cancel leaves settings alone. A shared frequency policy
   can affect CPUs outside the selected socket or CPU; the preview includes them.
 - Press **u** on the CPU page to restore the latest hardware change in this
-  session. Workloads has its own Undo history. The exit dialog undoes placement
+  session. Applications has its own Undo history. The exit dialog undoes placement
   entries first, then hardware entries, then weight/quota entries.
 
 Hardware writes use the existing permissions on `/sys/devices/system/cpu`.

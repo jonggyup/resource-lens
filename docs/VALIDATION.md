@@ -1,3 +1,30 @@
+# 0.9.0 workspace validation
+
+160 tests pass. New coverage checks workspace navigation and preserved overview
+state, CPU tile clicks and allowed-set filtering, exact disk identity and active counters, missing
+attribution, all detail tabs, cgroup replacement history reset, and clickable
+split-pane tabs with list rows kept above the footer.
+
+Live read-only tmux checks exercised Hardware, Applications, all five tabs,
+CPU/memory relationships, clearing relationship filters, narrow detail navigation
+and resizing between 140x45, 80x30 and 40x20.
+[Captured terminal evidence](workspaces-ui-evidence.json).
+
+Three real PTY trials measured existing navigation at 1.4–3.7 ms, 40-character
+bursts at 0.91–0.98 ms, Escape-to-frame at 3.65–3.77 ms, and Escape-to-exit at
+9.7–11.0 ms. [Raw measurements](workspaces-latency-evidence.json).
+These are local observations, not guarantees or measurements of remote display
+latency. The benchmark covers existing navigation and editors; it does not
+establish application rendering costs on hosts with thousands of groups.
+
+This release adds presentation and observed accounting relationships, not new
+per-core execution, GPU/network application attribution or NUMA residency collection.
+Disk relationships do not resolve storage layers. No live hardware settings were
+changed for the workspace verification. An isolated package installation reports
+version 0.9.0 and successfully collects an installed-command `--once` snapshot.
+
+---
+
 # 0.8.2 exit responsiveness validation
 
 153 tests pass, including a tightened 250 ms real-terminal exit regression with
