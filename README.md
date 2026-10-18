@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.9.1 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.9.2 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -42,13 +42,12 @@ also works without it.
 
 Interaction fixes and coverage: [0.9.1 audit](docs/INTERACTION_AUDIT.md).
 
-## Hardware and Applications workspaces
+## Overview and Applications
 
-Press **H** for the hardware workspace, **A** (or **8**) for applications, and
-**1** to return to the existing overview. The workspace buttons are clickable.
-Hardware opens the expanded resource/topology view; click a section to inspect
-its CPUs, memory, disks, GPU or network devices. Your overview expansion preference
-is preserved independently.
+Use **1** for Overview and **8** for Applications. Press **e** on Overview to
+expand its resource/topology information; click a section to inspect its CPUs,
+memory, disks, GPU or network devices. The duplicate Hardware page and H/A
+shortcuts have been removed. Saved Hardware-page preferences open expanded Overview.
 
 Applications shows a persistent group list beside the selected application's
 information at terminal sizes of at least 100 columns by 20 rows. On smaller

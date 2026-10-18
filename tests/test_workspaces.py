@@ -20,12 +20,16 @@ class WorkspaceTests(unittest.TestCase):
         self.sample['disks']=[dict(name='sda',identity='8:0:55',active_pct=0,read_bps=12,write_bps=0)]
         self.view.update(self.sample)
 
-    def test_workspace_navigation_preserves_overview_state(self):
+    def test_existing_navigation_preserves_overview_state(self):
         self.view.overview_expanded=True
-        self.view.key(ord('H'));self.assertEqual(self.view.page,10)
-        self.view.key(ord('A'));self.assertEqual(self.view.page,7)
+        self.view.key(ord('H'));self.assertEqual(self.view.page,0)
+        self.view.key(ord('A'));self.assertEqual(self.view.page,0)
+        self.view.key(ord('8'));self.assertEqual(self.view.page,7)
         self.view.key(ord('1'));self.assertEqual(self.view.page,0)
         self.assertTrue(self.view.overview_expanded)
+        self.view.key(ord('0'));self.view.key(9)
+        self.assertEqual(self.view.page,0)
+        self.assertEqual(len(self.view.names),10)
 
     def test_cpu_relation_means_allowed_not_actual_use(self):
         self.view.page=1;self.view.hardware_selection=(2,)

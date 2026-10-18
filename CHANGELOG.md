@@ -1,3 +1,9 @@
+# 0.9.2
+
+- Remove redundant H/A shortcuts, workspace buttons and the duplicate Hardware page.
+- Keep expanded Overview (`1`, then `e`), Applications (`8`), detail tabs and all controls.
+- Migrate saved Hardware-page preferences to expanded Overview.
+
 # 0.9.1
 
 - Restore ordinary CPU/socket left-click settings; keep right-click settings and

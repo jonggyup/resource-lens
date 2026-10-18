@@ -44,7 +44,6 @@ class InteractionRoutingTests(unittest.TestCase):
         view = self.view
         view.placement_ready(dict(target=group('demo.service'), info=dict(
             effective=[0, 1], eligible=[0, 1], allowed=[0, 1])))
-        view.workspace_regions = [(1, 15, 2, ord('H')), (16, 32, 2, ord('A'))]
         for x in (2, 17):
             view.mouse(x, 2, curses.BUTTON1_CLICKED)
             self.assertEqual(view.page, 1)
@@ -58,7 +57,6 @@ class InteractionRoutingTests(unittest.TestCase):
         view.key(ord('a'))
         self.assertEqual(view.placement['selected'], {0, 1})
         draw(Screen(40, 120), view, 1)
-        self.assertEqual(view.workspace_regions, [])
         view.key(27)
         self.assertIsNone(view.placement)
         self.assertEqual(view.page, 7)
@@ -106,7 +104,6 @@ class InteractionRoutingTests(unittest.TestCase):
         view = self.view
         view.page = 7
         view.key(ord('w'))
-        view.workspace_regions = [(1, 15, 2, ord('H'))]
         view.mouse(2, 2, curses.BUTTON1_CLICKED)
         self.assertEqual(view.modal['stage'], 'input')
         self.assertEqual(view.page, 7)

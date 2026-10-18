@@ -1,6 +1,6 @@
-# Hardware and application workflows (0.9.0)
+# Hardware and application workflows (0.9.2)
 
-Start with `python3 -m resourcelens`. Press `H` to inspect the machine, or `A`
+Start with `python3 -m resourcelens`. Press `1`, then `e` to inspect the machine, or `8`
 to investigate a workload. In Applications, use `/` to find a service, arrows to
 select it and `[`/`]` to change the detail tab. Enter focuses details for scrolling;
 Esc returns to the list. Wide terminals show both panes together.
@@ -12,7 +12,7 @@ For storage, focus a disk with `f`, then press `a` for matching active accountin
 Application `d` returns to a mapped whole disk when one is available.
 
 Ordinary left/right clicks on CPU/socket tiles open the existing settings menu.
-During CPU placement, tile clicks toggle the selected CPUs; workspace navigation
+During CPU placement, tile clicks toggle the selected CPUs; page navigation
 is disabled until you finish or cancel placement. In wide Applications, the mouse
 wheel selects groups over the list and scrolls details over the detail pane.
 Click the detail pane or press Enter to focus it; Esc returns to list selection.

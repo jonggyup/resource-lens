@@ -82,6 +82,8 @@ class UsabilityTests(unittest.TestCase):
             self.assertNotIn('control',values)
             self.assertEqual(path.stat().st_mode & 0o777,0o600)
             self.assertEqual(preferences({'page':100,'sort':'invalid','control':True}),{})
+            self.assertEqual(preferences({'page':10,'overview_expanded':False}),
+                             {'page':0,'overview_expanded':True})
             path.write_text('[]')
             with self.assertRaises(ValueError):load_preferences(path)
 

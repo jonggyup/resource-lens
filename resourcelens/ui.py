@@ -78,7 +78,7 @@ def pressure(snapshot, kind):
 
 
 class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView, Workspaces):
-    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Applications", "Timeline", "Capabilities", "Hardware")
+    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Applications", "Timeline", "Capabilities")
 
     def __init__(self, unicode=False, control=False, session=None):
         self.workspace_init()
@@ -469,7 +469,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         if self.help:
             return [piece for line in context_help(self)
                     for piece in (textwrap.wrap(line, max(20, width)) or [''])]
-        return {10: lambda width: expanded_overview(self,width)[0], 1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
+        return {1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
                 9: self.capability_lines, 4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines, 8: lambda width: [piece for line in self.investigation.lines() for piece in (textwrap.wrap(line, width) or [''])]}.get(self.page, self.process_lines)(width)
 
     def mouse(self, x, y, state):
@@ -507,10 +507,6 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                 self.scroll += 3
             return
         if left and not self.placement:
-            for start,end,row,key in self.workspace_regions:
-                if y==row and start<=x<end:
-                    self.workspace_key(key)
-                    return
             if self.page == 7:
                 for start,end,row,tab in self.app_tab_regions:
                     if y==row and start<=x<end:
@@ -525,7 +521,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     if x > self.app_regions[0][1]:
                         self.workload_detail = True
                     return  # Right detail pane is not a workload-list row.
-        if self.page in (0,10) and not self.help and left:
+        if self.page == 0 and not self.help and left:
             if self.page == 0 and y == 2 and 1 <= x <= 26:
                 self.overview_expanded = not self.overview_expanded
                 self.scroll = 0
@@ -790,7 +786,6 @@ def draw(screen, view, interval, error=None):
     h, w = screen.getmaxyx()
     view.screen_size = h, w
     view.action_regions = []
-    view.workspace_regions = []
     view.app_regions = []
     view.app_tab_regions = []
     view.overview_links = {}
@@ -841,7 +836,7 @@ def draw(screen, view, interval, error=None):
         for i, line in enumerate(lines[view.scroll:view.scroll + capacity]):
             put(screen, i + 3, 1, line, accent if i < 5 else 0)
         status = 'Focused overview | other resources summarized above'
-    elif not view.help and (view.page == 10 or view.page == 0 and view.overview_expanded):
+    elif not view.help and view.page == 0 and view.overview_expanded:
         lines, links = expanded_overview(view, w - 3)
         capacity = h - 5
         view.scroll = min(view.scroll, max(0, len(lines) - capacity))
@@ -852,7 +847,7 @@ def draw(screen, view, interval, error=None):
             section_page = next((links[key] for key in sorted(links, reverse=True) if key <= index), 1)
             color = view.colors[{1: 'cpu', 2: 'memory', 3: 'disk', 4: 'gpu', 6: 'network'}.get(section_page, 'accent')]
             put(screen, i + 3, 1, line, color | (curses.A_BOLD if index in links else 0))
-        status = f"{'Hardware workspace' if view.page == 10 else 'Expanded overview'} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows/wheel scroll"
+        status = f"Expanded overview | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows/wheel scroll"
     elif view.page == 0 and not view.help:
         layout = card_layout(h, w)
         if layout:
@@ -919,13 +914,6 @@ def draw(screen, view, interval, error=None):
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     if view.page == 0 and not view.help:
         put(screen, 2, 1, '[ - Collapse overview ] e' if view.overview_expanded else '[ + Expand overview ] e', accent)
-    if not view.help and not view.placement:
-        x = 29 if view.page == 0 else 1
-        for label,key in [(' H Hardware ',ord('H')),(' A Applications ',ord('A'))]:
-            if x+len(label)<w:
-                put(screen,2,x,label,accent | curses.A_REVERSE)
-                view.workspace_regions.append((x,x+len(label),2,key))
-            x += len(label)+1
     if view.focus:
         status += f' | focus {view.focus[1]} (f restores)'
     if view.replay:

@@ -14,7 +14,7 @@ def state_dir():
     return Path(os.environ.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'resource-lens'
 
 
-PREFERENCES = {'page': range(11), 'sort': ('cpu', 'memory', 'pid', 'name'),
+PREFERENCES = {'page': range(10), 'sort': ('cpu', 'memory', 'pid', 'name'),
                'workload_sort': ('cpu', 'memory', 'name', 'io'),
                'filter': str, 'workload_filter': str, 'overview_expanded': bool, 'process_tree': bool, 'app_tab': range(5)}
 
@@ -22,6 +22,9 @@ PREFERENCES = {'page': range(11), 'sort': ('cpu', 'memory', 'pid', 'name'),
 def preferences(values):
     if not isinstance(values, dict):
         raise ValueError('Preferences must be an object')
+    # Migrate the removed duplicate Hardware page to expanded Overview.
+    if values.get('page') == 10:
+        values = {**values, 'page': 0, 'overview_expanded': True}
     result = {}
     for key, allowed in PREFERENCES.items():
         value = values.get(key)

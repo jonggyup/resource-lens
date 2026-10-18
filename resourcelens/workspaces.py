@@ -46,18 +46,12 @@ class Workspaces:
         self.relation = None
         self.relation_label = ''
         self.hardware_selection = None
-        self.workspace_regions = []
         self.app_regions = []
         self.app_tab_regions = []
         self.app_history_identity = {}
 
     def workspace_key(self, key):
-        if key == ord('H'):
-            self.page, self.scroll, self.focus = 10, 0, None
-        elif key == ord('A'):
-            self.page, self.scroll, self.focus = 7, 0, None
-            self.workload_detail = False
-        elif self.page == 7 and key in (ord('['),ord(']')):
+        if self.page == 7 and key in (ord('['),ord(']')):
             self.app_tab = (self.app_tab + (1 if key == ord(']') else -1)) % len(TABS)
             self.scroll = 0
         elif self.page == 7 and key == ord('x'):

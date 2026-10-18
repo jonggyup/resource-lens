@@ -1,3 +1,15 @@
+# 0.9.2 navigation simplification
+
+167 tests pass. Updated navigation checks verify H/A no longer switch pages,
+Applications remains on `8`, Overview expansion survives navigation, and Tab cycles
+through the ten existing pages. Preferences from the removed Hardware page migrate
+to expanded Overview. Existing placement and control-routing coverage remains.
+
+A live tmux check verified absent H/A buttons, inactive H/A shortcuts, Overview
+expansion, Applications detail tabs and Tab wrapping from Capabilities to Overview.
+
+---
+
 # 0.9.1 interaction conflict audit
 
 167 tests pass. Seven new interaction tests verify original left/right CPU and
