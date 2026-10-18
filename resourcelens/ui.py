@@ -4,6 +4,7 @@ from collections import defaultdict, deque
 import curses
 import os
 import queue
+import re
 import sys
 import textwrap
 import threading
@@ -23,9 +24,12 @@ from .usability_ui import UsabilityView
 from .usability import tree_rows
 
 
+UNSAFE_TEXT = re.compile('[^\x20-\x7e' + re.escape(''.join(GLYPHS)) + ']')
+
+
 def clean(value):
-    # Kernel process/device names are untrusted terminal content.
-    return "".join(c if 32 <= ord(c) < 127 or c in GLYPHS else "?" for c in str(value))
+    # Keep the same allowlist, with the per-character scan in the regex engine.
+    return UNSAFE_TEXT.sub('?', str(value))
 
 
 def size(value):
@@ -975,6 +979,32 @@ def draw(screen, view, interval, error=None):
     screen.refresh()
 
 
+def read_input(screen, view):
+    """Apply queued keys in order, then render once; bound work to avoid starvation."""
+    key = screen.getch()
+    if key == -1:
+        return True
+    deadline = time.monotonic() + .004
+    screen.timeout(0)
+    try:
+        for index in range(64):
+            if not view.key(key, screen.getmaxyx()[0]):
+                return False
+            if index == 63 or key in (curses.KEY_MOUSE, curses.KEY_RESIZE) or time.monotonic() >= deadline:
+                break
+            key = screen.getch()
+            if key == -1:
+                break
+            if key in (curses.KEY_MOUSE, curses.KEY_RESIZE):
+                # A preceding navigation key may have changed the layout. Draw
+                # its new hit regions before handling the next mouse/resize event.
+                curses.ungetch(key)
+                break
+        return True
+    finally:
+        screen.timeout(100)
+
+
 def run(collector, interval, ascii=False, control=False, recorder=None, replay=None, preferences=None, incidents=None, helper=None):
     latest = {"snapshot": None, "sequence": 0, "error": None}
     lock, stop = threading.Lock(), threading.Event()
@@ -1013,10 +1043,10 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
         # A bare Escape otherwise commonly waits one second in ncurses.
         # Keep sequence decoding enabled for arrows/function keys/mouse over SSH.
         try:
-            escape_ms = int(os.environ.get('ESCDELAY', '35'))
-            curses.set_escdelay(escape_ms if escape_ms > 0 else 35)
+            escape_ms = int(os.environ.get('ESCDELAY', '10'))
+            curses.set_escdelay(escape_ms if escape_ms > 0 else 10)
         except (ValueError, curses.error):
-            curses.set_escdelay(35)
+            curses.set_escdelay(10)
         screen.timeout(100)  # Input wakes immediately; this only bounds idle polling.
         try:
             curses.mousemask(curses.ALL_MOUSE_EVENTS)
@@ -1073,7 +1103,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render
-            if not view.key(screen.getch(), screen.getmaxyx()[0]):
+            if not read_input(screen, view):
                 break
 
     worker = threading.Thread(target=collect, daemon=True)
@@ -1090,6 +1120,6 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             # Collection is read-only and the worker is a daemon. A slow kernel
             # read or GPU query must not hold the terminal application open.
             # Recorder.close serializes with any write already in progress.
-            worker.join(timeout=0.1)
+            worker.join(timeout=0.01)
             if incidents and not worker.is_alive():
                 incidents.close()

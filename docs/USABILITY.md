@@ -1,3 +1,10 @@
+# 0.8.1 responsiveness update
+
+Default Escape recognition and read-only worker shutdown waits are now 10 ms
+each. Queued keystrokes are batched before redraw and text sanitization uses the
+same allowlist with a faster implementation. ESCDELAY remains configurable for
+slower split escape sequences. See VALIDATION.md and scripts/benchmark_input.py.
+
 # 0.8.0 delivery status
 
 All six areas below now have an implementation. Capabilities and overhead use

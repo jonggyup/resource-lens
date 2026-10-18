@@ -1,3 +1,11 @@
+# 0.8.1
+
+- Batch queued keyboard input before redraw, bounded to 64 events / 4 ms of handling.
+- Preserve event order and redraw boundaries for mouse/resize events.
+- Move terminal text sanitization to the regex engine without changing its allowlist.
+- Lower default ESCDELAY to 10 ms and read-only worker shutdown waiting to 10 ms.
+- Add a reproducible real-PTY key-to-flush benchmark and input regression tests.
+
 # 0.8.0
 
 - Add a Capabilities page with collection wall/CPU time, peak RSS, permissions hints,

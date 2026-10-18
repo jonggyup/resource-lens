@@ -1,3 +1,28 @@
+# 0.8.1 input responsiveness validation
+
+153 tests pass. Added coverage proves bounded input batches preserve every key,
+stop at exit, defer mouse handling until the new layout is rendered, and preserve
+the terminal text allowlist across all 65,536 BMP codepoints. Existing split-key,
+mouse, confirmation, resize and live/stalled-collector exit tests still pass.
+
+Three local PTY trials per version:
+
+| Measurement | 0.8.0 | 0.8.1 |
+| --- | --- | --- |
+| Navigation key to curses flush | 1.7–4.7 ms | 1.4–3.8 ms |
+| 40-character burst to final flush | 20.1–20.7 ms; 40 redraws | 0.88–0.93 ms; one redraw |
+| Escape closing filter to flush | 38.6–38.8 ms | 12.6–13.1 ms |
+| Escape to process exit, same probe | 43.9–44.3 ms | 19.0–19.4 ms |
+
+A separate deliberately stalled-collector exit probe measured 31–32 ms (previous
+release around 144–149 ms). [Raw evidence](input-latency-evidence.json).
+Reproduce key-to-flush measurements with `python3 scripts/benchmark_input.py`.
+The benchmark uses a real curses application and PTY; it measures terminal flush,
+not physical display or network latency. Sampling is set to 60 seconds to isolate
+input/render cost. Results are observations, not hard latency bounds.
+
+---
+
 # 0.8.0 usability and control validation
 
 149 automated tests pass. New checks cover presentation-only preference validation,
