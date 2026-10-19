@@ -85,7 +85,7 @@ class BrowserTests(unittest.TestCase):
 
     def test_enter_and_right_open_groups_even_from_metrics_or_replay(self):
         for key in (10,13,curses.KEY_RIGHT):
-            view=View();view.update(self.sample);view.page=7
+            view=View();view.update(self.sample);view.page=7;view.application_mode='cgroups'
             view.workload_detail=True
             view.replay=object()
             view.key(key)
@@ -100,7 +100,7 @@ class BrowserTests(unittest.TestCase):
             view.key(27);self.assertIsNone(view.browser)
 
     def test_metrics_focus_uses_d_and_narrow_tabs_without_enter(self):
-        view=View();view.update(self.sample);view.page=7
+        view=View();view.update(self.sample);view.page=7;view.application_mode='cgroups'
         view.key(ord('D'));self.assertTrue(view.workload_detail)
         self.assertIsNone(view.browser)
         view.key(27);self.assertFalse(view.workload_detail)
@@ -110,7 +110,7 @@ class BrowserTests(unittest.TestCase):
         self.assertIsNone(view.browser)
 
     def test_view_routes_browser_without_controls_or_replay_seeking(self):
-        view=View(control=True);view.update(self.sample);view.page=7
+        view=View(control=True);view.update(self.sample);view.page=7;view.application_mode='cgroups'
         view.key(ord('T'));self.assertEqual(view.browser.path,'/')
         view.replay=object()
         view.key(curses.KEY_RIGHT);self.assertEqual(view.browser.path,'/demo.service')

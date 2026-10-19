@@ -118,7 +118,7 @@ class UsabilityTests(unittest.TestCase):
         view.workload_sort='memory';view.workload_rows();self.assertEqual(view.workload_id,'/b')
         b['inode']=3;view.workload_rows();self.assertIn('restarted',view.workload_notice)
         sample['workloads']=[a];view.workload_rows();self.assertIsNone(view.selected_workload())
-        view.page=7;view.key(curses.KEY_DOWN);self.assertEqual(view.workload_id,'/a')
+        view.page=7;view.application_mode='cgroups';view.key(curses.KEY_DOWN);self.assertEqual(view.workload_id,'/a')
 
     def test_new_ui_shortcuts_and_replay_control_block(self):
         view=View();view.update(self.sample)
@@ -126,7 +126,7 @@ class UsabilityTests(unittest.TestCase):
         view.page=5;view.key(ord('t'));self.assertTrue(view.process_tree)
         view.key(ord('N'));view.key(ord('X'));view.key(10)
         self.assertEqual(view.investigation.events[-1]['label'],'X')
-        view.page=7;view.replay=object();view.key(ord('b'))
+        view.page=7;view.application_mode='cgroups';view.replay=object();view.key(ord('b'))
         self.assertIn('live --control',view.modal['message'])
 
     def sample_at(self,t,value=30):

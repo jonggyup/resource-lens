@@ -1,3 +1,20 @@
+# 0.11.0 process-first validation
+
+181 tests pass. New coverage verifies default process/CPU mode, missing values
+last, top-row tracking before manual selection, stable selection across CPU ranking
+changes, PID reuse, process search without page switching, the mouse mode toggle,
+saved mode validation, process details without hierarchy recordings, blocked hidden
+group controls, and mixed child/process CPU sorting. Existing cgroup tests now
+explicitly select cgroup mode.
+
+Live terminal checks verified descending visible CPU values in the default list,
+process details/back, cgroup mode and child sorting, CPU/name/memory sorting,
+and resizing to 80x24. [Terminal evidence](process-first-ui-evidence.json).
+[PTY latency evidence](process-first-latency-evidence.json) covers existing navigation
+and exit, not rendering guarantees on large process tables.
+
+---
+
 # 0.10.1 consistent hierarchy navigation
 
 175 tests pass. Enter/Right now opens groups and processes from the list, metric

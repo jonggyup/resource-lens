@@ -96,6 +96,7 @@ class Workspaces:
         else:
             self.modal = dict(stage='result',message='Per-application GPU/network attribution is unavailable. Host utilization is not attributed to applications.')
             return
+        self.application_mode = 'cgroups'
         self.page, self.scroll, self.focus = 7, 0, None
         self.workload_id, self.workload_identity = None, None
         self.workload_notice, self.workload_detail = '', False

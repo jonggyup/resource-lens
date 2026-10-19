@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.10.1 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.11.0 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -49,13 +49,33 @@ expand its resource/topology information; click a section to inspect its CPUs,
 memory, disks, GPU or network devices. The duplicate Hardware page and H/A
 shortcuts have been removed. Saved Hardware-page preferences open expanded Overview.
 
+### Processes by default; cgroups when needed
+
+Applications (`8`) starts with individual processes ranked by **CPU usage,
+highest first**. Missing CPU samples appear last. CPU 100% means one logical CPU.
+Enter/Right opens the selected process, and Esc returns to the process list.
+Use `c` / `m` / `n` / `p` to sort by CPU / RSS / name / PID, and `/` to search
+PID, name or cgroup path. Selection follows the same PID and start time after you
+navigate; before manual selection, the list follows the highest-ranked process.
+
+Press **g**, or click its button, to switch between **Processes** and **Cgroups**.
+Cgroups retains the service metrics, controls and drill-down browser. Group controls
+are only available after switching to cgroups and selecting their target. `S` saves
+the chosen display mode and sorting preferences; without saved overrides the
+default is processes sorted by CPU. The existing Tasks page (`6`) remains available.
+
+Inside the cgroup browser, child groups and directly attached processes are ranked
+together by CPU, highest first. `c` / `m` / `n` switches CPU / memory / name sorting.
+Unavailable measurements stay last. Parent counters include children; avoid adding
+a parent's usage to the usage of its descendants.
+
 ### Browse actual cgroups and processes
 
-The main Applications list groups processes under their nearest systemd service
+In cgroup mode, the Applications list groups processes under their nearest systemd service
 or scope. It is not an application detector and may combine nested cgroups under
 one service. The new browser shows the actual visible cgroup directory hierarchy.
 
-1. Open Applications with `8`, find a service with `/`, and select its row.
+1. Open Applications with `8`, press `g` for cgroups, find a service with `/`, and select its row.
 2. Press Enter or Right, or click **Open group** (`v` remains an alias). Press `T` to start at the root instead.
 3. Select a `CG` child row and press Enter/Right, or click it, to enter that group.
 4. Select a `PID` row and press Enter, or click it, for process name, parent PID,
@@ -78,7 +98,7 @@ Enter/Right opens groups in Applications during replay too. On other pages,
 Left/Right retains sample-step behavior. The browser is read-only; existing service controls
 remain in the main Applications view.
 
-Applications shows a persistent group list beside the selected application's
+Cgroup mode shows a persistent group list beside the selected application's
 information at terminal sizes of at least 100 columns by 20 rows. On smaller
 terminals, select a group and use `[`/`]` to open metric tabs, or `D` to focus details. Applications means observed
 cgroup/systemd workload groups: a group can contain several programs, and nested

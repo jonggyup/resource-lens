@@ -5,6 +5,8 @@ from pathlib import PurePosixPath
 
 class CgroupBrowser:
     def __init__(self, snapshot, path='/'):
+        self.process_entry = False
+        self.sort = 'cpu'
         self.trail = []
         self.path = path
         node = next((n for n in snapshot.get('cgroup_tree', {}).get('nodes', []) if n['path'] == path), None)
@@ -25,7 +27,14 @@ class CgroupBrowser:
                   if n['path'] != '/' and str(PurePosixPath(n['path']).parent) == self.path]
         processes = [('process', p['pid'], p.get('starttime'), p) for p in snapshot.get('processes', [])
                      if p.get('cgroup') == self.path]
-        return sorted(groups, key=lambda r:r[1]) + sorted(processes, key=lambda r:r[1])
+        def order(row):
+            data=row[3]
+            if self.sort == 'name':
+                return (str(data.get('name') or row[1]).casefold(),str(row[1]))
+            field='cpu_pct' if self.sort == 'cpu' else ('memory_current' if row[0]=='group' else 'memory')
+            value=data.get(field)
+            return (value is None,-(value or 0),row[0],str(row[1]))
+        return sorted(groups+processes,key=order)
 
     def selection(self, rows):
         if self.selected is None and rows:
@@ -64,6 +73,11 @@ class CgroupBrowser:
     def key(self, key, snapshot, height):
         if key in (ord('q'), curses.KEY_F10):
             return False
+        if self.process_entry and key in (27,curses.KEY_LEFT,curses.KEY_BACKSPACE,127,8):
+            return False
+        if key in (ord('c'),ord('m'),ord('n')):
+            self.sort={ord('c'):'cpu',ord('m'):'memory',ord('n'):'name'}[key]
+            return True
         if key == 27:
             if self.process:
                 self.process = None
@@ -93,7 +107,7 @@ class CgroupBrowser:
     def mouse(self, x, y, state, snapshot, height):
         if state & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED):
             if self.back and y == self.back[2] and self.back[0] <= x < self.back[1]:
-                return self.up(snapshot)
+                return False if self.process_entry else self.up(snapshot)
             for start,end,row,identity in self.regions:
                 if row == y and start <= x < end:
                     self.selected = identity
@@ -107,26 +121,28 @@ class CgroupBrowser:
         from .ui import put, pct, size
         self.regions, self.back = [], (1, 14, 2)
         put(screen,2,1,'[ < Parent ]',curses.A_BOLD)
-        put(screen,3,1,'CGROUP BROWSER: '+self.path,curses.A_BOLD)
-        put(screen,4,1,'Enter/Right or click: open | Left/Backspace: parent | Esc: back | q: Applications')
+        put(screen,3,1,'PROCESS DETAILS' if self.process_entry else 'CGROUP BROWSER: '+self.path,curses.A_BOLD)
+        put(screen,4,1,'Enter: open | Left: parent | Esc: back | c/m/n sort: '+self.sort)
         tree = snapshot.get('cgroup_tree')
-        if tree is None:
+        if tree is None and not self.process_entry:
             put(screen,6,1,'This recording has no cgroup hierarchy data. Live collection or a new recording is required.')
             return
         node = self.node(snapshot)
-        if node is None:
+        if node is None and not self.process_entry:
             put(screen,6,1,'Cgroup disappeared, was replaced, or is outside collection coverage. Go to parent to reselect.')
             return
-        put(screen,5,1,f"Group CPU {pct(node.get('cpu_pct'))} | memory {size(node.get('memory_current'))} (includes descendants)")
+        node = node or {}
+        if not self.process_entry:
+            put(screen,5,1,f"Group CPU {pct(node.get('cpu_pct'))} | memory {size(node.get('memory_current'))} (includes descendants)")
         if self.process:
             pid,starttime = self.process
-            p = next((p for p in snapshot.get('processes',[]) if (p['pid'],p.get('starttime')) == (pid,starttime) and p.get('cgroup') == self.path),None)
+            p = next((p for p in snapshot.get('processes',[]) if (p['pid'],p.get('starttime')) == (pid,starttime) and (self.process_entry or p.get('cgroup') == self.path)),None)
             if not p:
                 put(screen,7,1,'Process exited, moved, or PID was reused. Left/Esc returns to this group.')
                 return
             lines = [f"PID {pid}: {p['name']}", f"Parent PID: {p.get('ppid')} | state: {p.get('state')}",
                      f"CPU: {pct(p.get('cpu_pct'))} | RSS: {size(p.get('memory'))}",
-                     f"Start ticks: {starttime}", 'Exact cgroup: '+self.path,
+                     f"Start ticks: {starttime}", 'Exact cgroup: '+(p.get('cgroup') or 'unknown'),
                      'Process details are read-only. Group controls remain in Applications.']
             for i,line in enumerate(lines):put(screen,7+i,1,line)
             return

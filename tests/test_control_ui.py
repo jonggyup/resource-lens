@@ -10,6 +10,7 @@ GROUP = {"id": "/demo.slice/job.service", "unit": "job.service", "path": "/demo.
 class ControlUITests(unittest.TestCase):
     def setUp(self):
         self.view = View(control=True)
+        self.view.application_mode = 'cgroups'
         self.view.page = 7
         self.view.snapshot = {"workloads": [GROUP]}
         self.view.screen_size = (30, 100)

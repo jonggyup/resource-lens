@@ -24,6 +24,7 @@ from .usability_ui import UsabilityView
 from .usability import tree_rows
 from .workspaces import Workspaces, related_groups
 from .cgroup_browser import CgroupBrowser
+from .application_processes import ApplicationProcesses
 
 
 UNSAFE_TEXT = re.compile('[^\x20-\x7e' + re.escape(''.join(GLYPHS)) + ']')
@@ -78,10 +79,11 @@ def pressure(snapshot, kind):
     return f"{kind.upper()} pressure (10s): {pct(value)}"
 
 
-class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView, Workspaces):
+class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView, Workspaces, ApplicationProcesses):
     names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Applications", "Timeline", "Capabilities")
 
     def __init__(self, unicode=False, control=False, session=None):
+        self.application_process_init()
         self.browser = None
         self.browser_button = None
         self.workspace_init()
@@ -512,6 +514,19 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             if self.browser.mouse(x,y,state,self.snapshot,self.screen_size[0]) is False:
                 self.browser = None
             return
+        if self.page == 7 and left and self.application_mode_region and y == 2 and self.application_mode_region[0] <= x < self.application_mode_region[1]:
+            return self.key(ord('g'),self.screen_size[0])
+        if self.page == 7 and self.application_mode == 'processes':
+            if left:
+                for start,end,row,identity in self.application_process_regions:
+                    if y == row and start <= x < end:
+                        self.application_process_manual = True
+                        self.application_process = identity
+                        return
+            for button,key in ((curses.BUTTON4_PRESSED,curses.KEY_UP),(getattr(curses,'BUTTON5_PRESSED',0),curses.KEY_DOWN)):
+                if state & button:
+                    for _ in range(3):self.application_process_key(key,self.screen_size[0])
+                    return
         if left and self.page == 7 and self.browser_button and y == 2 and self.browser_button[0] <= x < self.browser_button[1]:
             self.open_cgroup_browser()
             return
@@ -554,7 +569,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     self.page, self.scroll = page, 0
                     self.focus = None
                     return
-        if self.page == 7 and not self.workload_detail and left and y >= 7:
+        if self.page == 7 and self.application_mode == 'cgroups' and not self.workload_detail and left and y >= 7:
             rows = self.workload_rows()
             index = y - 3 + self.scroll - 4
             if 0 <= index < len(rows):
@@ -666,6 +681,12 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             return True
         if self.placement:
             return self.placement_key(key)
+        if self.page == 7 and key == ord('g'):
+            self.application_mode = 'cgroups' if self.application_mode == 'processes' else 'processes'
+            self.scroll,self.workload_detail = 0,False
+            return True
+        if self.application_process_key(key,height):
+            return True
         if self.page == 7 and key in (10, 13, curses.KEY_RIGHT, ord('v'), ord('T')):
             self.open_cgroup_browser(root=key == ord('T'))
             return True
@@ -809,6 +830,8 @@ def draw(screen, view, interval, error=None):
     h, w = screen.getmaxyx()
     view.screen_size = h, w
     view.action_regions = []
+    view.application_process_regions = []
+    view.application_mode_region = None
     view.browser_button = None
     view.app_regions = []
     view.app_tab_regions = []
@@ -853,6 +876,8 @@ def draw(screen, view, interval, error=None):
         tree = s.get('cgroup_tree') or {}
         coverage = "PARTIAL: unreadable directories / node limit" if tree.get('truncated') or tree.get('errors') else 'visible directories'
         status = "Cgroup browser | "+coverage+" | direct PIDs; group counters include descendants"
+    elif view.page == 7 and not view.help and view.application_mode == 'processes':
+        status = view.draw_application_processes(screen,w,h)
     elif view.page == 7 and not view.help and w >= 100 and h >= 20:
         status = view.draw_applications(screen,w,h)
     elif view.page == 0 and not view.help and view.focus:
@@ -943,11 +968,16 @@ def draw(screen, view, interval, error=None):
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     if view.page == 0 and not view.help:
         put(screen, 2, 1, '[ - Collapse overview ] e' if view.overview_expanded else '[ + Expand overview ] e', accent)
-    if view.page == 7 and not view.browser and not view.help:
+    if view.page == 7 and not view.browser and not view.help and view.application_mode == 'cgroups':
         label = '[ Enter Open group ]'
         put(screen,2,1,label,accent | curses.A_REVERSE)
         view.browser_button = (1,1+len(label))
-        put(screen,2,24,'T: root | [] metrics tabs | D: detail focus')
+        put(screen,2,24,'T: root | [] metrics | D: details')
+    if view.page == 7 and not view.browser and not view.help:
+        label = '[ g: '+('Cgroups' if view.application_mode == 'processes' else 'Processes')+' ]'
+        x = 1 if view.application_mode == 'processes' else max(1,w-len(label)-2)
+        put(screen,2,x,label,accent | curses.A_REVERSE)
+        view.application_mode_region = (x,x+len(label))
     if view.focus:
         status += f' | focus {view.focus[1]} (f restores)'
     if view.replay:
@@ -1115,7 +1145,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process) if view.browser else None)
+                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort) if view.browser else None)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render

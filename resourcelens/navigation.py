@@ -9,6 +9,8 @@ ALIASES = ('home overview dashboard', 'cpu processor topology', 'ram memory numa
 def actions(view):
     if view.browser:
         return [('Esc Back',27), ('Left Parent',curses.KEY_LEFT), ('Enter Open',10), ('q Applications',ord('q'))]
+    if view.page == 7 and view.application_mode == 'processes' and not view.help and not view.editing_filter:
+        return [('F1 Help',ord('?')),('F10 Quit',ord('q')),('g Cgroups',ord('g')),('Enter Open',10),('c CPU',ord('c')),('m Memory',ord('m')),('/ Search',ord('/'))]
     if view.editing_filter:
         return [('Enter Done', 10), ('Esc Clear', 27)]
     if view.help:
@@ -21,7 +23,7 @@ def actions(view):
         0: [('e Collapse' if view.overview_expanded else 'e Expand', ord('e'))],
         1: [('g CPU menu', ord('g')), ('u Undo', ord('u')), ('a Related apps', ord('a'))],
         5: [('F4 Filter', ord('/')), ('c CPU sort', ord('c')), ('m RAM sort', ord('m'))],
-        7: [('Enter Open', 10), ('D Details', ord('D')), ('F4 Filter', ord('/')), ('p Placement', ord('p')),
+        7: [('g Processes', ord('g')), ('Enter Open', 10), ('D Details', ord('D')), ('F4 Filter', ord('/')), ('p Placement', ord('p')),
             ('w Weight', ord('w')), ('l Quota', ord('l')), ('U Undo place', ord('U'))],
     }.get(view.page, [('Space Freeze', ord(' '))])
     # Quit stays discoverable even when only the first local action fits.
@@ -49,7 +51,10 @@ def context_help(view):
                 'u undoes the latest hardware change in this session.'],
             5: ['F4 or / filters processes. Enter finishes; Esc clears the filter.',
                 'c/m/n/p sort by CPU, memory, name or PID.'],
-            7: ['Up/Down or j/k selects a workload; Enter/Right opens the selected group; metrics appear beside it.',
+            7: ['Applications defaults to processes ranked by CPU. g toggles cgroup view.',
+                'Processes: c/m/n/p sorts CPU/memory/name/PID; Enter opens process details.',
+                'Cgroups: Up/Down selects a group; Enter/Right opens its hierarchy.',
+                'Browser: c/m/n sorts CPU/memory/name; children and direct PIDs rank together.',
                 'v / Right opens the actual cgroup hierarchy; T starts at root.',
                 'Browser: Enter or click opens a child/PID; Left/Backspace goes up; Esc goes back one level; q returns to Applications.',
                 'F4 or / filters workloads. p opens visual CPU placement.',

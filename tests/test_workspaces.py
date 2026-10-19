@@ -15,6 +15,7 @@ def group(name,inode=1):
 class WorkspaceTests(unittest.TestCase):
     def setUp(self):
         self.view=View()
+        self.view.application_mode = 'cgroups'
         self.sample=Collector(nvidia=False).sample()
         self.sample['workloads']=[group('demo.service')]
         self.sample['disks']=[dict(name='sda',identity='8:0:55',active_pct=0,read_bps=12,write_bps=0)]

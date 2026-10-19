@@ -1,3 +1,12 @@
+# 0.11.0
+
+- Default Applications to individual processes ranked by CPU usage, highest first.
+- Add a clickable `g` process/cgroup toggle and persist the chosen mode with `S`.
+- Support process search, CPU/RSS/name/PID sorting and identity-stable selection.
+- Rank child cgroups and direct processes together by CPU in the hierarchy browser;
+  add CPU/memory/name sorting and keep missing measurements last.
+- Keep group controls explicit in cgroup mode; retain group metrics and navigation.
+
 # 0.10.1
 
 - Make Enter/Right open the selected group or process consistently, including replay.

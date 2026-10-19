@@ -11,6 +11,7 @@ from test_workspaces import group
 class InteractionRoutingTests(unittest.TestCase):
     def setUp(self):
         self.view = View(control=True)
+        self.view.application_mode = 'cgroups'
         sample = Collector(nvidia=False).sample()
         sample['workloads'] = [dict(group('demo.service'), controllable=True)]
         self.view.update(sample)

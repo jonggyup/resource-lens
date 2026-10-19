@@ -1,3 +1,17 @@
+# Process-first Applications (0.11.0)
+
+Open `8` to see processes sorted by CPU utilization, highest first. Enter/Right
+opens the selected process; Esc returns to the list. `c/m/n/p` sorts CPU, RSS,
+name or PID; `/` searches. Press `g` (or click its button) for cgroup entities.
+The cgroup list also defaults to CPU sorting. Inside a group, direct processes
+and child groups rank together by CPU; `c/m/n` sorts CPU/memory/name.
+
+Metric tabs and group controls are in cgroup mode. Selecting or sorting a process
+cannot accidentally target a previously selected hidden group. `S` saves the mode
+and preferences; an unsaved fresh session defaults to CPU-ranked processes.
+
+---
+
 # Cgroup hierarchy browsing (0.10.0)
 
 Applications (`8`) is a systemd/cgroup workload list. Select a group and press Enter
