@@ -1,3 +1,13 @@
+# 0.12.0
+
+- Add on-demand `V` memory inspection for selected processes and cgroup PID details.
+- Show RSS/PSS, private/shared resident bars, PSS categories, swap and hugetlb counters.
+- List threads sharing a process address space and peers with overlapping file-backed
+  mappings, distinguishing shared-mode mappings from private common backing.
+- Keep inspection asynchronous, bounded, permission-aware and cancellable; reject
+  PID reuse and disable live inspection while replaying recorded data.
+- Label physical-page attribution and anonymous sharing relationships as unavailable.
+
 # 0.11.0
 
 - Default Applications to individual processes ranked by CPU usage, highest first.

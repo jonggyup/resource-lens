@@ -1,3 +1,17 @@
+# Memory sharing inspection (0.12.0)
+
+Select a process in Applications (`8`) and press `V`. The same shortcut works
+inside a cgroup's PID details. Allocation shows resident memory counters, Threads
+shows the shared address-space members, and Peer processes shows common file-backed
+regions. Click tabs or use Tab/`[`/`]`; scroll with arrows/wheel; `r` refreshes.
+Esc returns immediately, including while inspection runs. Missing permissions
+remain unknown and partial results are labelled.
+
+Shared-mode backing matches do not prove identical resident physical pages. The
+README explains the measured counters, estimates, coverage and unsupported cases.
+
+---
+
 # Process-first Applications (0.11.0)
 
 Open `8` to see processes sorted by CPU utilization, highest first. Enter/Right

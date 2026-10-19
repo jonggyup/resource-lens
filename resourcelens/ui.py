@@ -25,6 +25,7 @@ from .usability import tree_rows
 from .workspaces import Workspaces, related_groups
 from .cgroup_browser import CgroupBrowser
 from .application_processes import ApplicationProcesses
+from .memory_sharing import MemorySharingView
 
 
 UNSAFE_TEXT = re.compile('[^\x20-\x7e' + re.escape(''.join(GLYPHS)) + ']')
@@ -83,6 +84,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
     names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Applications", "Timeline", "Capabilities")
 
     def __init__(self, unicode=False, control=False, session=None):
+        self.memory_sharing = None
+        self.proc_root = '/proc'
         self.application_process_init()
         self.browser = None
         self.browser_button = None
@@ -191,6 +194,24 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         if self.recorder:
             self.recorder.write('event', event)
         return event
+
+    def open_memory_sharing(self):
+        if self.replay:
+            self.modal = dict(stage='result',message='Memory sharing inspection requires live /proc data; it is disabled during replay.')
+            return
+        target = None
+        if self.browser and self.browser.process:
+            target = next((p for p in self.snapshot.get('processes',[]) if (p['pid'],p.get('starttime')) == self.browser.process),None)
+        elif self.page == 7 and self.application_mode == 'processes':
+            rows = self.application_process_rows()
+            selected = self.selected_application_process(rows)
+            if selected is not None:
+                target = rows[selected]
+                self.application_process_manual = True
+        if target:
+            self.memory_sharing = MemorySharingView(target,self.snapshot.get('processes',[]),self.proc_root)
+        else:
+            self.modal = dict(stage='result',message='Select a process in Applications, or open a PID inside a cgroup, then press V.')
 
     def open_cgroup_browser(self, root=False):
         group = self.selected_workload()
@@ -506,6 +527,19 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                 elif self.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm') and hit[2] == 'cancel':
                     self.modal = None
             return
+        if self.memory_sharing:
+            if left and y == self.screen_size[0] - 1:
+                for start,end,key in self.action_regions:
+                    if start <= x < end:return self.key(key,self.screen_size[0])
+            if left:
+                for start,end,row,tab in self.memory_sharing.regions:
+                    if y == row and start <= x < end:
+                        self.memory_sharing.tab,self.memory_sharing.scroll=tab,0
+                        return
+            for button,key in ((curses.BUTTON4_PRESSED,curses.KEY_UP),(getattr(curses,'BUTTON5_PRESSED',0),curses.KEY_DOWN)):
+                if state & button:
+                    for _ in range(3):self.memory_sharing.key(key,self.screen_size[0])
+            return
         if self.browser:
             if left and y == self.screen_size[0] - 1:
                 for start,end,key in self.action_regions:
@@ -657,6 +691,19 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     return False
             except curses.error:
                 pass
+            return True
+        if self.memory_sharing:
+            if key == ord('r'):
+                if self.memory_sharing.result is None and self.memory_sharing.error is None:
+                    return True
+                old=self.memory_sharing
+                old.stop.set()
+                self.memory_sharing=MemorySharingView(old.target,self.snapshot.get('processes',[]),self.proc_root)
+            elif not self.memory_sharing.key(key,height):
+                self.memory_sharing=None
+            return True
+        if key == ord('V') and not self.help and not self.placement:
+            self.open_memory_sharing()
             return True
         if self.browser:
             if not self.browser.key(key,self.snapshot,height):
@@ -871,6 +918,9 @@ def draw(screen, view, interval, error=None):
     status = mode + " | newest samples at right"
     if not s:
         put(screen, 4, 2, "Collecting the first sample...", muted)
+    elif view.memory_sharing:
+        view.memory_sharing.draw(screen,w,h)
+        status = "Memory sharing | [] tabs | arrows scroll | r refresh | Esc back"
     elif view.browser:
         view.browser.draw(screen,s,w,h)
         tree = s.get('cgroup_tree') or {}
@@ -968,12 +1018,12 @@ def draw(screen, view, interval, error=None):
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     if view.page == 0 and not view.help:
         put(screen, 2, 1, '[ - Collapse overview ] e' if view.overview_expanded else '[ + Expand overview ] e', accent)
-    if view.page == 7 and not view.browser and not view.help and view.application_mode == 'cgroups':
+    if view.page == 7 and not view.browser and not view.memory_sharing and not view.help and view.application_mode == 'cgroups':
         label = '[ Enter Open group ]'
         put(screen,2,1,label,accent | curses.A_REVERSE)
         view.browser_button = (1,1+len(label))
         put(screen,2,24,'T: root | [] metrics | D: details')
-    if view.page == 7 and not view.browser and not view.help:
+    if view.page == 7 and not view.browser and not view.memory_sharing and not view.help:
         label = '[ g: '+('Cgroups' if view.application_mode == 'processes' else 'Processes')+' ]'
         x = 1 if view.application_mode == 'processes' else max(1,w-len(label)-2)
         put(screen,2,x,label,accent | curses.A_REVERSE)
@@ -1101,6 +1151,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             pass
         encoding = (sys.stdout.encoding or "").lower().replace("-", "")
         view, sequence = View(unicode=not ascii and encoding == "utf8", control=control and replay is None), -1
+        view.proc_root = str(getattr(collector, "proc", "/proc"))
         for name,value in (preferences or {}).items():
             setattr(view, name, value)
         if helper:
@@ -1145,7 +1196,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort) if view.browser else None)
+                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render

@@ -70,7 +70,7 @@ class ApplicationProcesses:
         capacity=max(1,height-8)
         first=max(0,(selected or 0)-capacity+1)
         put(screen,3,1,f'APPLICATIONS / PROCESSES | {len(rows)} visible | sort: {self.sort} | filter: {self.filter or "none"}',curses.A_BOLD)
-        put(screen,4,1,'Enter/Right: process details | c CPU / m memory / n name / p PID | / search')
+        put(screen,4,1,'Enter: details | V: memory sharing | c CPU / m memory / n name / p PID | / search')
         name_width=max(8,min(24,width-29))
         put(screen,5,1,f"{'PID':<7} {'NAME':<{name_width}} {'CPU':>7} {'RSS':>10}  CGROUP",curses.A_BOLD)
         for offset,p in enumerate(rows[first:first+capacity]):

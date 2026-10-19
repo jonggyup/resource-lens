@@ -143,7 +143,7 @@ class CgroupBrowser:
             lines = [f"PID {pid}: {p['name']}", f"Parent PID: {p.get('ppid')} | state: {p.get('state')}",
                      f"CPU: {pct(p.get('cpu_pct'))} | RSS: {size(p.get('memory'))}",
                      f"Start ticks: {starttime}", 'Exact cgroup: '+(p.get('cgroup') or 'unknown'),
-                     'Process details are read-only. Group controls remain in Applications.']
+                     'V: memory sharing inspector | process details are read-only.']
             for i,line in enumerate(lines):put(screen,7+i,1,line)
             return
         rows = self.rows(snapshot)

@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.11.0 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.12.0 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -68,6 +68,48 @@ Inside the cgroup browser, child groups and directly attached processes are rank
 together by CPU, highest first. `c` / `m` / `n` switches CPU / memory / name sorting.
 Unavailable measurements stay last. Parent counters include children; avoid adding
 a parent's usage to the usage of its descendants.
+
+### Memory allocation and sharing
+
+In Applications process mode, select a process and press **V**, or click **V Memory**
+in the footer. You can also press `V` from a PID's details inside a cgroup.
+The inspector reads `/proc` in a background worker. Tab / `[` / `]` or clicking
+the tab labels changes views; arrows/wheel scroll, `r` refreshes, and Esc returns
+immediately to the previous view. This is a point-in-time inspection, not a live
+stream. It never elevates privileges or changes the selected process.
+
+- **Allocation:** RSS, PSS, private/shared resident counters with visual bars,
+  anonymous/file/shmem PSS where available, swap and separate hugetlb counters.
+- **Threads:** TIDs and names observed in the selected TGID. These threads share
+  one address space; their stacks and TLS occupy regions within it. Do not add a
+  copy of the process RSS for each thread.
+- **Peer processes:** processes mapping the same device/inode with overlapping
+  file offsets. Shared-mode examples are listed first; private mappings can differ
+  after copy-on-write. Matching a filename alone is insufficient.
+
+RSS counts resident mappings, while PSS apportions shared pages. The private
+resident total sums `Private_Clean` and `Private_Dirty` as a USS-style estimate.
+Shared counters do not identify the other process and can include aliases within
+one process. Hugetlb accounting is shown separately because RSS/PSS may exclude it.
+The [Linux kernel /proc documentation](https://www.kernel.org/doc/html/latest/filesystems/proc.html)
+describes these counters and their limitations.
+
+**Common backing is not proof of identical physical RAM pages.** This version does
+not inspect page-frame numbers, determine DIMM placement, identify anonymous
+fork/KSM peers, or assign an exact shared-byte total to each process pair. A
+MAP_SHARED relationship also does not prove either mapping is resident. PSS is
+useful for understanding proportional resident cost; RSS totals across processes
+can double-count shared pages.
+
+The scan uses up to 256 candidate peers, 1,024 thread entries, a two-second checked
+work budget and 32 MiB of successfully read peer mapping text. Individual files
+are bounded. Kernel reads may outlast that work budget, but Esc does not wait for
+them. Permissions, exited processes and scan limits produce unknown/partial
+results; an empty peer list does not establish that memory is private. PID start
+times are checked before and after inspection to reject reused identities.
+
+Inspection is disabled in replay so recorded PIDs are never inspected on the
+current machine. On-demand inspection data is not added to recordings or reports.
 
 ### Browse actual cgroups and processes
 

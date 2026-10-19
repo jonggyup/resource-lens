@@ -1,3 +1,25 @@
+# 0.12.0 memory sharing validation
+
+188 tests pass. New coverage checks RSS/PSS field parsing, thread-group membership,
+shared-mode versus private matching, inode/device/offset identity, missing counters,
+bounded peer scanning, PID reuse rejection, nonblocking Escape, replay isolation,
+and UI entry/tab clicks/return.
+
+The live test created two owned processes sharing and touching a 64 KiB file mapping,
+with three threads in each. Verified at least 64 KiB Shared_Dirty, the peer identity
+and shared-mode mapping, all three thread IDs, allocation/thread/peer UI tabs,
+refresh, and return to both the process list and PID detail view. Test processes
+were terminated afterward. [Evidence](memory-sharing-ui-evidence.json).
+[PTY latency measurements](memory-sharing-latency-evidence.json) cover ordinary
+navigation and exit, not a bound on large-process kernel memory inspection time.
+
+Linux source semantics: [proc documentation](https://www.kernel.org/doc/html/latest/filesystems/proc.html).
+No exact shared physical-page identity or per-pair resident-byte attribution is
+claimed. Reads are non-atomic, permissions can limit coverage, and anonymous
+fork/KSM peers are not identified. The inspector is live-only and on demand.
+
+---
+
 # 0.11.0 process-first validation
 
 181 tests pass. New coverage verifies default process/CPU mode, missing values

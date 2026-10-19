@@ -1,0 +1,67 @@
+{
+  "captures": {
+    "allocation": " RESOURCE LENS  LIVE  0.2s  |  20:19:43                     node0.jonggyu-319338.tasrdma.emulab.net\n  1 Home   2 CPU   3 RAM   4 Disk   5 GPU   6 Tasks   7 Net   8 Apps   9 Time   0 Status\n MEMORY SHARING / PID 212336 python3\n  Allocation   Threads   Peer processes\n Observed 20:19:41 | r refresh | Esc back\n RESIDENT MEMORY (RAM, not virtual reservation)\n RSS 8.8MiB | PSS 3.9MiB | private resident 3.3MiB\n Shared resident mappings 5.5MiB\n Private [###########...................] 37.2%\n Shared  [###################...........] 62.8%\n PSS apportions shared pages; RSS counts each resident mapping.\n Private resident = Private_Clean + Private_Dirty (USS-style estimate).\n Shared counters may include multiple mappings within one process.\n Do not add thread RSS: threads in a process share one address space.\n PSS categories: anonymous 3.3MiB | file 610.0KiB | shmem 0.0B\n Swap 0.0B | proportional swap 0.0B\n Hugetlb: shared 0.0B | private 0.0B\n Hugetlb counters are separate; RSS/PSS may exclude these pages.\n No physical page IDs, DIMM placement or exact cross-process shared-byte attribution.\n\n Inspection is a point-in-time, non-atomic observation; r refreshes.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n [Read-only] Memory sharing | [] tabs | arrows scroll | r refresh | Esc back\n  Esc Back   Tab Next   r Refresh\n",
+    "threads": " RESOURCE LENS  LIVE  0.2s  |  20:19:44                     node0.jonggyu-319338.tasrdma.emulab.net\n  1 Home   2 CPU   3 RAM   4 Disk   5 GPU   6 Tasks   7 Net   8 Apps   9 Time   0 Status\n MEMORY SHARING / PID 212336 python3\n  Allocation   Threads   Peer processes\n Observed 20:19:41 | r refresh | Esc back\n 3 observed threads in TGID 212336: one shared address space.\n Stacks/TLS are per-thread regions within that address space; resident totals are not per-thread.\n\n TID 212336   python3 | S (sleeping)\n TID 212337   python3 | S (sleeping)\n TID 212338   python3 | S (sleeping)\n\n Inspection is a point-in-time, non-atomic observation; r refreshes.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n [Read-only] Memory sharing | [] tabs | arrows scroll | r refresh | Esc back\n  Esc Back   Tab Next   r Refresh\n",
+    "peers": " RESOURCE LENS  LIVE  0.2s  |  20:19:44                     node0.jonggyu-319338.tasrdma.emulab.net\n  1 Home   2 CPU   3 RAM   4 Disk   5 GPU   6 Tasks   7 Net   8 Apps   9 Time   0 Status\n MEMORY SHARING / PID 212336 python3\n  Allocation   Threads   Peer processes\n Observed 20:19:41 | r refresh | Esc back\n COMMON FILE-BACKED MAPPINGS ? not proof of identical resident RAM pages\n Matches require device + inode + overlapping file offsets, not just the filename.\n Shared-mode = both mappings use MAP_SHARED; either side may have nonresident pages.\n Private mappings can diverge through copy-on-write. Anonymous fork/KSM peers are not identified.\n Peers checked 188 | unreadable/exited 0 | candidate scan complete\n\n PID 212339 python3 | common objects 11 | shared-mode objects 2\n   shared-mode: /tmp/rl-shared-8b0uwix3/shared.bin\n   shared-mode: /usr/lib/x86_64-linux-gnu/gconv/gconv-modules.cache\n   common backing: /usr/bin/python3.10\n PID 212298 python3 | common objects 9 | shared-mode objects 1\n   shared-mode: /usr/lib/x86_64-linux-gnu/gconv/gconv-modules.cache\n   common backing: /usr/bin/python3.10\n   common backing: /usr/lib/locale/C.utf8/LC_CTYPE\n PID 212318 python3 | common objects 9 | shared-mode objects 1\n   shared-mode: /usr/lib/x86_64-linux-gnu/gconv/gconv-modules.cache\n   common backing: /usr/bin/python3.10\n   common backing: /usr/lib/locale/C.utf8/LC_CTYPE\n PID 212322 python3 | common objects 9 | shared-mode objects 1\n   shared-mode: /usr/lib/x86_64-linux-gnu/gconv/gconv-modules.cache\n   common backing: /usr/bin/python3.10\n   common backing: /usr/lib/locale/C.utf8/LC_CTYPE\n PID 212323 python | common objects 9 | shared-mode objects 1\n   shared-mode: /usr/lib/x86_64-linux-gnu/gconv/gconv-modules.cache\n   common backing: /usr/lib/python3.10/lib-dynload/mmap.cpython-310-x86_64-linux-gnu.so\n   common backing: /usr/lib/locale/C.utf8/LC_CTYPE\n PID 212345 python3 | common objects 9 | shared-mode objects 1\n   shared-mode: /usr/lib/x86_64-linux-gnu/gconv/gconv-modules.cache\n   common backing: /usr/bin/python3.10\n   common backing: /usr/lib/locale/C.utf8/LC_CTYPE\n PID 212347 python3 | common objects 9 | shared-mode objects 1\n   shared-mode: /usr/lib/x86_64-linux-gnu/gconv/gconv-modules.cache\n   common backing: /usr/bin/python3.10\n [Read-only] Memory sharing | [] tabs | arrows scroll | r refresh | Esc back\n  Esc Back   Tab Next   r Refresh\n",
+    "refresh": " RESOURCE LENS  LIVE  0.2s  |  20:19:46                     node0.jonggyu-319338.tasrdma.emulab.net\n  1 Home   2 CPU   3 RAM   4 Disk   5 GPU   6 Tasks   7 Net   8 Apps   9 Time   0 Status\n MEMORY SHARING / PID 212336 python3\n  Allocation   Threads   Peer processes\n Observed 20:19:44 | r refresh | Esc back\n RESIDENT MEMORY (RAM, not virtual reservation)\n RSS 8.8MiB | PSS 3.9MiB | private resident 3.3MiB\n Shared resident mappings 5.5MiB\n Private [###########...................] 37.2%\n Shared  [###################...........] 62.8%\n PSS apportions shared pages; RSS counts each resident mapping.\n Private resident = Private_Clean + Private_Dirty (USS-style estimate).\n Shared counters may include multiple mappings within one process.\n Do not add thread RSS: threads in a process share one address space.\n PSS categories: anonymous 3.3MiB | file 600.0KiB | shmem 0.0B\n Swap 0.0B | proportional swap 0.0B\n Hugetlb: shared 0.0B | private 0.0B\n Hugetlb counters are separate; RSS/PSS may exclude these pages.\n No physical page IDs, DIMM placement or exact cross-process shared-byte attribution.\n\n Inspection is a point-in-time, non-atomic observation; r refreshes.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n [Read-only] Memory sharing | [] tabs | arrows scroll | r refresh | Esc back\n  Esc Back   Tab Next   r Refresh\n",
+    "back_to_processes": " RESOURCE LENS  LIVE  0.2s  |  20:19:47                     node0.jonggyu-319338.tasrdma.emulab.net\n  1 Home   2 CPU   3 RAM   4 Disk   5 GPU   6 Tasks   7 Net   8 Apps   9 Time   0 Status\n [ g: Cgroups ]\n APPLICATIONS / PROCESSES | 1 visible | sort: cpu | filter: 212336\n Enter: details | V: memory sharing | c CPU / m memory / n name / p PID | / search\n PID     NAME                         CPU        RSS  CGROUP\n 212336  python3                     0.0%     8.7MiB  /user.slice/user-40598.slice/session-3.scope\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n [Read-only] Processes | CPU 100% = one logical CPU | g: cgroup view\n  F1 Help   F10 Quit   g Cgroups   Enter Open   V Memory   c CPU   m Memory   / Search\n",
+    "from_process_details": " RESOURCE LENS  LIVE  0.2s  |  20:19:49                     node0.jonggyu-319338.tasrdma.emulab.net\n  1 Home   2 CPU   3 RAM   4 Disk   5 GPU   6 Tasks   7 Net   8 Apps   9 Time   0 Status\n MEMORY SHARING / PID 212336 python3\n  Allocation   Threads   Peer processes\n Observed 20:19:47 | r refresh | Esc back\n RESIDENT MEMORY (RAM, not virtual reservation)\n RSS 8.8MiB | PSS 3.9MiB | private resident 3.3MiB\n Shared resident mappings 5.5MiB\n Private [###########...................] 37.2%\n Shared  [###################...........] 62.8%\n PSS apportions shared pages; RSS counts each resident mapping.\n Private resident = Private_Clean + Private_Dirty (USS-style estimate).\n Shared counters may include multiple mappings within one process.\n Do not add thread RSS: threads in a process share one address space.\n PSS categories: anonymous 3.3MiB | file 694.0KiB | shmem 0.0B\n Swap 0.0B | proportional swap 0.0B\n Hugetlb: shared 0.0B | private 0.0B\n Hugetlb counters are separate; RSS/PSS may exclude these pages.\n No physical page IDs, DIMM placement or exact cross-process shared-byte attribution.\n\n Inspection is a point-in-time, non-atomic observation; r refreshes.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n [Read-only] Memory sharing | [] tabs | arrows scroll | r refresh | Esc back\n  Esc Back   Tab Next   r Refresh\n",
+    "back_to_details": " RESOURCE LENS  LIVE  0.2s  |  20:19:49                     node0.jonggyu-319338.tasrdma.emulab.net\n  1 Home   2 CPU   3 RAM   4 Disk   5 GPU   6 Tasks   7 Net   8 Apps   9 Time   0 Status\n [ < Parent ]\n PROCESS DETAILS\n Enter: open | Left: parent | Esc: back | c/m/n sort: cpu\n\n\n PID 212336: python3\n Parent PID: 212322 | state: S\n CPU: 0.0% | RSS: 8.7MiB\n Start ticks: 96611793\n Exact cgroup: /user.slice/user-40598.slice/session-3.scope\n V: memory sharing inspector | process details are read-only.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n [Read-only] Cgroup browser | visible directories | direct PIDs; group counters include descendants\n  Esc Back   Left Parent   Enter Open   V Memory   q Applications\n"
+  },
+  "fixture": {
+    "pid": 212336,
+    "starttime": 96611793,
+    "name": "shared-test",
+    "timestamp": 1792376380.2538064,
+    "totals": {
+      "Rss": 9216000,
+      "Pss": 4228096,
+      "Pss_Anon": 3424256,
+      "Pss_File": 803840,
+      "Pss_Shmem": 0,
+      "Shared_Clean": 5726208,
+      "Shared_Dirty": 65536,
+      "Private_Clean": 0,
+      "Private_Dirty": 3424256,
+      "Shared_Hugetlb": 0,
+      "Private_Hugetlb": 0,
+      "Swap": 0,
+      "SwapPss": 0
+    },
+    "threads": [
+      {
+        "tid": 212336,
+        "name": "python3",
+        "state": "S (sleeping)"
+      },
+      {
+        "tid": 212337,
+        "name": "python3",
+        "state": "S (sleeping)"
+      },
+      {
+        "tid": 212338,
+        "name": "python3",
+        "state": "S (sleeping)"
+      }
+    ],
+    "peers": [
+      {
+        "pid": 212339,
+        "starttime": 96611795,
+        "name": "shared-test",
+        "common_count": 11,
+        "shared_count": 2,
+        "examples": [
+          "shared-mode: /tmp/rl-shared-8b0uwix3/shared.bin",
+          "shared-mode: /usr/lib/x86_64-linux-gnu/gconv/gconv-modules.cache",
+          "common backing: /usr/bin/python3.10"
+        ]
+      }
+    ],
+    "warnings": [],
+    "checked": 1,
+    "unreadable": 0,
+    "partial": false
+  }
+}

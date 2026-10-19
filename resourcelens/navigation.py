@@ -7,10 +7,12 @@ ALIASES = ('home overview dashboard', 'cpu processor topology', 'ram memory numa
 
 
 def actions(view):
+    if view.memory_sharing:
+        return [('Esc Back',27), ('Tab Next',9), ('r Refresh',ord('r'))]
     if view.browser:
-        return [('Esc Back',27), ('Left Parent',curses.KEY_LEFT), ('Enter Open',10), ('q Applications',ord('q'))]
+        return [('Esc Back',27), ('Left Parent',curses.KEY_LEFT), ('Enter Open',10), ('V Memory',ord('V')), ('q Applications',ord('q'))]
     if view.page == 7 and view.application_mode == 'processes' and not view.help and not view.editing_filter:
-        return [('F1 Help',ord('?')),('F10 Quit',ord('q')),('g Cgroups',ord('g')),('Enter Open',10),('c CPU',ord('c')),('m Memory',ord('m')),('/ Search',ord('/'))]
+        return [('F1 Help',ord('?')),('F10 Quit',ord('q')),('g Cgroups',ord('g')),('Enter Open',10),('V Memory',ord('V')),('c CPU',ord('c')),('m Memory',ord('m')),('/ Search',ord('/'))]
     if view.editing_filter:
         return [('Enter Done', 10), ('Esc Clear', 27)]
     if view.help:
@@ -53,6 +55,7 @@ def context_help(view):
                 'c/m/n/p sort by CPU, memory, name or PID.'],
             7: ['Applications defaults to processes ranked by CPU. g toggles cgroup view.',
                 'Processes: c/m/n/p sorts CPU/memory/name/PID; Enter opens process details.',
+                'V inspects live memory allocation, shared-address-space threads and mapped-file peers.',
                 'Cgroups: Up/Down selects a group; Enter/Right opens its hierarchy.',
                 'Browser: c/m/n sorts CPU/memory/name; children and direct PIDs rank together.',
                 'v / Right opens the actual cgroup hierarchy; T starts at root.',
