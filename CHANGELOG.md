@@ -1,3 +1,12 @@
+# 0.10.0
+
+- Add an actual cgroup hierarchy browser: `v`/Right enters a selected workload,
+  `T` opens root, Enter/click opens child groups or process details, and Left goes up.
+- Show direct processes separately from child cgroups, including visible empty groups.
+- Add background collection of cgroup CPU/memory counters with a 2,048-directory
+  cap, partial-coverage reporting and identity-aware navigation.
+- Preserve existing Applications metrics/control shortcuts and replay compatibility.
+
 # 0.9.2
 
 - Remove redundant H/A shortcuts, workspace buttons and the duplicate Hardware page.

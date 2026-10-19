@@ -7,6 +7,8 @@ ALIASES = ('home overview dashboard', 'cpu processor topology', 'ram memory numa
 
 
 def actions(view):
+    if view.browser:
+        return [('Esc Return',27), ('Left Parent',curses.KEY_LEFT), ('Enter Open',10)]
     if view.editing_filter:
         return [('Enter Done', 10), ('Esc Clear', 27)]
     if view.help:
@@ -19,7 +21,7 @@ def actions(view):
         0: [('e Collapse' if view.overview_expanded else 'e Expand', ord('e'))],
         1: [('g CPU menu', ord('g')), ('u Undo', ord('u')), ('a Related apps', ord('a'))],
         5: [('F4 Filter', ord('/')), ('c CPU sort', ord('c')), ('m RAM sort', ord('m'))],
-        7: [('Enter Inspect', 10), ('F4 Filter', ord('/')), ('p Placement', ord('p')),
+        7: [('v Browse', ord('v')), ('Enter Inspect', 10), ('F4 Filter', ord('/')), ('p Placement', ord('p')),
             ('w Weight', ord('w')), ('l Quota', ord('l')), ('U Undo place', ord('U'))],
     }.get(view.page, [('Space Freeze', ord(' '))])
     # Quit stays discoverable even when only the first local action fits.
@@ -48,6 +50,8 @@ def context_help(view):
             5: ['F4 or / filters processes. Enter finishes; Esc clears the filter.',
                 'c/m/n/p sort by CPU, memory, name or PID.'],
             7: ['Up/Down or j/k selects a workload; Enter opens its details; Esc returns.',
+                'v / Right opens the actual cgroup hierarchy; T starts at root.',
+                'Browser: Enter or click opens a child/PID; Left/Backspace goes up; Esc returns.',
                 'F4 or / filters workloads. p opens visual CPU placement.',
                 'w sets CPU weight; l sets quota; u undoes weight/quota.',
                 'U undoes CPU placement. Controls require --control and permission.'],

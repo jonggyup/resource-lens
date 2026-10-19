@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.9.2 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.10.0 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -48,6 +48,34 @@ Use **1** for Overview and **8** for Applications. Press **e** on Overview to
 expand its resource/topology information; click a section to inspect its CPUs,
 memory, disks, GPU or network devices. The duplicate Hardware page and H/A
 shortcuts have been removed. Saved Hardware-page preferences open expanded Overview.
+
+### Browse actual cgroups and processes
+
+The main Applications list groups processes under their nearest systemd service
+or scope. It is not an application detector and may combine nested cgroups under
+one service. The new browser shows the actual visible cgroup directory hierarchy.
+
+1. Open Applications with `8`, find a service with `/`, and select its row.
+2. Press `v` or Right, or click **Browse group**. Press `T` to start at the root instead.
+3. Select a `CG` child row and press Enter/Right, or click it, to enter that group.
+4. Select a `PID` row and press Enter, or click it, for process name, parent PID,
+   state, CPU usage, RSS and exact cgroup membership.
+5. Left/Backspace or the **Parent** button goes up. Esc leaves process details first,
+   then returns from the browser to Applications. Enter on the main list still opens metrics.
+
+The browser lists **direct** child cgroups and **directly attached** processes.
+Visible empty cgroups are included. CPU/memory counters for a cgroup include its
+subgroups, so parent and child counters must not be added together. Process RSS
+and cgroup accounted memory measure different things.
+
+Collection runs in the background and visits at most 2,048 directories per sample.
+Unreadable directories and the collection cap are labelled as partial coverage;
+process visibility also depends on `/proc` permissions. Directory inode and process
+start-time checks prevent silently following a replacement cgroup or reused PID.
+Older recordings without hierarchy data show an explicit unavailable message.
+In replay, use `v` or `T` to enter the browser; Right outside the browser retains
+its sample-step behavior. The browser is read-only; existing service controls
+remain in the main Applications view.
 
 Applications shows a persistent group list beside the selected application's
 information at terminal sizes of at least 100 columns by 20 rows. On smaller

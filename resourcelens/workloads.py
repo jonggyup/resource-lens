@@ -61,6 +61,7 @@ class WorkloadCollector:
     def __init__(self, root="/sys/fs/cgroup"):
         self.root = Path(root).resolve()
         self.previous = {}
+        self.hierarchy_previous = {}
 
     def directory(self, path):
         if not path or not path.startswith("/") or ".." in path.split("/"):
@@ -153,3 +154,31 @@ class WorkloadCollector:
             previous[identity] = {**stats, "io": io_counters}
         self.previous = previous
         return sorted(groups.values(), key=lambda group: group["id"])
+
+    def hierarchy(self, elapsed, limit=2048):
+        """Bounded directory walk in the collector thread; never on UI input."""
+        nodes, previous, pending = [], {}, [self.root]
+        errors, truncated = 0, False
+        while pending:
+            directory = pending.pop()
+            try:
+                inode = directory.stat().st_ino
+                path = '/' + str(directory.relative_to(self.root)) if directory != self.root else '/'
+                identity = (path, inode)
+                stats = key_values(read(directory / 'cpu.stat'))
+                usage = delta(stats['usage_usec'], self.hierarchy_previous.get(identity), elapsed) if 'usage_usec' in stats else None
+                nodes.append(dict(path=path, inode=inode, cpu_pct=usage / 10000 if usage is not None else None,
+                                  memory_current=limit_number(read(directory / 'memory.current'))))
+                previous[identity] = stats.get('usage_usec')
+                with os.scandir(directory) as entries:
+                    for entry in entries:
+                        if entry.is_dir(follow_symlinks=False):
+                            if len(nodes) + len(pending) < limit:
+                                pending.append(Path(entry.path))
+                            else:
+                                truncated = True
+                                break
+            except OSError:
+                errors += 1
+        self.hierarchy_previous = previous
+        return dict(nodes=nodes, truncated=truncated, errors=errors, limit=limit)

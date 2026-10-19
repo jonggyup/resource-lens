@@ -1,3 +1,17 @@
+# Cgroup hierarchy browsing (0.10.0)
+
+Applications (`8`) is a systemd/cgroup workload list. Select a group and press `v`
+or Right to browse its actual children; `T` starts at the cgroup root. Click a child
+or press Enter to enter it. PID rows open individual process details. Left/Backspace
+or Parent goes up, and Esc returns to Applications (from process details, first to
+the group). Arrow keys, PgUp/PgDn and mouse wheel navigate longer lists.
+
+Enter on the main Applications list still focuses metrics. Controls remain there;
+the hierarchy browser does not change CPU placement or limits. See README for
+collection limits, exact membership semantics and older recording behavior.
+
+---
+
 # Hardware and application workflows (0.9.2)
 
 Start with `python3 -m resourcelens`. Press `1`, then `e` to inspect the machine, or `8`

@@ -353,7 +353,7 @@ class Collector:
                 "hostname": os.uname().nodename, "cpu_model": self.model,
                 "cpu": cpu, "memory": memory, "disks": disks, "gpus": self.gpus(),
                 "network": network, "cpu_hardware": Hardware(self.sys / "devices/system/cpu").snapshot(),
-                "workloads": workloads, "resource_topology": topology(self.sys),
+                "workloads": workloads, "cgroup_tree": self.workloads.hierarchy(elapsed), "resource_topology": topology(self.sys),
                 "thermal_throttling": self.thermal_throttling(),
                 "pressure": self.pressure(), "temperatures": self.temperatures(),
                 "processes": processes, "processes_skipped": skipped,

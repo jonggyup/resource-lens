@@ -23,6 +23,7 @@ from .investigation import Investigation, indicators
 from .usability_ui import UsabilityView
 from .usability import tree_rows
 from .workspaces import Workspaces, related_groups
+from .cgroup_browser import CgroupBrowser
 
 
 UNSAFE_TEXT = re.compile('[^\x20-\x7e' + re.escape(''.join(GLYPHS)) + ']')
@@ -81,6 +82,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
     names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Applications", "Timeline", "Capabilities")
 
     def __init__(self, unicode=False, control=False, session=None):
+        self.browser = None
+        self.browser_button = None
         self.workspace_init()
         self.usability_init()
         self.hardware_init()
@@ -186,6 +189,11 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         if self.recorder:
             self.recorder.write('event', event)
         return event
+
+    def open_cgroup_browser(self, root=False):
+        group = self.selected_workload()
+        if self.snapshot and (root or group):
+            self.browser = CgroupBrowser(self.snapshot, '/' if root else group.get('path') or '/')
 
     def workload_rows(self):
         groups = related_groups(self.snapshot, self.relation) if self.snapshot else []
@@ -496,6 +504,16 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                 elif self.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm') and hit[2] == 'cancel':
                     self.modal = None
             return
+        if self.browser:
+            if left and y == self.screen_size[0] - 1:
+                for start,end,key in self.action_regions:
+                    if start <= x < end:
+                        return self.key(key,self.screen_size[0])
+            self.browser.mouse(x,y,state,self.snapshot,self.screen_size[0])
+            return
+        if left and self.page == 7 and self.browser_button and y == 2 and self.browser_button[0] <= x < self.browser_button[1]:
+            self.open_cgroup_browser()
+            return
         if left and y == self.screen_size[0] - 1:
             for start, end, key in self.action_regions:
                 if start <= x < end:
@@ -624,6 +642,10 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             except curses.error:
                 pass
             return True
+        if self.browser:
+            if not self.browser.key(key,self.snapshot,height):
+                self.browser = None
+            return True
         key = {curses.KEY_F1: ord('?'), curses.KEY_F4: ord('/'), curses.KEY_F10: ord('q')}.get(key, key)
         if key == ord('?') or self.help and key == 27:
             if self.help:
@@ -643,6 +665,9 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             return True
         if self.placement:
             return self.placement_key(key)
+        if self.page == 7 and (key in (ord('v'), ord('T')) or key == curses.KEY_RIGHT and not self.replay):
+            self.open_cgroup_browser(root=key == ord('T'))
+            return True
         if self.workspace_key(key):
             return True
         if self.utility_key(key):
@@ -786,6 +811,7 @@ def draw(screen, view, interval, error=None):
     h, w = screen.getmaxyx()
     view.screen_size = h, w
     view.action_regions = []
+    view.browser_button = None
     view.app_regions = []
     view.app_tab_regions = []
     view.overview_links = {}
@@ -824,6 +850,11 @@ def draw(screen, view, interval, error=None):
     status = mode + " | newest samples at right"
     if not s:
         put(screen, 4, 2, "Collecting the first sample...", muted)
+    elif view.browser:
+        view.browser.draw(screen,s,w,h)
+        tree = s.get('cgroup_tree') or {}
+        coverage = "PARTIAL: unreadable directories / node limit" if tree.get('truncated') or tree.get('errors') else 'visible directories'
+        status = "Cgroup browser | "+coverage+" | direct PIDs; group counters include descendants"
     elif view.page == 7 and not view.help and w >= 100 and h >= 20:
         status = view.draw_applications(screen,w,h)
     elif view.page == 0 and not view.help and view.focus:
@@ -914,6 +945,11 @@ def draw(screen, view, interval, error=None):
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     if view.page == 0 and not view.help:
         put(screen, 2, 1, '[ - Collapse overview ] e' if view.overview_expanded else '[ + Expand overview ] e', accent)
+    if view.page == 7 and not view.browser and not view.help:
+        label = '[ v Browse group ]'
+        put(screen,2,1,label,accent | curses.A_REVERSE)
+        view.browser_button = (1,1+len(label))
+        put(screen,2,22,'T: root hierarchy | Enter: metrics')
     if view.focus:
         status += f' | focus {view.focus[1]} (f restores)'
     if view.replay:
@@ -1081,7 +1117,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.app_tab, repr(view.relation), view.hardware_selection)
+                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process) if view.browser else None)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render

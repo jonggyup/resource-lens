@@ -1,3 +1,24 @@
+# 0.10.0 cgroup hierarchy validation
+
+173 tests pass. New tests cover empty/nested directories, bounded collection,
+symlink exclusion, CPU rate deltas, direct process membership, group/PID identity
+replacement, click and keyboard navigation, legacy recordings, and modal/control
+isolation. Existing control, recording/replay and input latency tests also pass.
+
+Live tmux checks used a disposable delegated sleep service with one populated
+child and one empty child. Verified service -> child -> PID details, empty group
+contents, parent/root navigation, return to Applications and resizing to 80x24.
+The service was stopped after testing. [Terminal evidence](cgroup-browser-ui-evidence.json).
+[Local PTY latency measurements](cgroup-browser-latency-evidence.json) cover ordinary
+navigation and exit; they do not establish collector costs on a 2,048-group host.
+
+Only directories visible in this process's cgroup namespace are browsable. The
+background walk is capped at 2,048 nodes; unreadable/truncated trees are labelled.
+Group counters include descendants; PID rows are direct visible members. Process
+and filesystem reads are separate observations, not an atomic kernel snapshot.
+
+---
+
 # 0.9.2 navigation simplification
 
 167 tests pass. Updated navigation checks verify H/A no longer switch pages,
