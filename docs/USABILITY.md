@@ -1,3 +1,11 @@
+# 0.13.0 investigation workflow
+
+`P` captures the selected live Applications target asynchronously. Esc returns
+without waiting for perf cleanup. The saved-session path and collection failures
+are visible. See [profiling](PROFILING.md) for CLI repeats, comparisons, permissions
+and next steps. Native stack reports and JSON comparisons are available; a saved
+session browser and off-CPU traces remain future work.
+
 # Memory sharing inspection (0.12.0)
 
 Select a process in Applications (`8`) and press `V`. The same shortcut works

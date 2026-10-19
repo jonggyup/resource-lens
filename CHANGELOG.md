@@ -1,3 +1,12 @@
+# 0.13.0
+
+- Add asynchronous `P` investigation sessions for selected processes/cgroups.
+- Save bounded counter evidence, configuration and optional native perf call stacks.
+- Add CLI capture and repeated baseline/candidate comparison with variability,
+  externally supplied workload outcomes, and explicit missing/failed evidence.
+- Preserve responsive cancellation, target identity checks and private artifacts.
+- Keep scheduler runqueue estimates distinct from blocked-time profiling.
+
 # 0.12.0
 
 - Add on-demand `V` memory inspection for selected processes and cgroup PID details.

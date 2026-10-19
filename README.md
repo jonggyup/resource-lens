@@ -5,12 +5,28 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.12.0 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.13.0 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
 limits and nice/per-process affinity editing remain future work.
 It does not claim functionality is unique to Linux tools.
+
+## Save profiling evidence and compare runs
+
+Press `P` on a selected process or cgroup in Applications (`8`) for a background
+10-second capture. Esc cancels immediately. Sessions save resource counters,
+configuration and optional Linux perf call stacks. `V` still opens memory inspection.
+
+```bash
+python3 -m resourcelens --profile ./baseline/run1 --pid 1234 --duration 30
+python3 -m resourcelens --profile ./candidate/run1 --pid 1234 --duration 30
+python3 -m resourcelens --compare ./baseline ./candidate
+```
+
+Replace the PID with your target. Repeat into new run directories to see variability.
+See [profiling commands, permissions, interpretation and limits](docs/PROFILING.md).
+This is a first profiling workflow, not a complete kernel regression analyzer.
 
 ## Run immediately
 

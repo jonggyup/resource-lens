@@ -1,3 +1,36 @@
+# 0.13.0 profiling validation
+
+198 tests pass, including private/no-overwrite capture, identity rejection,
+missing/failed perf, cancellation, target exit, repeated comparisons and measured
+outcomes, scheduler accounting availability, thread reuse and CLI mode isolation.
+Existing interaction tests caught a footer regression; placement remains visible
+at the tested terminal width after moving the new group action later in the footer.
+
+Live validation installed the matching Ubuntu Linux perf tools and recorded two
+2-second CPU-bound Python runs. CPU measurements were 99.55% and 100.03% of one
+CPU. Both native files decoded successfully; the inspected baseline contained
+80 cpu-clock samples, zero lost samples and `_PyEval_EvalFrameDefault` stacks.
+This also caught and fixed valid SIGINT-completed perf captures being mislabeled
+as failures. Unknown stack frames remain visible rather than being attributed.
+
+A real tmux session opened Applications → P, completed a 10-second capture,
+displayed stacks, and returned with Escape. A subsequent P/Escape cancellation
+returned to the process list. CLI cgroup counter capture and CLI comparison also
+completed. Cgroup perf filtering was not validated with privileged live capture.
+Scheduler wait accounting is disabled on this host; disabled accounting is shown
+as unavailable, and enabled-counter arithmetic is covered by controlled tests.
+
+The existing PTY benchmark measured navigation at 1.46–3.84 ms, Escape-to-frame
+at 3.81–3.95 ms and exit at 11.88–12.13 ms across three trials. These are local
+key-to-flush measurements, not network or physical display latency. The profile
+cancellation unit test verifies that Escape does not wait on the capture worker.
+
+Raw local captures are retained under `.eval/profiling/` (ignored by Git); the live
+UI capture is in the normal private profile state directory. These contain local
+symbols and process metadata and are not committed. See [scope and limits](PROFILING.md).
+
+---
+
 # 0.12.0 memory sharing validation
 
 188 tests pass. New coverage checks RSS/PSS field parsing, thread-group membership,

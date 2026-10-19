@@ -26,6 +26,7 @@ from .workspaces import Workspaces, related_groups
 from .cgroup_browser import CgroupBrowser
 from .application_processes import ApplicationProcesses
 from .memory_sharing import MemorySharingView
+from .profiling import ProfileView
 
 
 UNSAFE_TEXT = re.compile('[^\x20-\x7e' + re.escape(''.join(GLYPHS)) + ']')
@@ -85,6 +86,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
 
     def __init__(self, unicode=False, control=False, session=None):
         self.memory_sharing = None
+        self.profile_view = None
+        self.profile_jobs = []
         self.proc_root = '/proc'
         self.application_process_init()
         self.browser = None
@@ -194,6 +197,33 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         if self.recorder:
             self.recorder.write('event', event)
         return event
+
+    def open_profile(self):
+        if self.replay:
+            self.modal=dict(stage='result',message='Profiling requires a live target; disabled during replay.')
+            return
+        target=None
+        if self.browser and self.browser.process:
+            pid,start=self.browser.process
+            target=dict(pid=pid,expected_start=start)
+        elif self.browser:
+            target=dict(cgroup='/sys/fs/cgroup/'+self.browser.path.lstrip('/'),expected_inode=self.browser.inode)
+        elif self.page==7 and self.application_mode=='processes':
+            rows=self.application_process_rows()
+            selected=self.selected_application_process(rows)
+            if selected is not None:
+                row=rows[selected]
+                target=dict(pid=row['pid'],expected_start=row.get('starttime'))
+        elif self.page==7:
+            group=self.selected_workload()
+            if group and group.get('path'):
+                target=dict(cgroup='/sys/fs/cgroup/'+group['path'].lstrip('/'),expected_inode=group.get('inode'))
+        if target:
+            self.profile_view=ProfileView(target)
+            self.profile_jobs=[job for job in self.profile_jobs if job.result is None and job.error is None]
+            self.profile_jobs.append(self.profile_view)
+        else:
+            self.modal=dict(stage='result',message='Select a process or cgroup in Applications, then press P to profile for 10 seconds.')
 
     def open_memory_sharing(self):
         if self.replay:
@@ -527,6 +557,13 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                 elif self.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm') and hit[2] == 'cancel':
                     self.modal = None
             return
+        if self.profile_view:
+            if left and y == self.screen_size[0]-1:
+                for start,end,key in self.action_regions:
+                    if start<=x<end:return self.key(key,self.screen_size[0])
+            if wheel_up:self.profile_view.key(curses.KEY_UP,self.screen_size[0])
+            elif wheel_down:self.profile_view.key(curses.KEY_DOWN,self.screen_size[0])
+            return
         if self.memory_sharing:
             if left and y == self.screen_size[0] - 1:
                 for start,end,key in self.action_regions:
@@ -691,6 +728,12 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     return False
             except curses.error:
                 pass
+            return True
+        if self.profile_view:
+            if not self.profile_view.key(key,height):self.profile_view=None
+            return True
+        if key==ord('P') and not self.help and not self.placement and not self.memory_sharing:
+            self.open_profile()
             return True
         if self.memory_sharing:
             if key == ord('r'):
@@ -918,6 +961,8 @@ def draw(screen, view, interval, error=None):
     status = mode + " | newest samples at right"
     if not s:
         put(screen, 4, 2, "Collecting the first sample...", muted)
+    elif view.profile_view:
+        view.profile_view.draw(screen,w,h)
     elif view.memory_sharing:
         view.memory_sharing.draw(screen,w,h)
         status = "Memory sharing | [] tabs | arrows scroll | r refresh | Esc back"
@@ -1018,12 +1063,12 @@ def draw(screen, view, interval, error=None):
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     if view.page == 0 and not view.help:
         put(screen, 2, 1, '[ - Collapse overview ] e' if view.overview_expanded else '[ + Expand overview ] e', accent)
-    if view.page == 7 and not view.browser and not view.memory_sharing and not view.help and view.application_mode == 'cgroups':
+    if view.page == 7 and not view.browser and not view.memory_sharing and not view.profile_view and not view.help and view.application_mode == 'cgroups':
         label = '[ Enter Open group ]'
         put(screen,2,1,label,accent | curses.A_REVERSE)
         view.browser_button = (1,1+len(label))
         put(screen,2,24,'T: root | [] metrics | D: details')
-    if view.page == 7 and not view.browser and not view.memory_sharing and not view.help:
+    if view.page == 7 and not view.browser and not view.memory_sharing and not view.profile_view and not view.help:
         label = '[ g: '+('Cgroups' if view.application_mode == 'processes' else 'Processes')+' ]'
         x = 1 if view.application_mode == 'processes' else max(1,w-len(label)-2)
         put(screen,2,x,label,accent | curses.A_REVERSE)
@@ -1196,11 +1241,12 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None)
+                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None, (view.profile_view.scroll, id(view.profile_view.result), view.profile_view.error) if view.profile_view else None)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render
             if not read_input(screen, view):
+                for job in view.profile_jobs:job.stop.set()
                 break
 
     worker = threading.Thread(target=collect, daemon=True)
