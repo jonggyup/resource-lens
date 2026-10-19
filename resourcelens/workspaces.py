@@ -51,8 +51,13 @@ class Workspaces:
         self.app_history_identity = {}
 
     def workspace_key(self, key):
-        if self.page == 7 and key in (ord('['),ord(']')):
+        if self.page == 7 and key == ord('D'):
+            self.workload_detail = not self.workload_detail
+            self.scroll = 0
+        elif self.page == 7 and key in (ord('['),ord(']')):
             self.app_tab = (self.app_tab + (1 if key == ord(']') else -1)) % len(TABS)
+            if self.screen_size[1] < 100 or self.screen_size[0] < 20:
+                self.workload_detail = True
             self.scroll = 0
         elif self.page == 7 and key == ord('x'):
             self.relation, self.relation_label = None, ''
@@ -107,7 +112,7 @@ class Workspaces:
                  'Identity: '+group['id']+' | inode '+str(group.get('inode')),
                  self.workload_notice or 'A workload group is not necessarily one desktop application.',
                  ' | '.join(('['+name+']') if i==self.app_tab else name for i,name in enumerate(TABS)),
-                 '[ / ] tabs | Enter detail focus | Esc list focus', '']
+                 '[ / ] tabs | D detail focus | Esc list focus', '']
         if self.app_tab == 0:
             lines += [f"CPU {pct(group.get('cpu_pct'))} (100% = one logical CPU)",
                       'Accounted memory '+size(group.get('memory_current')),

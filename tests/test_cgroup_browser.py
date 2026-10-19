@@ -7,6 +7,7 @@ from resourcelens.workloads import WorkloadCollector
 from resourcelens.ui import View, draw
 from test_navigation import Screen
 from resourcelens.collect import Collector
+from test_workspaces import group
 
 
 class HierarchyTests(unittest.TestCase):
@@ -38,6 +39,7 @@ class BrowserTests(unittest.TestCase):
                                     'truncated':False,'errors':0}
         self.sample['processes']=[dict(pid=10,starttime=20,ppid=1,name='parent',state='S',cpu_pct=0,memory=20,cgroup='/demo.service'),
                                   dict(pid=11,starttime=30,ppid=10,name='child',state='S',cpu_pct=0,memory=30,cgroup='/demo.service/child')]
+        self.sample['workloads']=[group('demo.service')]
         self.browser=CgroupBrowser(self.sample,'/demo.service')
 
     def test_direct_members_children_and_back_navigation(self):
@@ -81,12 +83,39 @@ class BrowserTests(unittest.TestCase):
         self.browser.draw(screen,self.sample,100,24)
         self.assertIn('no cgroup hierarchy',' '.join(screen.lines.values()))
 
+    def test_enter_and_right_open_groups_even_from_metrics_or_replay(self):
+        for key in (10,13,curses.KEY_RIGHT):
+            view=View();view.update(self.sample);view.page=7
+            view.workload_detail=True
+            view.replay=object()
+            view.key(key)
+            self.assertEqual(view.browser.path,'/demo.service')
+            view.key(key)
+            self.assertEqual(view.browser.path,'/demo.service/child')
+            view.key(key)
+            self.assertEqual(view.browser.process,(11,30))
+            view.key(27);self.assertIsNone(view.browser.process)
+            view.key(27);self.assertEqual(view.browser.path,'/demo.service')
+            self.assertEqual(view.browser.selected,('group','/demo.service/child',2))
+            view.key(27);self.assertIsNone(view.browser)
+
+    def test_metrics_focus_uses_d_and_narrow_tabs_without_enter(self):
+        view=View();view.update(self.sample);view.page=7
+        view.key(ord('D'));self.assertTrue(view.workload_detail)
+        self.assertIsNone(view.browser)
+        view.key(27);self.assertFalse(view.workload_detail)
+        view.screen_size=(24,80)
+        view.key(ord(']'));self.assertTrue(view.workload_detail)
+        self.assertEqual(view.app_tab,1)
+        self.assertIsNone(view.browser)
+
     def test_view_routes_browser_without_controls_or_replay_seeking(self):
         view=View(control=True);view.update(self.sample);view.page=7
         view.key(ord('T'));self.assertEqual(view.browser.path,'/')
         view.replay=object()
         view.key(curses.KEY_RIGHT);self.assertEqual(view.browser.path,'/demo.service')
         view.key(ord('w'));self.assertIsNone(view.modal)
+        view.key(27);self.assertEqual(view.browser.path,'/')
         view.key(27);self.assertIsNone(view.browser)
         self.assertEqual(view.page,7)
         view.replay=None

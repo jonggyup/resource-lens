@@ -1,3 +1,17 @@
+# 0.10.1 consistent hierarchy navigation
+
+175 tests pass. Enter/Right now opens groups and processes from the list, metric
+focus, and replay. Tests cover Esc retracing nested groups with selection restored,
+process return, parent navigation, and separate metric focus (`D` and narrow tabs).
+The existing control confirmation and input-responsiveness tests still pass.
+
+Live terminal checks navigated a disposable service -> child cgroup -> process
+using Enter, retraced process and child with Esc, entered an empty child, and
+returned to the root/list at wide and narrow sizes. The test service was stopped.
+[Terminal evidence](cgroup-navigation-ui-evidence.json).
+
+---
+
 # 0.10.0 cgroup hierarchy validation
 
 173 tests pass. New tests cover empty/nested directories, bounded collection,

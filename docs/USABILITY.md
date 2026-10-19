@@ -1,12 +1,13 @@
 # Cgroup hierarchy browsing (0.10.0)
 
-Applications (`8`) is a systemd/cgroup workload list. Select a group and press `v`
+Applications (`8`) is a systemd/cgroup workload list. Select a group and press Enter
 or Right to browse its actual children; `T` starts at the cgroup root. Click a child
 or press Enter to enter it. PID rows open individual process details. Left/Backspace
-or Parent goes up, and Esc returns to Applications (from process details, first to
-the group). Arrow keys, PgUp/PgDn and mouse wheel navigate longer lists.
+or Parent goes up, and Esc returns to the previous level with selection restored. At the entry group,
+Esc returns to Applications; `q` returns there directly from anywhere in the browser. Arrow keys, PgUp/PgDn and mouse wheel navigate longer lists.
 
-Enter on the main Applications list still focuses metrics. Controls remain there;
+Enter always opens the selected item. `D` focuses metric details; `[`/`]` opens
+metric tabs directly on narrow terminals. Controls remain in Applications;
 the hierarchy browser does not change CPU placement or limits. See README for
 collection limits, exact membership semantics and older recording behavior.
 
@@ -16,7 +17,7 @@ collection limits, exact membership semantics and older recording behavior.
 
 Start with `python3 -m resourcelens`. Press `1`, then `e` to inspect the machine, or `8`
 to investigate a workload. In Applications, use `/` to find a service, arrows to
-select it and `[`/`]` to change the detail tab. Enter focuses details for scrolling;
+select it and `[`/`]` to change the detail tab. `D` focuses details for scrolling;
 Esc returns to the list. Wide terminals show both panes together.
 
 For CPU placement, select a service and press `o`; CPU tiles show its allowed set.
@@ -29,7 +30,7 @@ Ordinary left/right clicks on CPU/socket tiles open the existing settings menu.
 During CPU placement, tile clicks toggle the selected CPUs; page navigation
 is disabled until you finish or cancel placement. In wide Applications, the mouse
 wheel selects groups over the list and scrolls details over the detail pane.
-Click the detail pane or press Enter to focus it; Esc returns to list selection.
+Click the detail pane or press `D` to focus it; Esc returns to list selection.
 
 The overview remains on `1`. See the README for full shortcuts, accounting limits,
 and the opt-in preview/authorization workflow for resource controls.

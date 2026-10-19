@@ -8,7 +8,7 @@ ALIASES = ('home overview dashboard', 'cpu processor topology', 'ram memory numa
 
 def actions(view):
     if view.browser:
-        return [('Esc Return',27), ('Left Parent',curses.KEY_LEFT), ('Enter Open',10)]
+        return [('Esc Back',27), ('Left Parent',curses.KEY_LEFT), ('Enter Open',10), ('q Applications',ord('q'))]
     if view.editing_filter:
         return [('Enter Done', 10), ('Esc Clear', 27)]
     if view.help:
@@ -21,7 +21,7 @@ def actions(view):
         0: [('e Collapse' if view.overview_expanded else 'e Expand', ord('e'))],
         1: [('g CPU menu', ord('g')), ('u Undo', ord('u')), ('a Related apps', ord('a'))],
         5: [('F4 Filter', ord('/')), ('c CPU sort', ord('c')), ('m RAM sort', ord('m'))],
-        7: [('v Browse', ord('v')), ('Enter Inspect', 10), ('F4 Filter', ord('/')), ('p Placement', ord('p')),
+        7: [('Enter Open', 10), ('D Details', ord('D')), ('F4 Filter', ord('/')), ('p Placement', ord('p')),
             ('w Weight', ord('w')), ('l Quota', ord('l')), ('U Undo place', ord('U'))],
     }.get(view.page, [('Space Freeze', ord(' '))])
     # Quit stays discoverable even when only the first local action fits.
@@ -49,16 +49,16 @@ def context_help(view):
                 'u undoes the latest hardware change in this session.'],
             5: ['F4 or / filters processes. Enter finishes; Esc clears the filter.',
                 'c/m/n/p sort by CPU, memory, name or PID.'],
-            7: ['Up/Down or j/k selects a workload; Enter opens its details; Esc returns.',
+            7: ['Up/Down or j/k selects a workload; Enter/Right opens the selected group; metrics appear beside it.',
                 'v / Right opens the actual cgroup hierarchy; T starts at root.',
-                'Browser: Enter or click opens a child/PID; Left/Backspace goes up; Esc returns.',
+                'Browser: Enter or click opens a child/PID; Left/Backspace goes up; Esc goes back one level; q returns to Applications.',
                 'F4 or / filters workloads. p opens visual CPU placement.',
                 'w sets CPU weight; l sets quota; u undoes weight/quota.',
                 'U undoes CPU placement. Controls require --control and permission.'],
         }.get(view.page, ['Scroll to inspect every device, node and metric.',
                           'N/A means unavailable, not idle. Resource panels are read-only.'])
     details += ['1 overview | e expand overview | 8 applications',
-                'Applications: [ / ] detail tabs; Enter detail focus; Esc list focus; x clears hardware filter.',
+                'Applications: [ / ] detail tabs; D detail focus; Esc list focus; x clears hardware filter.',
                 'CPU/socket tiles: click or right-click opens settings; Shift-click shows allowed applications.',
                 'Focused CPU/disk or Memory: a shows related applications (placement/accounting, not inference).','0 capabilities | S save preferences | R export redacted report | N named marker',
                 'Workloads: c/m/n/i sort, d device, b disk limit, B Undo disk | Tasks: t tree','f focuses a resource; [ / ] switch devices; f restores all panels.',

@@ -1,3 +1,11 @@
+# 0.10.1
+
+- Make Enter/Right open the selected group or process consistently, including replay.
+- Make Esc retrace hierarchy navigation with selection restored; `q` returns directly
+  to Applications, while Left/Backspace goes to the parent.
+- Keep metrics alongside the list; use `D` to focus scrolling and `[`/`]` to open
+  metric tabs on narrow terminals. Update buttons, help and documentation.
+
 # 0.10.0
 
 - Add an actual cgroup hierarchy browser: `v`/Right enters a selected workload,

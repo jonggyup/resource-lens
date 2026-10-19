@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.10.0 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.10.1 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -56,12 +56,13 @@ or scope. It is not an application detector and may combine nested cgroups under
 one service. The new browser shows the actual visible cgroup directory hierarchy.
 
 1. Open Applications with `8`, find a service with `/`, and select its row.
-2. Press `v` or Right, or click **Browse group**. Press `T` to start at the root instead.
+2. Press Enter or Right, or click **Open group** (`v` remains an alias). Press `T` to start at the root instead.
 3. Select a `CG` child row and press Enter/Right, or click it, to enter that group.
 4. Select a `PID` row and press Enter, or click it, for process name, parent PID,
    state, CPU usage, RSS and exact cgroup membership.
-5. Left/Backspace or the **Parent** button goes up. Esc leaves process details first,
-   then returns from the browser to Applications. Enter on the main list still opens metrics.
+5. Left/Backspace or the **Parent** button goes up. Esc returns to the previous
+   level and restores the selection; at the entry group it returns to Applications.
+   Press `q` inside the browser to return directly to Applications.
 
 The browser lists **direct** child cgroups and **directly attached** processes.
 Visible empty cgroups are included. CPU/memory counters for a cgroup include its
@@ -73,13 +74,13 @@ Unreadable directories and the collection cap are labelled as partial coverage;
 process visibility also depends on `/proc` permissions. Directory inode and process
 start-time checks prevent silently following a replacement cgroup or reused PID.
 Older recordings without hierarchy data show an explicit unavailable message.
-In replay, use `v` or `T` to enter the browser; Right outside the browser retains
-its sample-step behavior. The browser is read-only; existing service controls
+Enter/Right opens groups in Applications during replay too. On other pages,
+Left/Right retains sample-step behavior. The browser is read-only; existing service controls
 remain in the main Applications view.
 
 Applications shows a persistent group list beside the selected application's
 information at terminal sizes of at least 100 columns by 20 rows. On smaller
-terminals, select a group and press Enter for details. Applications means observed
+terminals, select a group and use `[`/`]` to open metric tabs, or `D` to focus details. Applications means observed
 cgroup/systemd workload groups: a group can contain several programs, and nested
 counters can overlap. This is not automatic desktop application identification.
 
@@ -88,7 +89,8 @@ counters can overlap. This is not automatic desktop application identification.
 | Up/Down, or click a group | Select an application group |
 | `/`, then a unit name or cgroup path | Filter the application list |
 | `[` / `]`, or click a visible tab | Usage, Processes, Placement, Limits, History |
-| Enter / Esc | Focus scrollable details / return to list selection |
+| Enter / Right | Open selected cgroup or process |
+| D / Esc on the main list | Focus scrollable metrics / return to list selection |
 | `o` on an application | Open CPU topology with its allowed placement overlay |
 | `d` on an application | Open the first accounting device mapped to a visible whole disk |
 | Shift-click a CPU/core/socket in CPU view | Show applications allowed on those CPUs |
@@ -145,7 +147,7 @@ python3 -m resourcelens --record batch.jsonl --json --count 30
 python3 -m resourcelens --replay batch.jsonl --json
 ```
 
-Replay: Left/Right steps one sample, `,` / `.` skips ten, `(` / `)` jumps to
+Replay: Left/Right steps one sample outside Applications/hierarchy browsing, `,` / `.` skips ten, `(` / `)` jumps to
 start/end, and Space plays/pauses. Playback uses `--interval`, not original timing.
 Graphs/comparisons rebuild from up to 120 samples ending at the cursor; advance
 past an event to see its after-window. Replay markers are temporary and do not
@@ -200,7 +202,7 @@ See [real-world usability priorities](docs/USABILITY.md) and
 | --- | --- |
 | `0` | Capabilities, permissions hints, collector wall/CPU time, process peak RSS, errors and missing-data explanations |
 | Applications `c` / `m` / `n` / `i` | Sort by CPU, memory, name or observed I/O |
-| Applications mouse click | Select a row; Enter inspects it |
+| Applications mouse click | Select a row; Enter opens its hierarchy |
 | Applications `d` | Open the first accounting device that maps to a visible whole disk |
 | Processes `t` | Toggle a process tree; sorting applies within branches |
 | `S` | Save presentation preferences explicitly |
@@ -341,7 +343,7 @@ always sorted by CPU; sorting/filtering applies to the full Tasks page.
 | `c` / `m` / `n` / `p` | Sort processes by CPU / memory / name / PID |
 | `/` | Filter processes by name or PID; Enter finishes, Esc clears |
 | `/` on Applications | Filter workloads by unit name or cgroup path |
-| Applications: Up/Down, Enter, Esc | Select a group, inspect details, return to list |
+| Applications: Up/Down, Enter, Esc | Select a group, open its hierarchy, go back |
 | Applications with `--control`: `w`, `l`, `u` | CPU weight, CPU quota, Undo latest session change |
 | `?` | Help |
 | `q` / `Esc` | Quit (Esc clears an active filter first) |

@@ -5,6 +5,7 @@ from pathlib import PurePosixPath
 
 class CgroupBrowser:
     def __init__(self, snapshot, path='/'):
+        self.trail = []
         self.path = path
         node = next((n for n in snapshot.get('cgroup_tree', {}).get('nodes', []) if n['path'] == path), None)
         self.inode = node.get('inode') if node else None
@@ -40,27 +41,39 @@ class CgroupBrowser:
         if kind == 'process':
             self.process = (identity, generation)
         else:
+            self.trail.append((self.path, self.inode, self.selected))
             self.path, self.inode = identity, generation
             self.selected = None
 
     def up(self, snapshot):
         if self.process:
             self.process = None
-            return
+            return True
         previous = self.path
         parent = str(PurePosixPath(previous).parent)
         node = next((n for n in snapshot.get('cgroup_tree', {}).get('nodes', []) if n['path'] == parent), None)
-        if node:
+        if previous == '/':
+            return False
+        if self.trail and self.trail[-1][0] == parent:
+            self.path, self.inode, self.selected = self.trail.pop()
+        elif node:
             self.path, self.inode, self.selected = parent, node['inode'], None
+            self.trail = []
+        return True
 
     def key(self, key, snapshot, height):
-        if key in (27, ord('q'), curses.KEY_F10):
+        if key in (ord('q'), curses.KEY_F10):
+            return False
+        if key == 27:
             if self.process:
                 self.process = None
                 return True
+            if self.trail:
+                self.path, self.inode, self.selected = self.trail.pop()
+                return True
             return False
         if key in (curses.KEY_LEFT, curses.KEY_BACKSPACE, 127, 8):
-            self.up(snapshot)
+            return self.up(snapshot)
         elif not self.process:
             rows = self.rows(snapshot)
             index = self.selection(rows)
@@ -80,7 +93,7 @@ class CgroupBrowser:
     def mouse(self, x, y, state, snapshot, height):
         if state & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED):
             if self.back and y == self.back[2] and self.back[0] <= x < self.back[1]:
-                self.up(snapshot)
+                return self.up(snapshot)
             for start,end,row,identity in self.regions:
                 if row == y and start <= x < end:
                     self.selected = identity
@@ -95,7 +108,7 @@ class CgroupBrowser:
         self.regions, self.back = [], (1, 14, 2)
         put(screen,2,1,'[ < Parent ]',curses.A_BOLD)
         put(screen,3,1,'CGROUP BROWSER: '+self.path,curses.A_BOLD)
-        put(screen,4,1,'Enter/Right or click: open | Left/Backspace: parent | Esc: Applications')
+        put(screen,4,1,'Enter/Right or click: open | Left/Backspace: parent | Esc: back | q: Applications')
         tree = snapshot.get('cgroup_tree')
         if tree is None:
             put(screen,6,1,'This recording has no cgroup hierarchy data. Live collection or a new recording is required.')

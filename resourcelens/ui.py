@@ -230,7 +230,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         mode = "CPU controls enabled: p placement | U undo placement | w weight | l quota | u Undo" if self.control else "Read-only | use --control to enable runtime CPU changes"
         if not self.workload_detail or group is None:
             name_width = max(12, min(45, width - 32))
-            lines = [f"{len(rows)} workloads | / find | Enter inspect | Filter: {clean(self.workload_filter) or '(none)'}", mode,
+            lines = [f"{len(rows)} workloads | / find | Enter open | Filter: {clean(self.workload_filter) or '(none)'}", mode,
                      self.workload_notice or self.relation_label or f"Sort: {self.workload_sort} | c CPU / m RAM / n name / i I/O | b disk limits / B Undo",
                      f"  {'UNIT / GROUP':<{name_width}} {'CPU':>7} {'MEMORY':>10} {'PIDS':>5}"]
             for row in rows:
@@ -509,7 +509,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                 for start,end,key in self.action_regions:
                     if start <= x < end:
                         return self.key(key,self.screen_size[0])
-            self.browser.mouse(x,y,state,self.snapshot,self.screen_size[0])
+            if self.browser.mouse(x,y,state,self.snapshot,self.screen_size[0]) is False:
+                self.browser = None
             return
         if left and self.page == 7 and self.browser_button and y == 2 and self.browser_button[0] <= x < self.browser_button[1]:
             self.open_cgroup_browser()
@@ -665,7 +666,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             return True
         if self.placement:
             return self.placement_key(key)
-        if self.page == 7 and (key in (ord('v'), ord('T')) or key == curses.KEY_RIGHT and not self.replay):
+        if self.page == 7 and key in (10, 13, curses.KEY_RIGHT, ord('v'), ord('T')):
             self.open_cgroup_browser(root=key == ord('T'))
             return True
         if self.workspace_key(key):
@@ -762,9 +763,6 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                 self.workload_notice = ""
                 line, capacity = index + 4, max(1, height - 5)
                 self.scroll = min(self.scroll, line) if line < self.scroll else max(self.scroll, line - capacity + 1)
-                return True
-            if key in (10, 13) and self.selected_workload():
-                self.workload_detail, self.scroll = True, 0
                 return True
         if ord("1") <= key <= ord("9"):
             self.page, self.scroll = key - ord("1"), 0
@@ -946,10 +944,10 @@ def draw(screen, view, interval, error=None):
     if view.page == 0 and not view.help:
         put(screen, 2, 1, '[ - Collapse overview ] e' if view.overview_expanded else '[ + Expand overview ] e', accent)
     if view.page == 7 and not view.browser and not view.help:
-        label = '[ v Browse group ]'
+        label = '[ Enter Open group ]'
         put(screen,2,1,label,accent | curses.A_REVERSE)
         view.browser_button = (1,1+len(label))
-        put(screen,2,22,'T: root hierarchy | Enter: metrics')
+        put(screen,2,24,'T: root | [] metrics tabs | D: detail focus')
     if view.focus:
         status += f' | focus {view.focus[1]} (f restores)'
     if view.replay:
