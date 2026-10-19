@@ -12,9 +12,9 @@ def actions(view):
     if view.memory_sharing:
         return [('Esc Back',27), ('Tab Next',9), ('r Refresh',ord('r'))]
     if view.browser:
-        return [('Esc Back',27), ('Left Parent',curses.KEY_LEFT), ('Enter Open',10), ('V Memory',ord('V')),('P Profile',ord('P')), ('q Applications',ord('q'))]
+        return [('Esc Back',27), ('Left Parent',curses.KEY_LEFT), ('Enter Open',10), ('V Memory',ord('V')),('P Profile',ord('P')),('W Waits',ord('W')), ('q Applications',ord('q'))]
     if view.page == 7 and view.application_mode == 'processes' and not view.help and not view.editing_filter:
-        return [('F1 Help',ord('?')),('F10 Quit',ord('q')),('g Cgroups',ord('g')),('Enter Open',10),('V Memory',ord('V')),('P Profile',ord('P')),('c CPU',ord('c')),('m Memory',ord('m')),('/ Search',ord('/'))]
+        return [('F1 Help',ord('?')),('F10 Quit',ord('q')),('g Cgroups',ord('g')),('Enter Open',10),('V Memory',ord('V')),('P Profile',ord('P')),('W Waits',ord('W')),('c CPU',ord('c')),('m Memory',ord('m')),('/ Search',ord('/'))]
     if view.editing_filter:
         return [('Enter Done', 10), ('Esc Clear', 27)]
     if view.help:
@@ -28,7 +28,7 @@ def actions(view):
         1: [('g CPU menu', ord('g')), ('u Undo', ord('u')), ('a Related apps', ord('a'))],
         5: [('F4 Filter', ord('/')), ('c CPU sort', ord('c')), ('m RAM sort', ord('m'))],
         7: [('g Processes', ord('g')), ('Enter Open', 10), ('D Details', ord('D')), ('F4 Filter', ord('/')), ('p Placement', ord('p')),
-            ('w Weight', ord('w')), ('l Quota', ord('l')), ('U Undo place', ord('U')), ('P Profile',ord('P'))],
+            ('w Weight', ord('w')), ('l Quota', ord('l')), ('U Undo place', ord('U')), ('P Profile',ord('P')),('W Waits',ord('W'))],
     }.get(view.page, [('Space Freeze', ord(' '))])
     # Quit stays discoverable even when only the first local action fits.
     extra = [('f Focus', ord('f'))] if view.page in (0, 1, 2, 3, 4, 6) else []
@@ -57,6 +57,7 @@ def context_help(view):
                 'c/m/n/p sort by CPU, memory, name or PID.'],
             7: ['Applications defaults to processes ranked by CPU. g toggles cgroup view.',
                 'Processes: c/m/n/p sorts CPU/memory/name/PID; Enter opens process details.',
+                'W adds opt-in filtered scheduler tracing and off-CPU stacks; requires perf permission.',
                 'P captures a private 10-second CPU profile and scheduler evidence; Esc cancels.',
                 'V inspects live memory allocation, shared-address-space threads and mapped-file peers.',
                 'Cgroups: Up/Down selects a group; Enter/Right opens its hierarchy.',

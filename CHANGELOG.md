@@ -1,3 +1,14 @@
+# 0.14.0
+
+- Add opt-in `W` / `--scheduler` tracing for selected initial process/cgroup threads.
+- Use kernel-filtered perf scheduler events to separate off-CPU, sleep-to-wakeup,
+  and ready-to-running distributions and show time-weighted switch-out stacks.
+- Save raw traces, decoded events, diagnostics, interval coverage and loss markers.
+- Suppress derived results for detected event loss, malformed events, discontinuities
+  and parser limits; exclude exited/reused threads and reject unsupported namespaces.
+- Include valid per-run scheduler percentiles in repeated CLI comparisons.
+- Preserve `P` CPU profiling and asynchronous Escape cancellation.
+
 # 0.13.0
 
 - Add asynchronous `P` investigation sessions for selected processes/cgroups.

@@ -1,3 +1,14 @@
+# 0.14.0 scheduler investigation
+
+`W` in Applications adds explicit scheduler tracing to the existing profile view;
+`P` remains CPU profiling only. Ready-to-running, sleeping and total off-CPU
+intervals have separate counts/percentiles, alongside switch-out stacks and data
+quality indicators. Escape is asynchronous. See [scope and commands](PROFILING.md).
+
+The next usability priority is a saved-session browser and interactive comparison,
+followed by linking a wait interval to its raw evidence. Kernel trace analysis does
+not yet attribute lock owners or individual storage/network requests.
+
 # 0.13.0 investigation workflow
 
 `P` captures the selected live Applications target asynchronously. Esc returns

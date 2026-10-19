@@ -1,3 +1,40 @@
+# 0.14.0 scheduler tracing validation
+
+213 tests pass. New coverage checks sleeping versus runnable intervals, correct
+switch-out stack ownership, missing/duplicate wakeups, capture boundaries,
+malformed/reordered/lost events, event-count caps, repeated switch-out detection,
+namespace refusal, oversized scope refusal, permission failures, cancellation,
+CLI/profile compatibility, and old sessions without scheduler evidence.
+
+Live tests on the local Linux 5.15 host with perf 5.15:
+
+| Owned test workload | Observed result |
+| --- | --- |
+| 10 ms periodic sleep | 486 events; off-CPU p50 10.224 ms; ready-to-running p50 0.0124 ms; timer/select switch-out stack |
+| Two busy processes pinned to one allowed CPU | 112 events; ready-to-running p95 16.152 ms; runnable-state intervals |
+| Python threads waiting on a lock | 1,854 events; futex wait stacks; ready-to-running p95 0.0131 ms |
+| Own process moved into a temporary test cgroup | 186 filtered events; capture completed; temporary group removed afterward |
+
+No loss markers or parser discontinuities were observed in these captures. This
+does not prove absence of every possible dropped event. Test processes were
+terminated afterward; only those owned test processes had affinity or membership
+changed. Scheduler settings and tracing configuration were not globally modified.
+
+A real tmux run selected an owned sleeping process, used W, displayed all three
+interval distributions and stacks, then returned to Applications. Cancelling a
+second capture returned in 5.66 ms (includes local tmux command/poll overhead).
+This check caught Unicode arrows rendering as question marks; labels now use
+plain text. The standard three-trial PTY benchmark measured navigation at
+1.47–3.60 ms and exit at 10.85–11.89 ms. These are local measurements, not guarantees
+for remote SSH or physical display latency.
+
+Raw host captures remain private under `.eval/scheduler/` and the UI profile state
+directory; they are not committed. Automated loss/ordering/unsupported-scope cases
+use controlled fixtures. Real buffer loss, other kernel/perf versions, and dynamic
+cgroup/thread tracking are not validated. See [interpretation and bounds](PROFILING.md).
+
+---
+
 # 0.13.0 profiling validation
 
 198 tests pass, including private/no-overwrite capture, identity rejection,

@@ -87,7 +87,7 @@ def metrics(first, last, elapsed, cgroup=False, schedstats=False):
     return {k:v for k,v in result.items() if v>=0 and math.isfinite(v)}
 
 
-def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=None, perf=True, expected_start=None, expected_inode=None, outcomes=None):
+def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=None, perf=True, expected_start=None, expected_inode=None, outcomes=None, scheduler=False):
     outcomes=outcomes or {}
     if any(not isinstance(v,(int,float)) or not math.isfinite(v) for v in outcomes.values()):
         raise ValueError('Workload outcomes must be finite numbers')
@@ -122,7 +122,7 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
                            'sched_schedstats':read('/proc/sys/kernel/sched_schedstats'),
                            'online_cpus':read('/sys/devices/system/cpu/online')},
               warnings=['Resource changes do not establish causality or predict application latency.',
-                        'Runqueue wait covers surviving threads only, not blocked/off-CPU time or a latency distribution.',
+                        'Polling runqueue counters cover surviving threads only; trace-based intervals are reported separately.',
                         'Frame-pointer stacks may be incomplete; debug symbols and frame pointers improve attribution.',
                         'Counter and perf windows are approximately aligned; perf startup/decoding add overhead.'])
     if pid:
@@ -131,10 +131,14 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
     else:
         info['environment']['limits']={name:read(Path(cgroup)/name) for name in ('cpu.max','cpu.weight','cpuset.cpus.effective','memory.max','io.max')}
     info['environment']['governors']={p.parent.name:read(p) for p in Path('/sys/devices/system/cpu/cpufreq').glob('policy*/scaling_governor')}
-    process=None; log=None; start=time.monotonic()
+    process=None; log=None; trace=None; start=time.monotonic()
     info['profile']={'status':'disabled' if not perf else 'unavailable'}
+    info['scheduler']={'status':'pending' if scheduler else 'disabled'}
     write(directory/'session.json',info)
     try:
+        if scheduler:
+            from .scheduler_trace import SchedulerTrace
+            trace=SchedulerTrace(directory,pid,cgroup,duration)
         if perf:
             executable=shutil.which('perf')
             if executable:
@@ -156,6 +160,8 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
             info['samples'].append({'elapsed':time.monotonic()-start,'data':sample})
             if stop.is_set() or time.monotonic()-start>=duration:
                 break
+            if trace and trace.over_limit():
+                raise ValueError('Scheduler trace reached 64 MiB capture limit')
             if (directory/'perf.data').exists() and (directory/'perf.data').stat().st_size>64*1024*1024:
                 raise ValueError('Profile reached 64 MiB capture limit')
             stop.wait(min(.25,max(0,duration-(time.monotonic()-start))))
@@ -166,6 +172,13 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
     except (OSError,ValueError) as exc:
         info['status']='partial'; info['warnings'].append(str(exc))
     finally:
+        if trace:
+            try:
+                info['scheduler']=trace.finish(cancelled=info['status']=='cancelled')
+            except (OSError,ValueError) as exc:
+                info['scheduler']={'status':'failed','reason':str(exc)}
+        if log and not process:
+            log.close()
         if process:
             if process.poll() is None:
                 try:os.killpg(process.pid,signal.SIGINT)
@@ -194,8 +207,13 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
         if len(info['samples'])>1:
             a,b=info['samples'][0],info['samples'][-1]
             info['metrics']=metrics(a['data'],b['data'],b['elapsed']-a['elapsed'],bool(cgroup),info['environment']['sched_schedstats']=='1')
+        if info['scheduler']['status']=='complete':
+            for kind,values in info['scheduler'].get('distributions',{}).items():
+                if values['count']:
+                    for stat in ('p50_ms','p95_ms','p99_ms','max_ms'):
+                        info['metrics']['scheduler.'+kind+'.'+stat]=values[stat]
         if info['environment']['sched_schedstats']!='1':
-            info['warnings'].append('Scheduler wait accounting unavailable/disabled; no wait estimate reported.')
+            info['warnings'].append('Polling-based scheduler accounting unavailable/disabled; see the separate scheduler trace status.')
         write(directory/'session.final.json',info)
         os.replace(directory/'session.final.json',directory/'session.json')
     return info
@@ -239,7 +257,11 @@ def compare(baseline, candidate):
         rows[key]={'baseline':x,'candidate':y,'delta':y['mean']-x['mean'],
                    'change_percent':100*(y['mean']-x['mean'])/x['mean'] if x['mean'] else None}
     if not any(k.startswith('outcome.') for k in rows):warnings.append('No matched application latency or throughput outcome was supplied.')
-    return dict(metrics=rows,environment_changes=changes,configurations=configurations,warnings=warnings,
+    scheduler_status={'baseline':[r.get('scheduler',{}).get('status','disabled') for r in a],
+                      'candidate':[r.get('scheduler',{}).get('status','disabled') for r in b]}
+    if any(status!='disabled' for side in scheduler_status.values() for status in side) and any(status!='complete' for side in scheduler_status.values() for status in side):
+        warnings.append('Scheduler tracing is not complete for every run; consult scheduler status before comparing waits.')
+    return dict(scheduler=scheduler_status,metrics=rows,environment_changes=changes,configurations=configurations,warnings=warnings,
                 profiles={'baseline':[r['profile']['status'] for r in a],'candidate':[r['profile']['status'] for r in b]})
 
 
@@ -276,7 +298,10 @@ class ProfileView:
                     'major_faults_per_second':'Major faults / second',
                     'surviving_threads_runqueue_wait_seconds_per_second':'Runqueue wait (thread-seconds / second)',
                     'throttled_seconds_per_second':'Throttled seconds / second'}
-            lines += [labels.get(k,k)+': '+(size(v) if k=='rss_end_bytes' else f'{v:.3f}') for k,v in r['metrics'].items()]
+            lines += [labels.get(k,k)+': '+(size(v) if k=='rss_end_bytes' else f'{v:.3f}') for k,v in r['metrics'].items() if not k.startswith('scheduler.')]
+            if r.get('scheduler',{}).get('status','disabled')!='disabled':
+                from .scheduler_trace import summary_lines
+                lines += summary_lines(r['scheduler'])
             lines += r['warnings']
             if r['profile'].get('reason'):lines.append(r['profile']['reason'])
             if r['profile'].get('diagnostic'):lines.extend(r['profile']['diagnostic'].splitlines())

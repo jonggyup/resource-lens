@@ -198,7 +198,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             self.recorder.write('event', event)
         return event
 
-    def open_profile(self):
+    def open_profile(self, scheduler=False):
         if self.replay:
             self.modal=dict(stage='result',message='Profiling requires a live target; disabled during replay.')
             return
@@ -219,6 +219,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             if group and group.get('path'):
                 target=dict(cgroup='/sys/fs/cgroup/'+group['path'].lstrip('/'),expected_inode=group.get('inode'))
         if target:
+            if scheduler:target['scheduler']=True
             self.profile_view=ProfileView(target)
             self.profile_jobs=[job for job in self.profile_jobs if job.result is None and job.error is None]
             self.profile_jobs.append(self.profile_view)
@@ -732,8 +733,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         if self.profile_view:
             if not self.profile_view.key(key,height):self.profile_view=None
             return True
-        if key==ord('P') and not self.help and not self.placement and not self.memory_sharing:
-            self.open_profile()
+        if key in (ord('P'),ord('W')) and not self.help and not self.placement and not self.memory_sharing:
+            self.open_profile(scheduler=key==ord('W'))
             return True
         if self.memory_sharing:
             if key == ord('r'):

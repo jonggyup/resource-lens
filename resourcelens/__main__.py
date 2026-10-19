@@ -42,6 +42,7 @@ def main():
     parser.add_argument('--cgroup', help='absolute cgroup v2 directory to profile')
     parser.add_argument('--duration', type=float, default=10, help='profile duration, 0.2–300 seconds')
     parser.add_argument('--label', default='', help='workload/build description saved with a profile')
+    parser.add_argument('--scheduler',action='store_true',help='opt in to filtered scheduler tracing and off-CPU stacks (requires perf permission)')
     parser.add_argument('--no-perf', action='store_true', help='capture counters without CPU call stacks')
     parser.add_argument('--compare', nargs=2, metavar=('BASELINE', 'CANDIDATE'), help='compare two saved session directories')
     parser.add_argument('--outcome',action='append',default=[],metavar='NAME=VALUE',help='externally measured workload result; include units in name, e.g. p99_ms=12.5')
@@ -51,7 +52,7 @@ def main():
             parser.error('choose --profile or --compare')
         if any((args.replay,args.record,args.control,args.once,args.json,args.report,args.incidents)):
             parser.error('profiling/comparison cannot be combined with dashboard, recording or snapshot modes')
-        if args.compare and (args.pid is not None or args.cgroup or args.no_perf or args.label or args.outcome or args.duration != 10):
+        if args.compare and (args.pid is not None or args.cgroup or args.no_perf or args.label or args.outcome or args.duration != 10 or args.scheduler):
             parser.error('capture options require --profile, not --compare')
         from .profiling import capture, compare
         try:
@@ -60,7 +61,7 @@ def main():
                 name,value=item.split('=',1)
                 if not name:raise ValueError('Outcome name is empty')
                 outcomes[name]=float(value)
-            result = (capture(args.profile,pid=args.pid,cgroup=args.cgroup,duration=args.duration,label=args.label,perf=not args.no_perf,outcomes=outcomes)
+            result = (capture(args.profile,pid=args.pid,cgroup=args.cgroup,duration=args.duration,label=args.label,perf=not args.no_perf,outcomes=outcomes,scheduler=args.scheduler)
                       if args.profile else compare(*args.compare))
             print(json.dumps(result,indent=2,allow_nan=False))
             return 0 if not args.profile or result['status']=='complete' else 1
@@ -69,8 +70,8 @@ def main():
         except (OSError,ValueError) as exc:
             print('Resource Lens: '+str(exc),file=sys.stderr)
             return 1
-    if args.pid is not None or args.cgroup or args.no_perf or args.label or args.duration != 10 or args.outcome:
-        parser.error('--pid/--cgroup/--duration/--label/--no-perf require --profile')
+    if args.pid is not None or args.cgroup or args.no_perf or args.label or args.duration != 10 or args.outcome or args.scheduler:
+        parser.error('--pid/--cgroup/--duration/--label/--no-perf/--scheduler require --profile')
     if not math.isfinite(args.interval) or not 0.2 <= args.interval <= 60:
         parser.error("--interval must be between 0.2 and 60 seconds")
     if args.count is not None and (not args.json or args.count < 1):
