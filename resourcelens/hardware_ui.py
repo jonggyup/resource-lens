@@ -14,7 +14,7 @@ class HardwareView:
             self.modal = dict(stage='result', message='Replay is read-only; resource controls are disabled.')
             return
         if not self.control:
-            self.modal = dict(stage='result', message='Restart with --control to enable CPU settings.')
+            self.open_control_mode()
             return
         data = self.hardware.snapshot()
         cpus = [c for c in data['cpus'] if scope[0] == 'all' or c[scope[0]] == scope[1]]

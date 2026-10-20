@@ -20,7 +20,8 @@ class ControlUITests(unittest.TestCase):
     def test_disabled_controls_never_start_job(self):
         self.view.control = False
         self.view.key(ord("w"))
-        self.assertIn("disabled", self.view.modal["message"])
+        self.assertEqual(self.view.modal["stage"], "control_mode")
+        self.assertFalse(self.view.control)
         self.assertFalse(self.jobs)
 
     def test_edit_preview_and_apply_are_separate_actions(self):

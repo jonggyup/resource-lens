@@ -15,9 +15,12 @@ class PlacementView:
         if getattr(self, 'replay', None):
             self.modal = dict(stage='result', message='Replay is read-only; resource controls are disabled.')
             return
+        if not self.control:
+            self.open_control_mode()
+            return
         group = self.selected_workload()
-        if not self.control or not group or not group.get('controllable'):
-            self.modal = dict(stage='result', message='Select a controllable service/scope on Workloads and launch with --control.')
+        if not group or not group.get('controllable'):
+            self.modal = dict(stage='result', message='Select a controllable service/scope on Applications.')
             return
         def inspect():
             return dict(target=dict(group), info=self.placement_session.backend.snapshot(group))

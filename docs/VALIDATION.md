@@ -1,3 +1,19 @@
+# 0.15.1 in-app feature selection
+
+232 tests pass, including mode toggling without hardware access, retained session
+and Undo history, outstanding-change exit warnings, replay rejection, keyboard and
+mouse activation/cancellation, disabled control entry points, and dialog/editor routing.
+
+A real 120x35 tmux terminal launched `python3 -m resourcelens` without flags.
+F2/Enter enabled controls; 2/g opened CPU settings. F2 disabled controls. Clicking
+the status indicator and Enable button enabled them again. In read-only mode,
+8/P/3 opened energy capture. Escape cancelled and exited with process status 0.
+No system settings were changed. This host has no exposed energy counters.
+
+The three-trial local PTY benchmark measured navigation at 1.52–3.67 ms,
+Escape-to-frame at 3.77–3.93 ms, and Escape-to-exit at 10.84–12.14 ms.
+These measure curses flushing, not physical display or SSH latency.
+
 # 0.15.0 energy validation
 
 227 tests pass. Controlled sysfs fixtures cover powercap alias deduplication,

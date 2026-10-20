@@ -127,7 +127,7 @@ class UsabilityTests(unittest.TestCase):
         view.key(ord('N'));view.key(ord('X'));view.key(10)
         self.assertEqual(view.investigation.events[-1]['label'],'X')
         view.page=7;view.application_mode='cgroups';view.replay=object();view.key(ord('b'))
-        self.assertIn('live --control',view.modal['message'])
+        self.assertIn('Replay is read-only',view.modal['message'])
 
     def sample_at(self,t,value=30):
         sample=deepcopy(self.sample);sample['timestamp']=t;sample['elapsed_s']=1

@@ -110,8 +110,8 @@ class HardwareTests(unittest.TestCase):
     def test_readonly_mouse_does_not_enable_control(self):
         view = View()
         view.hardware_menu()
-        self.assertEqual(view.modal['stage'], 'result')
-        self.assertIn('--control', view.modal['message'])
+        self.assertEqual(view.modal['stage'], 'control_mode')
+        self.assertFalse(view.control)
 
     def test_confirmation_resize_blocks_apply(self):
         view = View(control=True)

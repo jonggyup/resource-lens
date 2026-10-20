@@ -5,12 +5,30 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.15.0 is a preview with optional temporary CPU and disk controls.** Monitoring
-is read-only by default. `--control` enables previewed, confirmed CPU weight and
+**Version 0.15.1 is a preview with optional temporary CPU and disk controls.** Monitoring
+is read-only by default. **F2** (or click the mode indicator) enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
 limits and nice/per-process affinity editing remain future work.
 It does not claim functionality is unique to Linux tools.
+
+## Start without feature flags
+
+```bash
+python3 -m resourcelens
+# Or, after installation:
+resource-lens
+```
+
+- **F2** or click **Read-only F2**: enable/disable control menus, then Enter or click the button.
+- **8 → select a process or cgroup → P → 3**: capture energy efficiency.
+- **2 → g** (or click a CPU): governor and CPU online/offline settings.
+
+Enabling menus changes no OS settings. Each change still requires its own preview,
+confirmation and existing permissions. Disabling menus does not undo settings;
+re-enable them to use Undo. The mode is session-only; saved preferences never enable
+controls. Replay remains read-only. `--control` is an optional startup shortcut;
+energy and profiling CLI flags remain useful for scripted captures. No restart is needed.
 
 ## Save profiling evidence and compare runs
 
@@ -337,7 +355,7 @@ metrics; a fresh live report has no before/after history yet.
 
 ### Per-service disk bandwidth
 
-Launch with `--control`, select a service on Applications (`8`), and press `b`.
+Enable controls with **F2**, select a service on Applications (`8`), and press `b`.
 Enter a block device, direction, and rate, for example `sda write 10M`.
 `K/M/G` mean powers of 1024 bytes/sec; `max` removes that device's limit in the
 chosen direction. Review the device major/minor, backing devices, holders, old
@@ -441,7 +459,7 @@ always sorted by CPU; sorting/filtering applies to the full Tasks page.
 | `/` | Filter processes by name or PID; Enter finishes, Esc clears |
 | `/` on Applications | Filter workloads by unit name or cgroup path |
 | Applications: Up/Down, Enter, Esc | Select a group, open its hierarchy, go back |
-| Applications with `--control`: `w`, `l`, `u` | CPU weight, CPU quota, Undo latest session change |
+| Applications with controls enabled: `w`, `l`, `u` | CPU weight, CPU quota, Undo latest session change |
 | `?` | Help |
 | `q` / `Esc` | Quit (Esc clears an active filter first) |
 

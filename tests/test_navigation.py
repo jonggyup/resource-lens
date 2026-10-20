@@ -87,7 +87,7 @@ class NavigationTests(unittest.TestCase):
             draw(screen, view, 1)
             self.assertTrue(view.action_regions)
             self.assertTrue(all(1 <= start < end <= width - 1 for start, end, _ in view.action_regions))
-            self.assertIn('[Read-only]', ' '.join(screen.lines.values()))
+            self.assertIn('[Read-only F2]', ' '.join(screen.lines.values()))
         view.key(ord(':'))
         draw(Screen(24, 80), view, 1)
         row, (start, end, index) = next(iter(view.modal_regions.items()))

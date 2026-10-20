@@ -1,3 +1,10 @@
+# 0.15.1
+
+- Launch without feature flags; enable/disable control menus with F2 or the clickable mode indicator.
+- Offer in-app enablement from disabled CPU, placement and disk controls.
+- Keep explicit per-change confirmation, permissions, Undo history and replay isolation.
+- Document existing flag-free energy capture through P → Energy efficiency.
+
 # 0.15.0
 
 - Add read-only powercap/hwmon energy-domain discovery and CPU/Status display.

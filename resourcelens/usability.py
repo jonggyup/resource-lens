@@ -85,7 +85,7 @@ def capability_lines(sample, error=None, replay=False):
               'Writable CPU online files: ' + str(caps.get('writable_online', 'unknown')),
               f"Skipped/exited/unreadable processes: {sample.get('processes_skipped', 'unknown')}",
               'Workload files may be inactive despite controller availability at the root.',
-              'Enable --control only for intended changes. Permission denied? Use manager authorization',
+              'Use F2 to enable control menus. Permission denied? Use manager authorization',
               'or the explicitly installed narrow helper; monitoring never requires elevation.']
     energy=sample.get('energy')
     if energy:

@@ -71,10 +71,11 @@ def context_help(view):
                 'Browser: Enter or click opens a child/PID; Left/Backspace goes up; Esc goes back one level; q returns to Applications.',
                 'F4 or / filters workloads. p opens visual CPU placement.',
                 'w sets CPU weight; l sets quota; u undoes weight/quota.',
-                'U undoes CPU placement. Controls require --control and permission.'],
+                'U undoes CPU placement. Controls require F2 enablement and permission.'],
         }.get(view.page, ['Scroll to inspect every device, node and metric.',
                           'N/A means unavailable, not idle. Resource panels are read-only.'])
-    details += ['1 overview | e expand overview | 8 applications',
+    details += ['F2 or click the mode indicator: enable/disable control menus (no settings change).',
+                '1 overview | e expand overview | 8 applications',
                 'Applications: [ / ] detail tabs; D detail focus; Esc list focus; x clears hardware filter.',
                 'CPU/socket tiles: click or right-click opens settings; Shift-click shows allowed applications.',
                 'Focused CPU/disk or Memory: a shows related applications (placement/accounting, not inference).','0 capabilities | S save preferences | R export redacted report | N named marker',

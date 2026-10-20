@@ -281,7 +281,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
     def workload_lines(self, width=100):
         rows = self.workload_rows()
         group = self.selected_workload()
-        mode = "CPU controls enabled: p placement | U undo placement | w weight | l quota | u Undo" if self.control else "Read-only | use --control to enable runtime CPU changes"
+        mode = "CPU controls enabled: p placement | U undo placement | w weight | l quota | u Undo" if self.control else "Read-only | F2 enables runtime resource controls"
         if not self.workload_detail or group is None:
             name_width = max(12, min(45, width - 32))
             lines = [f"{len(rows)} workloads | / find | Enter open | Filter: {clean(self.workload_filter) or '(none)'}", mode,
@@ -351,8 +351,25 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     f"{result['target']['unit']}: previous CPU {result['property']} restored and verified." if kind == "undo" else
                     f"{result['target']['unit']}: CPU {result['property']} confirmed in systemd and the kernel. u: Undo latest change.")}
 
+    def control_label(self):
+        return '[CONTROL F2]' if self.control else '[Read-only F2]'
+
+    def open_control_mode(self):
+        if self.replay:
+            self.modal = dict(stage='result', message='Replay is read-only; resource controls are disabled.')
+        else:
+            self.modal = dict(stage='control_mode')
+
     def modal_lines(self):
         modal = self.modal
+        if modal['stage'] == 'control_mode':
+            return ['RESOURCE CONTROLS',
+                    'Mode: ' + ('enabled' if self.control else 'read-only'),
+                    'Enabling unlocks menus; it changes no system settings.',
+                    'Changes still require preview, confirmation and permission.',
+                    'Disabling keeps existing settings and Undo history.',
+                    '[ Disable controls ]' if self.control else '[ Enable controls ]',
+                    '[ Cancel ]', 'Enter: switch mode | Esc: cancel']
         if modal['stage'].startswith('utility_'):
             return self.utility_lines()
         if modal['stage'] == 'focus':
@@ -392,6 +409,16 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
 
     def modal_key(self, key):
         stage = self.modal["stage"]
+        if stage == 'control_mode':
+            if key in (10, 13):
+                if self.replay:
+                    self.open_control_mode()
+                else:
+                    self.control = not self.control
+                    self.modal = None
+            elif key in (27, ord('q')):
+                self.modal = None
+            return True
         if stage.startswith("utility_"):
             return self.utility_modal_key(key)
         if stage == 'focus':
@@ -549,7 +576,9 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         if self.modal:
             hit = self.modal_regions.get(y)
             if left and hit and hit[0] <= x < hit[1]:
-                if self.modal['stage'] == 'focus':
+                if self.modal['stage'] == 'control_mode':
+                    self.modal_key(27 if hit[2] == 'cancel' else 10)
+                elif self.modal['stage'] == 'focus':
                     self.modal['selected'] = hit[2]
                     self.focus_key(10)
                 elif self.modal['stage'] == 'navigate':
@@ -566,6 +595,9 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     self.utility_modal_key(10)
                 elif self.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm') and hit[2] == 'cancel':
                     self.modal = None
+            return
+        if left and y == self.screen_size[0] - 2 and 1 <= x < 1 + len(self.control_label()) and not self.placement and not self.editing_filter:
+            self.open_control_mode()
             return
         if self.profile_view:
             if left and y == self.screen_size[0]-1:
@@ -740,6 +772,9 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             except curses.error:
                 pass
             return True
+        if key == curses.KEY_F2 and not self.placement:
+            self.open_control_mode()
+            return True
         if self.profile_view:
             if not self.profile_view.key(key,height):self.profile_view=None
             return True
@@ -857,7 +892,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             return True
         if self.page == 7 and key in (ord("w"), ord("l"), ord("u")):
             if not self.control:
-                self.modal = {"stage": "result", "message": "Controls are disabled. Restart with --control to enable temporary CPU changes."}
+                self.open_control_mode()
             elif self.screen_size[0] < 18 or self.screen_size[1] < 70:
                 self.modal = {"stage": "result", "message": "Resize to at least 70 columns by 18 rows to preview CPU controls."}
             elif key == ord("u"):
@@ -1096,7 +1131,7 @@ def draw(screen, view, interval, error=None):
     if view.editing_filter:
         value = view.workload_filter if view.filter_context == "workloads" else view.filter
         message = f"Filter: {value}_ ({view.filter_context})  Enter: apply  Esc: clear"
-    message = ("[CONTROL] " if view.control else "[Read-only] ") + message
+    message = view.control_label() + " " + message
     put(screen, h - 2, 1, message, view.colors["warning"] if error else muted)
     x = 1
     for label, key in actions(view):
@@ -1125,6 +1160,8 @@ def draw(screen, view, interval, error=None):
             if view.modal['stage'] in ('hardware_menu', 'navigate', 'focus') and (line.startswith('> ') or line.startswith('- ')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, option_index)
                 option_index += 1
+            if view.modal['stage'] == 'control_mode' and line.startswith(('[ Enable controls ]', '[ Disable controls ]', '[ Cancel ]')):
+                view.modal_regions[top + 1 + index] = (left, left + box_width, 'cancel' if line.startswith('[ Cancel ]') else 'toggle')
             if view.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm') and line.startswith(('[ Apply ]', '[ Cancel ]')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, 'apply' if line.startswith('[ Apply ]') else 'cancel')
             put(screen, top + 1 + index, left + 2, line, curses.A_REVERSE | (curses.A_BOLD if index == 0 else 0), content_width)
@@ -1252,7 +1289,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None, (view.profile_view.scroll, id(view.profile_view.result), view.profile_view.error, view.profile_view.choosing, view.profile_view.selection, view.profile_view.details) if view.profile_view else None)
+                      screen.getmaxyx(), stale, view.control, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None, (view.profile_view.scroll, id(view.profile_view.result), view.profile_view.error, view.profile_view.choosing, view.profile_view.selection, view.profile_view.details) if view.profile_view else None)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render

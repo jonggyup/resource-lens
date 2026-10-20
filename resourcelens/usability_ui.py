@@ -51,7 +51,7 @@ class UsabilityView:
                 self.modal = dict(stage='result', message='No accounting device maps to a visible whole disk. Inspect I/O device IDs and backing topology.')
         elif self.page == 7 and key in (ord('b'),ord('B')):
             if self.replay or not self.control:
-                self.modal = dict(stage='result', message='Disk controls require live --control mode.')
+                self.open_control_mode()
             elif key == ord('B'):
                 self.job('utility_disk_undo', self.disk_session.undo)
             else:
