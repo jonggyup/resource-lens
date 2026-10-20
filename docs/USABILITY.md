@@ -1,3 +1,13 @@
+# 0.14.1 simpler investigation
+
+P opens one Investigate menu with CPU usage and CPU + waits, explained in plain
+language. Click a mode or select it with arrows/Enter; no capture starts merely by
+opening the menu. W remains a direct CPU + waits shortcut. Results show a summary
+first, with D for detailed stacks/diagnostics. Escape cancels or returns as labelled.
+
+Next: a saved-session browser with baseline selection and an interactive before/after
+comparison. This is planned, not implemented in this release.
+
 # 0.14.0 scheduler investigation
 
 `W` in Applications adds explicit scheduler tracing to the existing profile view;

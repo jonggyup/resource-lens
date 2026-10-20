@@ -1,3 +1,22 @@
+# 0.14.1 investigation usability validation
+
+217 tests pass. Added checks verify that opening/cancelling the chooser does not
+start a collector, keyboard and mouse select the requested mode, and summaries
+retain failure status while details expose full diagnostics. Existing control,
+profiling, scheduler and navigation tests still pass. The live mouse test exposed
+uninitialized wheel flags in the profile overlay; initialization now occurs before
+overlay routing, with a regression test through the main mouse handler.
+
+A live tmux check exercised P, a completed CPU capture, summary/details switching,
+and return to Applications. Mouse input is tested with xterm-256color/SGR terminal
+configuration; Escape cancellation remains asynchronous. The installed CLI reports
+0.14.1. CLI capture and comparison syntax are unchanged.
+
+The saved-session browser and interactive before/after comparison remain planned;
+this release improves mode discovery and result presentation.
+
+---
+
 # 0.14.0 scheduler tracing validation
 
 213 tests pass. New coverage checks sleeping versus runnable intervals, correct

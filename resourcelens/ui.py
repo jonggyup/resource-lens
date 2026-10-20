@@ -220,8 +220,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                 target=dict(cgroup='/sys/fs/cgroup/'+group['path'].lstrip('/'),expected_inode=group.get('inode'))
         if target:
             if scheduler:target['scheduler']=True
-            self.profile_view=ProfileView(target)
-            self.profile_jobs=[job for job in self.profile_jobs if job.result is None and job.error is None]
+            self.profile_view=ProfileView(target,choose=not scheduler)
+            self.profile_jobs=[job for job in self.profile_jobs if job.result is None and job.error is None and not job.stop.is_set()]
             self.profile_jobs.append(self.profile_view)
         else:
             self.modal=dict(stage='result',message='Select a process or cgroup in Applications, then press P to profile for 10 seconds.')
@@ -535,6 +535,8 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                 9: self.capability_lines, 4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines, 8: lambda width: [piece for line in self.investigation.lines() for piece in (textwrap.wrap(line, width) or [''])]}.get(self.page, self.process_lines)(width)
 
     def mouse(self, x, y, state):
+        wheel_up = state & getattr(curses, "BUTTON4_PRESSED", 0)
+        wheel_down = state & getattr(curses, "BUTTON5_PRESSED", 0)
         left = state & (getattr(curses, "BUTTON1_CLICKED", 0) | getattr(curses, "BUTTON1_PRESSED", 0))
         right = state & (getattr(curses, "BUTTON3_CLICKED", 0) | getattr(curses, "BUTTON3_PRESSED", 0))
         if self.modal:
@@ -562,6 +564,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             if left and y == self.screen_size[0]-1:
                 for start,end,key in self.action_regions:
                     if start<=x<end:return self.key(key,self.screen_size[0])
+            if left:self.profile_view.mouse(x,y)
             if wheel_up:self.profile_view.key(curses.KEY_UP,self.screen_size[0])
             elif wheel_down:self.profile_view.key(curses.KEY_DOWN,self.screen_size[0])
             return
@@ -1242,7 +1245,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None, (view.profile_view.scroll, id(view.profile_view.result), view.profile_view.error) if view.profile_view else None)
+                      screen.getmaxyx(), stale, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None, (view.profile_view.scroll, id(view.profile_view.result), view.profile_view.error, view.profile_view.choosing, view.profile_view.selection, view.profile_view.details) if view.profile_view else None)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render

@@ -1,3 +1,12 @@
+# 0.14.1
+
+- Replace the ambiguous P action with an Investigate menu: CPU usage or CPU + waits.
+- Add mouse selection and explicit mode explanations before collection starts.
+- Retain W as a direct CPU + waits shortcut and all CLI capture options.
+- Open results with a concise summary; D toggles stacks, diagnostics and coverage.
+- Keep failures visible in the summary and cancel/back actions specific to each stage.
+- Fix mouse clicks/scrolling crashing the profile overlay due to uninitialized wheel flags.
+
 # 0.14.0
 
 - Add opt-in `W` / `--scheduler` tracing for selected initial process/cgroup threads.

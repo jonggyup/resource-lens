@@ -1,4 +1,4 @@
-# Investigation sessions (0.14.0 preview)
+# Investigation sessions (0.14.1 preview)
 
 Use this workflow to preserve evidence before and after a workload or configuration
 change. It combines Resource Lens counters with Linux perf; it is not a replacement
@@ -6,14 +6,18 @@ for perf, an automatic regression verdict, or a complete kernel profiler.
 
 ## Interactive capture
 
-Open Applications (`8`), select a process, and press **P**. In cgroup mode (`g`),
-P captures the selected group; inside the hierarchy it captures the open group or
-PID. The target identity is checked, so a stale selection cannot silently choose a
+Open Applications (`8`), select a process, and press **P** for **Investigate**.
+Choose **CPU usage** (busy functions) or **CPU + waits** (also captures where threads
+stop and how long they wait for CPU). Click a choice, press 1/2, or use arrows then
+Enter. No collection starts until you choose; Escape closes the menu. In cgroup
+mode (`g`), the target is the selected group; inside the hierarchy it is the open
+group or PID. The target identity is checked, so a stale selection cannot silently choose a
 replacement. Recording replay cannot initiate a live profile.
 
 Collection runs in a background thread for ten seconds. The screen displays the
-saved directory, collection status, counters, diagnostics, and the first 100 lines
-of a readable perf report. Arrow keys or mouse wheel scroll. **Esc cancels and
+saved directory, collection status and a short counter/wait summary. Press **D**
+for coverage, diagnostics, switch-out stacks and the first 100 lines of the CPU
+report; D again returns to the summary. Arrow keys or mouse wheel scroll. **Esc cancels and
 returns immediately**; workers finish cleanup in the background. A completed
 capture remains saved. Pressing Escape again follows the existing navigation.
 The footer's action is clickable. Existing hardware/control shortcuts remain intact.
@@ -26,8 +30,7 @@ it. The perf child has a bounded sleep duration even if the dashboard terminates
 ## Scheduler tracing: W / --scheduler
 
 In Applications or a process/cgroup detail view, press **W** instead of P to add
-scheduler tracing to the ten-second capture. W is an explicit opt-in; P remains
-CPU profiling only. Escape returns immediately and requests background cleanup.
+scheduler tracing to the ten-second capture. W is a direct shortcut for **CPU + waits**; the P menu offers both modes. Escape returns immediately and requests background cleanup.
 The report is scrollable using Up/Down or the mouse wheel. F1 documents the shortcut.
 
 ```bash

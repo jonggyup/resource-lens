@@ -100,3 +100,55 @@ class ProfilingTests(unittest.TestCase):
         result=subprocess.run(['python3','-m','resourcelens','--compare','a','b','--pid','1'],capture_output=True,text=True)
         self.assertNotEqual(result.returncode,0)
         self.assertIn('require --profile',result.stderr)
+
+    def test_chooser_does_not_collect_until_choice_and_can_cancel(self):
+        with patch('resourcelens.profiling.capture') as collecting:
+            view=ProfileView(dict(pid=os.getpid()),choose=True)
+            self.assertTrue(view.choosing)
+            collecting.assert_not_called()
+            self.assertFalse(view.key(27,24))
+            view.start(True)
+            collecting.assert_not_called()
+
+    def test_chooser_keyboard_and_mouse_select_explicit_mode(self):
+        from test_navigation import Screen
+        for use_mouse in (False,True):
+            view=ProfileView(dict(pid=os.getpid()),choose=True)
+            with patch.object(view,'start') as start:
+                if use_mouse:
+                    view.draw(Screen(24,100),100,24)
+                    left,right,row,mode=view.regions[1]
+                    view.mouse(left,row)
+                else:
+                    view.key(curses.KEY_DOWN,24)
+                    self.assertEqual(view.selection,1)
+                    view.key(10,24)
+                start.assert_called_once_with(True)
+
+    def test_summary_keeps_failures_visible_and_details_separate(self):
+        view=ProfileView(dict(pid=os.getpid()),choose=True)
+        view.choosing=False
+        view.result=dict(status='complete',metrics={'cpu_percent':20},warnings=['measurement warning'],
+                         profile={'status':'failed','diagnostic':'precise error'},
+                         scheduler={'status':'unavailable','reason':'Permission denied'})
+        summary='\n'.join(view.lines())
+        self.assertIn('CPU stack capture failed',summary)
+        self.assertIn('Permission denied',summary)
+        self.assertNotIn('precise error',summary)
+        view.key(ord('D'),24)
+        self.assertIn('precise error','\n'.join(view.lines()))
+        self.assertIn('measurement warning','\n'.join(view.lines()))
+
+    def test_main_mouse_route_handles_profile_click_and_wheel(self):
+        from test_navigation import Screen
+        dashboard=View()
+        profile=ProfileView(dict(pid=os.getpid()),choose=True)
+        dashboard.profile_view=profile
+        profile.draw(Screen(24,100),100,24)
+        with patch.object(profile,'start') as start:
+            dashboard.mouse(5,8,curses.BUTTON1_PRESSED)
+            start.assert_called_once_with(True)
+        profile.choosing=False
+        profile.scroll=2
+        dashboard.mouse(5,8,curses.BUTTON4_PRESSED)
+        self.assertEqual(profile.scroll,1)

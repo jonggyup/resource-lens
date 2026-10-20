@@ -266,48 +266,111 @@ def compare(baseline, candidate):
 
 
 class ProfileView:
-    def __init__(self, target):
+    def __init__(self, target, choose=False):
         from .usability import state_dir
         import uuid
         self.directory=state_dir()/'profiles'/uuid.uuid4().hex
         self.stop=threading.Event();self.result=None;self.error=None;self.scroll=0
-        self.target=target
+        self.target=dict(target)
+        self.choosing=choose;self.selection=0;self.details=False;self.regions=[]
+        self.started=False
+        if not choose:self.start(bool(target.get('scheduler')))
+
+    def start(self, scheduler):
+        if self.started or self.stop.is_set():return
+        self.target['scheduler']=scheduler
+        self.started=True;self.choosing=False;self.scroll=0
         def worker():
-            try:self.result=capture(self.directory,**target,stop=self.stop)
+            try:self.result=capture(self.directory,**self.target,stop=self.stop)
             except Exception as exc:self.error=str(exc)
         threading.Thread(target=worker,daemon=True).start()
 
     def key(self,key,height):
         if key in (27,ord('q'),curses.KEY_F10):self.stop.set();return False
-        if key in (curses.KEY_DOWN,ord('j')):self.scroll+=1
+        if self.choosing:
+            if key in (curses.KEY_DOWN,curses.KEY_UP,ord('j'),ord('k'),9):self.selection=1-self.selection
+            elif key in (10,13):self.start(bool(self.selection))
+            elif key==ord('1'):self.start(False)
+            elif key==ord('2'):self.start(True)
+            return True
+        if key in (ord('d'),ord('D')):
+            self.details=not self.details;self.scroll=0
+        elif key in (curses.KEY_DOWN,ord('j')):self.scroll+=1
         elif key in (curses.KEY_UP,ord('k')):self.scroll=max(0,self.scroll-1)
+        elif key==curses.KEY_NPAGE:self.scroll+=max(1,height-5)
+        elif key==curses.KEY_PPAGE:self.scroll=max(0,self.scroll-max(1,height-5))
         return True
+
+    def mouse(self,x,y):
+        if self.choosing:
+            for left,right,row,mode in self.regions:
+                if row==y and left<=x<right:
+                    self.start(mode)
+                    return
+
+    def lines(self):
+        from .ui import size
+        target='PID '+str(self.target['pid']) if self.target.get('pid') else 'Cgroup '+str(self.target.get('cgroup'))
+        mode='CPU + waits' if self.target.get('scheduler') else 'CPU usage'
+        lines=['INVESTIGATE / '+target+' / '+mode]
+        if self.error:return lines+[self.error,'Esc returns.']
+        if self.result is None:
+            return lines+['Collecting for 10 seconds in the background.','Esc cancels and returns immediately.','Saving to: '+str(self.directory)]
+        r=self.result
+        lines += ['Capture: '+r['status']+' | CPU stacks: '+r['profile']['status'],
+                  'D: '+('Summary' if self.details else 'Details and stacks')+' | Esc: Back']
+        labels={'cpu_percent':'CPU (% of one CPU)', 'rss_end_bytes':'Resident memory at end',
+                'major_faults_per_second':'Major faults / second',
+                'surviving_threads_runqueue_wait_seconds_per_second':'Runqueue wait (thread-seconds / second)',
+                'throttled_seconds_per_second':'Throttled seconds / second'}
+        lines += [labels.get(k,k)+': '+(size(v) if k=='rss_end_bytes' else f'{v:.3f}') for k,v in r['metrics'].items() if not k.startswith('scheduler.')]
+        trace=r.get('scheduler',{})
+        if trace.get('status','disabled')!='disabled':
+            if self.details:
+                from .scheduler_trace import summary_lines
+                lines += summary_lines(trace)
+            else:
+                lines += ['Wait tracing: '+trace['status']]
+                names={'off_cpu':'Not running (sleeping + waiting for CPU)',
+                       'sleep_to_wakeup':'Sleeping until awakened', 'runqueue':'Ready, waiting for CPU'}
+                for kind,values in trace.get('distributions',{}).items():
+                    lines.append(names[kind]+(f": p95 {values['p95_ms']:.3f} ms ({values['count']} intervals)" if values['count'] else ': no complete intervals'))
+                if trace.get('reason'):lines.append(trace['reason'])
+                lines += ['These are observed thread waits, not request latency.',
+                          'Initial threads only; boundary intervals are excluded. D shows coverage and stacks.']
+        if r['profile'].get('reason'):lines.append(r['profile']['reason'])
+        if r['profile']['status']=='failed':lines.append('CPU stack capture failed. Press D for the collector error.')
+        if trace.get('status') in ('failed','partial','unavailable'):
+            lines.append('Wait evidence is incomplete or unavailable. Press D for the reason and coverage.')
+        if r['status']!='complete':lines += r['warnings']
+        if self.details:
+            if r['status']=='complete':lines += r['warnings']
+            if r['profile'].get('diagnostic'):lines.extend(r['profile']['diagnostic'].splitlines())
+            if r['profile']['status']=='recorded':
+                lines += (read(self.directory/'perf-report.txt') or '').splitlines()[:100]
+            lines += ['CPU stacks: perf report -i '+str(self.directory/'perf.data'),
+                      'Compare: resource-lens --compare BASELINE_DIR CANDIDATE_DIR']
+        lines += ['Saved to: '+str(self.directory)]
+        return lines
 
     def draw(self,screen,width,height):
         from .ui import put
         import textwrap
-        target='PID '+str(self.target['pid']) if self.target.get('pid') else 'Cgroup '+str(self.target.get('cgroup'))
-        lines=['INVESTIGATION / '+target+' / 10 seconds','Esc cancels collection and returns immediately.',str(self.directory)]
-        if self.error:lines.append(self.error)
-        elif not self.result:lines.append('Collecting in background; normal telemetry continues.')
-        else:
-            r=self.result
-            lines += ['Session: '+r['status']+' | CPU profile: '+r['profile']['status']]
-            from .ui import size
-            labels={'cpu_percent':'CPU (% of one CPU)', 'rss_end_bytes':'Resident memory at end',
-                    'major_faults_per_second':'Major faults / second',
-                    'surviving_threads_runqueue_wait_seconds_per_second':'Runqueue wait (thread-seconds / second)',
-                    'throttled_seconds_per_second':'Throttled seconds / second'}
-            lines += [labels.get(k,k)+': '+(size(v) if k=='rss_end_bytes' else f'{v:.3f}') for k,v in r['metrics'].items() if not k.startswith('scheduler.')]
-            if r.get('scheduler',{}).get('status','disabled')!='disabled':
-                from .scheduler_trace import summary_lines
-                lines += summary_lines(r['scheduler'])
-            lines += r['warnings']
-            if r['profile'].get('reason'):lines.append(r['profile']['reason'])
-            if r['profile'].get('diagnostic'):lines.extend(r['profile']['diagnostic'].splitlines())
-            if r['profile']['status']=='recorded':
-                lines += (read(self.directory/'perf-report.txt') or '').splitlines()[:100]
-            lines += ['Stacks: perf report -i '+str(self.directory/'perf.data'), 'Compare: resource-lens --compare BASELINE_DIR CANDIDATE_DIR']
-        wrapped=[piece for line in lines for piece in (textwrap.wrap(line,max(10,width-3)) or [''])]
+        self.regions=[]
+        if self.choosing:
+            target='PID '+str(self.target['pid']) if self.target.get('pid') else str(self.target.get('cgroup'))
+            put(screen,2,1,'INVESTIGATE / '+target,curses.A_BOLD)
+            put(screen,3,1,'Choose what to capture. Both run for 10 seconds.')
+            options=[('1  CPU usage','Which functions are using CPU? Start here.'),
+                     ('2  CPU + waits','Also show where threads stop and how long they wait for CPU.')]
+            for index,(label,explanation) in enumerate(options):
+                row=5+index*3
+                put(screen,row,1,'[ '+label+' ]',curses.A_REVERSE if self.selection==index else curses.A_BOLD)
+                self.regions.append((1,min(width-1,len(label)+5),row,bool(index)))
+                put(screen,row+1,3,explanation)
+            put(screen,11,1,'CPU + waits adds tracing overhead and needs scheduler tracing permission.')
+            put(screen,13,1,'Click a choice, press 1/2, or use arrows then Enter. Esc goes back.')
+            return
+        wrapped=[piece for line in self.lines() for piece in (textwrap.wrap(line,max(10,width-3)) or [''])]
         self.scroll=min(self.scroll,max(0,len(wrapped)-max(1,height-5)))
         for i,line in enumerate(wrapped[self.scroll:self.scroll+max(1,height-5)]):put(screen,i+2,1,line)

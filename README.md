@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.14.0 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.14.1 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -14,8 +14,11 @@ It does not claim functionality is unique to Linux tools.
 
 ## Save profiling evidence and compare runs
 
-Press `P` on a selected process or cgroup in Applications (`8`) for a background
-10-second capture. Press `W` to add filtered scheduler tracing and off-CPU stacks. Esc cancels immediately. Sessions save resource counters,
+Press `P` on a selected process or cgroup in Applications (`8`) to open **Investigate**.
+Choose **CPU usage** to find busy functions, or **CPU + waits** to also inspect
+where threads stop and how long they wait for CPU. Click a choice or press 1/2.
+Both capture for 10 seconds; `W` starts CPU + waits directly. Esc cancels immediately.
+Results open with a summary; `D` shows stacks, diagnostics and coverage details. Sessions save resource counters,
 configuration and optional Linux perf call stacks. `V` still opens memory inspection.
 
 ```bash
