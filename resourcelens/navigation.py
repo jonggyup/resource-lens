@@ -10,7 +10,7 @@ def actions(view):
     if view.profile_view:
         profile=view.profile_view
         if profile.choosing:
-            return [('1 CPU usage',ord('1')),('2 CPU + waits',ord('2')),('Enter Start',10),('Esc Back',27)]
+            return [('1 CPU usage',ord('1')),('2 CPU + waits',ord('2')),('3 Energy',ord('3')),('Enter Start',10),('Esc Back',27)]
         if profile.result is not None or profile.error is not None:
             return [('D Summary' if profile.details else 'D Details',ord('D')),('Esc Back',27)]
         return [('Esc Cancel',27)]
@@ -62,7 +62,7 @@ def context_help(view):
                 'c/m/n/p sort by CPU, memory, name or PID.'],
             7: ['Applications defaults to processes ranked by CPU. g toggles cgroup view.',
                 'Processes: c/m/n/p sorts CPU/memory/name/PID; Enter opens process details.',
-                'P opens Investigate: choose CPU usage or CPU + waits by click, 1/2, or arrows/Enter.',
+                'P opens Investigate: choose CPU usage, CPU + waits, or Energy efficiency; click or press 1/2/3.',
                 'W starts CPU + waits directly. Both capture 10 seconds; Esc cancels. D toggles result details.',
                 'V inspects live memory allocation, shared-address-space threads and mapped-file peers.',
                 'Cgroups: Up/Down selects a group; Enter/Right opens its hierarchy.',

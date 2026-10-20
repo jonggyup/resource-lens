@@ -1,3 +1,13 @@
+# 0.15.0
+
+- Add read-only powercap/hwmon energy-domain discovery and CPU/Status display.
+- Add P → 3 Energy efficiency, --energy-info and --profile --energy capture.
+- Save per-domain counter evidence, joules, average watts and sampling coverage.
+- Add caller-supplied completed work and per-domain joules/work comparisons.
+- Reject guessed rollover/reset intervals, omit incomplete normalized results,
+  distinguish unavailable energy from zero, and never sum overlapping domains.
+- Keep energy hardware-scoped; no process attribution or automatic power controls.
+
 # 0.14.1
 
 - Replace the ambiguous P action with an Investigate menu: CPU usage or CPU + waits.

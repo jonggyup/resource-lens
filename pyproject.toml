@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "resource-lens"
-version = "0.14.1"
+version = "0.15.0"
 description = "A live Linux resource dashboard with verified runtime CPU and disk controls"
 requires-python = ">=3.10"
 license = {text = "MIT"}

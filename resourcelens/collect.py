@@ -75,6 +75,8 @@ class Collector:
         self.active_query = None
         self.closed = False
         self.clock = clock
+        from .energy import EnergyMeter
+        self.energy = EnergyMeter(self.sys, clock)
         self.last_time = None
         self.last_cpu, self.last_disk, self.last_process = {}, {}, {}
         self.last_network = {}
@@ -355,7 +357,7 @@ class Collector:
                 "network": network, "cpu_hardware": Hardware(self.sys / "devices/system/cpu").snapshot(),
                 "workloads": workloads, "cgroup_tree": self.workloads.hierarchy(elapsed), "resource_topology": topology(self.sys),
                 "thermal_throttling": self.thermal_throttling(),
-                "pressure": self.pressure(), "temperatures": self.temperatures(),
+                "pressure": self.pressure(), "temperatures": self.temperatures(), "energy": self.energy.sample(),
                 "processes": processes, "processes_skipped": skipped,
                 "load": [number(x) for x in loads[:3]], "root_filesystem": root_fs,
                 "warnings": (["CPU counters unavailable"] if not cpu else []) +

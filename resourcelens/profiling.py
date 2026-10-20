@@ -87,7 +87,13 @@ def metrics(first, last, elapsed, cgroup=False, schedstats=False):
     return {k:v for k,v in result.items() if v>=0 and math.isfinite(v)}
 
 
-def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=None, perf=True, expected_start=None, expected_inode=None, outcomes=None, scheduler=False):
+def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=None, perf=True, expected_start=None, expected_inode=None, outcomes=None, scheduler=False, energy=False, work_units=None, work_unit="unit"):
+    if work_units is not None and (not energy or not math.isfinite(work_units) or work_units<=0):
+        raise ValueError('Positive finite --work-units requires --energy')
+    if work_unit!='unit' and not energy:
+        raise ValueError('--work-unit requires --energy')
+    if not work_unit.strip() or len(work_unit)>64:
+        raise ValueError('Work unit must be a nonempty label of at most 64 characters')
     outcomes=outcomes or {}
     if any(not isinstance(v,(int,float)) or not math.isfinite(v) for v in outcomes.values()):
         raise ValueError('Workload outcomes must be finite numbers')
@@ -131,11 +137,15 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
     else:
         info['environment']['limits']={name:read(Path(cgroup)/name) for name in ('cpu.max','cpu.weight','cpuset.cpus.effective','memory.max','io.max')}
     info['environment']['governors']={p.parent.name:read(p) for p in Path('/sys/devices/system/cpu/cpufreq').glob('policy*/scaling_governor')}
-    process=None; log=None; trace=None; start=time.monotonic()
+    process=None; log=None; trace=None; energy_meter=None; energy_samples=[]; start=time.monotonic()
     info['profile']={'status':'disabled' if not perf else 'unavailable'}
     info['scheduler']={'status':'pending' if scheduler else 'disabled'}
+    info['energy']={'status':'pending' if energy else 'disabled'}
     write(directory/'session.json',info)
     try:
+        if energy:
+            from .energy import EnergyMeter
+            energy_meter=EnergyMeter()
         if scheduler:
             from .scheduler_trace import SchedulerTrace
             trace=SchedulerTrace(directory,pid,cgroup,duration)
@@ -157,6 +167,8 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
             sample=target_sample(pid,cgroup)
             if pid and (sample['starttime']!=generation or identity(Path('/proc')/str(pid))!=generation):
                 raise ValueError('PID identity changed during sampling')
+            if energy_meter:
+                energy_samples.append(energy_meter.sample())
             info['samples'].append({'elapsed':time.monotonic()-start,'data':sample})
             if stop.is_set() or time.monotonic()-start>=duration:
                 break
@@ -207,6 +219,23 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
         if len(info['samples'])>1:
             a,b=info['samples'][0],info['samples'][-1]
             info['metrics']=metrics(a['data'],b['data'],b['elapsed']-a['elapsed'],bool(cgroup),info['environment']['sched_schedstats']=='1')
+        if energy_meter:
+            from .energy import summarize
+            info['energy']=summarize(energy_samples,work_units,work_unit)
+            info['energy']['samples']=energy_samples
+            info['energy']['host']=platform.node()
+            if info['status']!='complete':
+                info['energy']['status']='partial'
+                for domain in info['energy']['domains']:domain['joules_per_work_unit']=None
+            if info['status']=='complete':
+                import hashlib
+                for domain in info['energy']['domains']:
+                    if domain['status']!='complete':continue
+                    prefix='energy.'+hashlib.sha256(domain['id'].encode()).hexdigest()[:16]+'.'
+                    info['metrics'][prefix+'joules']=domain['observed_joules']
+                    info['metrics'][prefix+'average_watts']=domain['average_watts']
+                    if domain['joules_per_work_unit'] is not None:
+                        info['metrics'][prefix+'joules_per_work_unit']=domain['joules_per_work_unit']
         if info['scheduler']['status']=='complete':
             for kind,values in info['scheduler'].get('distributions',{}).items():
                 if values['count']:
@@ -251,6 +280,21 @@ def compare(baseline, candidate):
     rows={}
     sets=[dict(r['metrics'],**{'outcome.'+k:v for k,v in r.get('outcomes',{}).items()}) for r in a+b]
     common=set.intersection(*(set(r) for r in sets))
+    energy_runs=[r.get('energy',{}) for r in a+b]
+    if len({r.get('host') for r in energy_runs})>1:
+        warnings.append('Energy host identity differs or is missing; hardware energy comparisons omitted.')
+        common={k for k in common if not k.startswith('energy.')}
+    if len({r.get('work_unit') for r in energy_runs})>1:
+        warnings.append('Completed-work units differ; joules/work comparisons omitted.')
+        common={k for k in common if not k.endswith('.joules_per_work_unit')}
+    energy_domains={}
+    import hashlib
+    for r in energy_runs:
+        for d in r.get('domains',[]):
+            key='energy.'+hashlib.sha256(d['id'].encode()).hexdigest()[:16]
+            energy_domains[key]={'id':d['id'],'label':d['label'],'source':d['source']}
+    if any(r.get('status','disabled')!='disabled' for r in energy_runs):
+        warnings.append('Energy is per hardware domain across all workloads, not attributed application energy. Overlapping domains must not be added.')
     if any(set(r)!=common for r in sets):warnings.append('Some metrics are unavailable in some sessions; only common metrics compared.')
     for key in sorted(common):
         x=summary([r[key] for r in sets[:len(a)]]);y=summary([r[key] for r in sets[len(a):]])
@@ -261,7 +305,7 @@ def compare(baseline, candidate):
                       'candidate':[r.get('scheduler',{}).get('status','disabled') for r in b]}
     if any(status!='disabled' for side in scheduler_status.values() for status in side) and any(status!='complete' for side in scheduler_status.values() for status in side):
         warnings.append('Scheduler tracing is not complete for every run; consult scheduler status before comparing waits.')
-    return dict(scheduler=scheduler_status,metrics=rows,environment_changes=changes,configurations=configurations,warnings=warnings,
+    return dict(energy_domains=energy_domains,energy_status={'baseline':[r.get('energy',{}).get('status','disabled') for r in a],'candidate':[r.get('energy',{}).get('status','disabled') for r in b]},scheduler=scheduler_status,metrics=rows,environment_changes=changes,configurations=configurations,warnings=warnings,
                 profiles={'baseline':[r['profile']['status'] for r in a],'candidate':[r['profile']['status'] for r in b]})
 
 
@@ -278,7 +322,9 @@ class ProfileView:
 
     def start(self, scheduler):
         if self.started or self.stop.is_set():return
-        self.target['scheduler']=scheduler
+        self.target['scheduler']=scheduler==1
+        if scheduler==2:
+            self.target.update(energy=True,perf=False)
         self.started=True;self.choosing=False;self.scroll=0
         def worker():
             try:self.result=capture(self.directory,**self.target,stop=self.stop)
@@ -288,10 +334,11 @@ class ProfileView:
     def key(self,key,height):
         if key in (27,ord('q'),curses.KEY_F10):self.stop.set();return False
         if self.choosing:
-            if key in (curses.KEY_DOWN,curses.KEY_UP,ord('j'),ord('k'),9):self.selection=1-self.selection
-            elif key in (10,13):self.start(bool(self.selection))
+            if key in (curses.KEY_DOWN,curses.KEY_UP,ord('j'),ord('k'),9):self.selection=(self.selection+(-1 if key in (curses.KEY_UP,ord('k')) else 1))%3
+            elif key in (10,13):self.start(2 if self.selection==2 else bool(self.selection))
             elif key==ord('1'):self.start(False)
             elif key==ord('2'):self.start(True)
+            elif key==ord('3'):self.start(2)
             return True
         if key in (ord('d'),ord('D')):
             self.details=not self.details;self.scroll=0
@@ -311,19 +358,22 @@ class ProfileView:
     def lines(self):
         from .ui import size
         target='PID '+str(self.target['pid']) if self.target.get('pid') else 'Cgroup '+str(self.target.get('cgroup'))
-        mode='CPU + waits' if self.target.get('scheduler') else 'CPU usage'
+        mode='Energy efficiency' if self.target.get('energy') else ('CPU + waits' if self.target.get('scheduler') else 'CPU usage')
         lines=['INVESTIGATE / '+target+' / '+mode]
         if self.error:return lines+[self.error,'Esc returns.']
         if self.result is None:
             return lines+['Collecting for 10 seconds in the background.','Esc cancels and returns immediately.','Saving to: '+str(self.directory)]
         r=self.result
-        lines += ['Capture: '+r['status']+' | CPU stacks: '+r['profile']['status'],
+        lines += ['Capture: '+r['status']+(' | Hardware-domain energy' if self.target.get('energy') else ' | CPU stacks: '+r['profile']['status']),
                   'D: '+('Summary' if self.details else 'Details and stacks')+' | Esc: Back']
         labels={'cpu_percent':'CPU (% of one CPU)', 'rss_end_bytes':'Resident memory at end',
                 'major_faults_per_second':'Major faults / second',
                 'surviving_threads_runqueue_wait_seconds_per_second':'Runqueue wait (thread-seconds / second)',
                 'throttled_seconds_per_second':'Throttled seconds / second'}
-        lines += [labels.get(k,k)+': '+(size(v) if k=='rss_end_bytes' else f'{v:.3f}') for k,v in r['metrics'].items() if not k.startswith('scheduler.')]
+        lines += [labels.get(k,k)+': '+(size(v) if k=='rss_end_bytes' else f'{v:.3f}') for k,v in r['metrics'].items() if not k.startswith(('scheduler.','energy.'))]
+        if r.get('energy',{}).get('status','disabled')!='disabled':
+            from .energy import lines as energy_lines
+            lines += energy_lines(r['energy'])
         trace=r.get('scheduler',{})
         if trace.get('status','disabled')!='disabled':
             if self.details:
@@ -360,16 +410,17 @@ class ProfileView:
         if self.choosing:
             target='PID '+str(self.target['pid']) if self.target.get('pid') else str(self.target.get('cgroup'))
             put(screen,2,1,'INVESTIGATE / '+target,curses.A_BOLD)
-            put(screen,3,1,'Choose what to capture. Both run for 10 seconds.')
+            put(screen,3,1,'Choose what to capture. All run for 10 seconds.')
             options=[('1  CPU usage','Which functions are using CPU? Start here.'),
-                     ('2  CPU + waits','Also show where threads stop and how long they wait for CPU.')]
+                     ('2  CPU + waits','Also show where threads stop and how long they wait for CPU.'),
+                     ('3  Energy efficiency','Hardware-domain joules and watts during this workload; not process attribution.')]
             for index,(label,explanation) in enumerate(options):
                 row=5+index*3
                 put(screen,row,1,'[ '+label+' ]',curses.A_REVERSE if self.selection==index else curses.A_BOLD)
-                self.regions.append((1,min(width-1,len(label)+5),row,bool(index)))
+                self.regions.append((1,min(width-1,len(label)+5),row,2 if index==2 else bool(index)))
                 put(screen,row+1,3,explanation)
-            put(screen,11,1,'CPU + waits adds tracing overhead and needs scheduler tracing permission.')
-            put(screen,13,1,'Click a choice, press 1/2, or use arrows then Enter. Esc goes back.')
+            put(screen,14,1,'CPU + waits adds tracing overhead and needs scheduler tracing permission.')
+            put(screen,16,1,'Click a choice, press 1/2/3, or use arrows then Enter. Esc goes back.')
             return
         wrapped=[piece for line in self.lines() for piece in (textwrap.wrap(line,max(10,width-3)) or [''])]
         self.scroll=min(self.scroll,max(0,len(wrapped)-max(1,height-5)))

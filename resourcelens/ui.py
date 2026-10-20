@@ -476,6 +476,13 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         offset = len(lines)
         self.topology_line_regions.update({row + offset: value for row, value in hits.items()})
         lines.extend(tiles)
+        if not p:
+            energy=s.get('energy')
+            if energy:
+                domains=energy.get('domains',[])
+                values=[d['label']+': '+(f"{d['watts']:.2f} W" if d.get('watts') is not None else d['status']) for d in domains[:3]]
+                lines.append('Hardware energy: '+(' | '.join(values) if values else 'unavailable (no exposed energy counters)'))
+                if domains:lines.append('Separate hardware domains, not additive or process-attributed. 0: full sensor inventory.')
         if not data['policies']:
             lines.append('Frequency governors: unavailable on this system.')
         for policy, info in data['policies'].items():

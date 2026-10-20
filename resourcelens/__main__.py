@@ -46,13 +46,23 @@ def main():
     parser.add_argument('--no-perf', action='store_true', help='capture counters without CPU call stacks')
     parser.add_argument('--compare', nargs=2, metavar=('BASELINE', 'CANDIDATE'), help='compare two saved session directories')
     parser.add_argument('--outcome',action='append',default=[],metavar='NAME=VALUE',help='externally measured workload result; include units in name, e.g. p99_ms=12.5')
+    parser.add_argument('--energy-info',action='store_true',help='list exposed hardware energy domains as JSON and exit')
+    parser.add_argument('--energy',action='store_true',help='save hardware-domain energy during a profile, not per-process attribution')
+    parser.add_argument('--work-units',type=float,help='externally measured completed work during the energy window')
+    parser.add_argument('--work-unit',default='unit',help='completed-work label, e.g. request, job, or token')
     args = parser.parse_args()
+    if args.energy_info:
+        if any((args.profile,args.compare,args.replay,args.record,args.control,args.once,args.json,args.report,args.energy,args.incidents,args.pid is not None,args.cgroup,args.work_units is not None,args.work_unit!='unit',args.scheduler)):
+            parser.error('--energy-info is a standalone discovery command')
+        from .energy import EnergyMeter
+        print(json.dumps(EnergyMeter().sample(),indent=2,allow_nan=False))
+        return 0
     if args.profile or args.compare:
         if args.profile and args.compare:
             parser.error('choose --profile or --compare')
         if any((args.replay,args.record,args.control,args.once,args.json,args.report,args.incidents)):
             parser.error('profiling/comparison cannot be combined with dashboard, recording or snapshot modes')
-        if args.compare and (args.pid is not None or args.cgroup or args.no_perf or args.label or args.outcome or args.duration != 10 or args.scheduler):
+        if args.compare and (args.pid is not None or args.cgroup or args.no_perf or args.label or args.outcome or args.duration != 10 or args.scheduler or args.energy or args.work_units is not None or args.work_unit!='unit'):
             parser.error('capture options require --profile, not --compare')
         from .profiling import capture, compare
         try:
@@ -61,7 +71,7 @@ def main():
                 name,value=item.split('=',1)
                 if not name:raise ValueError('Outcome name is empty')
                 outcomes[name]=float(value)
-            result = (capture(args.profile,pid=args.pid,cgroup=args.cgroup,duration=args.duration,label=args.label,perf=not args.no_perf,outcomes=outcomes,scheduler=args.scheduler)
+            result = (capture(args.profile,pid=args.pid,cgroup=args.cgroup,duration=args.duration,label=args.label,perf=not args.no_perf,outcomes=outcomes,scheduler=args.scheduler,energy=args.energy,work_units=args.work_units,work_unit=args.work_unit)
                       if args.profile else compare(*args.compare))
             print(json.dumps(result,indent=2,allow_nan=False))
             return 0 if not args.profile or result['status']=='complete' else 1
@@ -70,8 +80,8 @@ def main():
         except (OSError,ValueError) as exc:
             print('Resource Lens: '+str(exc),file=sys.stderr)
             return 1
-    if args.pid is not None or args.cgroup or args.no_perf or args.label or args.duration != 10 or args.outcome or args.scheduler:
-        parser.error('--pid/--cgroup/--duration/--label/--no-perf/--scheduler require --profile')
+    if args.pid is not None or args.cgroup or args.no_perf or args.label or args.duration != 10 or args.outcome or args.scheduler or args.energy or args.work_units is not None or args.work_unit!='unit':
+        parser.error('--pid/--cgroup/--duration/--label/--no-perf/--scheduler/--energy/--work-units require --profile')
     if not math.isfinite(args.interval) or not 0.2 <= args.interval <= 60:
         parser.error("--interval must be between 0.2 and 60 seconds")
     if args.count is not None and (not args.json or args.count < 1):

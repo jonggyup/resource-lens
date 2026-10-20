@@ -87,6 +87,14 @@ def capability_lines(sample, error=None, replay=False):
               'Workload files may be inactive despite controller availability at the root.',
               'Enable --control only for intended changes. Permission denied? Use manager authorization',
               'or the explicitly installed narrow helper; monitoring never requires elevation.']
+    energy=sample.get('energy')
+    if energy:
+        lines += ['', 'HARDWARE ENERGY: '+energy['status'],energy['scope']]
+        for domain in energy.get('domains',[]):
+            lines += [domain['label']+' ['+domain['source']+']: '+domain['status'],
+                      '  '+domain['id'], '  Parent: '+domain['parent']]
+            if domain.get('reason'):lines.append('  '+domain['reason'])
+        lines += energy.get('warnings',[])
     return lines + ['Warning: ' + item for item in sample.get('warnings', [])]
 
 

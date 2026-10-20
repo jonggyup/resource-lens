@@ -1,3 +1,13 @@
+# 0.15.0 energy investigation
+
+P now offers three choices, including Energy efficiency. The CPU view shows live
+hardware-domain watts when exposed; Status explains the sensor inventory. Energy
+capture remains asynchronous and explicitly labels shared hardware scope. CLI
+captures accept completed-work metadata for joules/work. See [energy](ENERGY.md).
+
+Next priorities: energy-capable hardware validation, completed-work entry after a
+capture, and saved-session comparison in the UI. No automatic tuning is implemented.
+
 # 0.14.1 simpler investigation
 
 P opens one Investigate menu with CPU usage and CPU + waits, explained in plain

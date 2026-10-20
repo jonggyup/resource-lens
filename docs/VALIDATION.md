@@ -1,3 +1,30 @@
+# 0.15.0 energy validation
+
+227 tests pass. Controlled sysfs fixtures cover powercap alias deduplication,
+parent/subdomain separation, hwmon labels and microjoule conversion, known joules/
+watts/work arithmetic, ambiguous reset/wrap intervals, long sampling gaps,
+missing/invalid/reappearing counters, replaced sensor identities, cancellation,
+unit/host mismatch comparison guards, and explicit energy-mode selection.
+
+The real development host exposes no supported powercap/hwmon energy counters.
+Live CLI discovery and capture correctly returned unavailable and omitted energy
+metrics instead of emitting zero. CLI comparison preserved unavailable status.
+A real tmux run selected P → 3, completed the ten-second capture, displayed the
+hardware-wide scope and unavailable sensors, and returned to Applications.
+Raw local checks are under `.eval/energy/` and the normal private profile directory.
+
+The existing terminal core-control test caught energy text shifting topology click
+targets; energy text now follows the topology, preserving the original core rows.
+The standard three-trial PTY benchmark measured navigation at 1.56–3.74 ms and
+exit at 10.84–10.89 ms on this host. These are local measurements, not remote/display
+latency guarantees or overhead measurements on an energy-capable platform.
+
+Actual energy-counter accuracy, calibration, sensor update cadence and cross-machine
+coverage remain unvalidated. No watt/joule reading in this release was verified
+against physical hardware or an external meter. See [energy limitations](ENERGY.md).
+
+---
+
 # 0.14.1 investigation usability validation
 
 217 tests pass. Added checks verify that opening/cancelling the chooser does not

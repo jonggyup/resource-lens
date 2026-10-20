@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.14.1 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.15.0 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. `--control` enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -15,9 +15,9 @@ It does not claim functionality is unique to Linux tools.
 ## Save profiling evidence and compare runs
 
 Press `P` on a selected process or cgroup in Applications (`8`) to open **Investigate**.
-Choose **CPU usage** to find busy functions, or **CPU + waits** to also inspect
-where threads stop and how long they wait for CPU. Click a choice or press 1/2.
-Both capture for 10 seconds; `W` starts CPU + waits directly. Esc cancels immediately.
+Choose **CPU usage**, **CPU + waits**, or **Energy efficiency**. The energy mode
+records hardware-domain joules and watts without attributing them to the process.
+Click a choice or press 1/2/3. All capture for 10 seconds; `W` starts CPU + waits directly. Esc cancels immediately.
 Results open with a summary; `D` shows stacks, diagnostics and coverage details. Sessions save resource counters,
 configuration and optional Linux perf call stacks. `V` still opens memory inspection.
 
@@ -31,6 +31,21 @@ python3 -m resourcelens --profile ./waits --pid 1234 --duration 10 --scheduler
 Replace the PID with your target. Repeat into new run directories to see variability.
 See [profiling commands, permissions, interpretation and limits](docs/PROFILING.md).
 This is a first profiling workflow, not a complete kernel regression analyzer.
+
+## Energy efficiency
+
+CPU (`2`) shows exposed energy-domain power; Status (`0`) lists the inventory.
+In Applications, use **P → 3 Energy efficiency** for a saved measurement window.
+Missing sensors stay unavailable. Hardware domains are kept separate, not summed.
+
+```bash
+python3 -m resourcelens --energy-info
+python3 -m resourcelens --profile ./energy-run --pid 1234 --duration 10 --energy --no-perf
+```
+
+Add `--work-units 1000 --work-unit request` only for 1,000 requests actually completed
+in that window. See [energy measurement, comparisons and limits](docs/ENERGY.md).
+This host has no exposed energy counters; real hardware accuracy remains unvalidated.
 
 ## Run immediately
 

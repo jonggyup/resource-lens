@@ -1,4 +1,4 @@
-# Investigation sessions (0.14.1 preview)
+# Investigation sessions (0.15.0 preview)
 
 Use this workflow to preserve evidence before and after a workload or configuration
 change. It combines Resource Lens counters with Linux perf; it is not a replacement
@@ -7,8 +7,9 @@ for perf, an automatic regression verdict, or a complete kernel profiler.
 ## Interactive capture
 
 Open Applications (`8`), select a process, and press **P** for **Investigate**.
-Choose **CPU usage** (busy functions) or **CPU + waits** (also captures where threads
-stop and how long they wait for CPU). Click a choice, press 1/2, or use arrows then
+Choose **CPU usage**, **CPU + waits**, or **Energy efficiency**. Energy captures
+hardware-domain counters without CPU stack sampling; see [energy](ENERGY.md).
+Click a choice, press 1/2/3, or use arrows then
 Enter. No collection starts until you choose; Escape closes the menu. In cgroup
 mode (`g`), the target is the selected group; inside the hierarchy it is the open
 group or PID. The target identity is checked, so a stale selection cannot silently choose a
