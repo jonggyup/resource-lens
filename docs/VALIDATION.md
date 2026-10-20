@@ -1,3 +1,11 @@
+# Help readability validation
+
+234 tests pass. Help tests cover 20/37/60/77/117-column wrapping, process/cgroup
+context selection and placement-specific actions. Real terminal checks covered
+100-column process help and 42-column cgroup help, scrolling and returning to the
+previous view. Shortcuts and section headings use bold/accent styling; narrow
+terminals stack keys above descriptions. No hardware settings were changed.
+
 # Regular-key navigation validation
 
 233 tests pass. C replaces F2 for control mode; footer actions advertise ?, / and q.

@@ -479,7 +479,9 @@ wall-clock axis.
 
 ## Navigation and contextual help
 
-- **?** opens help for the current page or CPU placement editor. Esc
+- **?** opens a grouped shortcut guide for the current view. Process lists, cgroups
+  and CPU placement each show their own actions first. Highlighted keys align with
+  descriptions on wide terminals and stack on narrow ones. Esc
   or ? returns to your previous scroll position. Help cannot execute controls.
 - **:** opens a searchable view switcher. Type `cpu`, `ram`, `net`, `services`
   or a view number, use Up/Down, and press Enter (or click a result). Esc cancels.

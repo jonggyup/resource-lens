@@ -2,7 +2,7 @@ import curses
 import unittest
 from unittest.mock import patch
 from resourcelens.ui import View, draw
-from resourcelens.navigation import actions
+from resourcelens.navigation import actions, context_help
 from resourcelens.collect import Collector
 
 
@@ -25,6 +25,21 @@ class NavigationTests(unittest.TestCase):
             for label, key in actions(view):
                 self.assertNotRegex(label, r'\bF\d+\b')
                 self.assertNotIn(key, (curses.KEY_F1, curses.KEY_F2, curses.KEY_F4, curses.KEY_F10))
+
+    def test_help_wraps_and_prioritizes_current_application_mode(self):
+        view = View()
+        view.page = 7
+        for width in (20, 37, 60, 77, 117):
+            lines = context_help(view, width)
+            self.assertTrue(all(len(line) <= width for line in lines))
+            self.assertLess(lines.index('-- Processes --'), lines.index('-- Move around --'))
+            self.assertNotIn('-- Tune a service --', lines)
+        view.application_mode = 'cgroups'
+        lines = context_help(view, 77)
+        self.assertIn('-- Tune a service --', lines)
+        self.assertNotIn('-- Processes --', lines)
+        view.placement = {'selected': set()}
+        self.assertIn('-- Choose CPUs --', context_help(view, 77))
 
     def test_palette_matches_aliases_and_cancels(self):
         view = View()

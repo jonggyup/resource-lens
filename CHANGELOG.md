@@ -1,5 +1,8 @@
 # Unreleased
 
+- Group help by current task, with highlighted headings and keys, aligned descriptions,
+  and a stacked layout for narrow terminals. Simplify the control-mode dialog.
+
 - Use C for the in-app control switch and advertise ?, / and q for help, filtering and exit.
 - Keep clickable actions and existing F1/F4/F10 aliases for compatibility.
 

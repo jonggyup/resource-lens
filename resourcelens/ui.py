@@ -364,10 +364,10 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         modal = self.modal
         if modal['stage'] == 'control_mode':
             return ['RESOURCE CONTROLS',
-                    'Mode: ' + ('enabled' if self.control else 'read-only'),
-                    'Enabling unlocks menus; it changes no system settings.',
-                    'Changes still require preview, confirmation and permission.',
-                    'Disabling keeps existing settings and Undo history.',
+                    'Current mode: ' + ('controls enabled' if self.control else 'monitoring only'),
+                    'Enable controls to adjust CPU and service settings.',
+                    'Nothing changes until you preview and confirm an action.',
+                    'Existing permissions apply. Disabling does not undo changes.',
                     '[ Disable controls ]' if self.control else '[ Enable controls ]',
                     '[ Cancel ]', 'Enter: switch mode | Esc: cancel']
         if modal['stage'].startswith('utility_'):
@@ -563,8 +563,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
 
     def lines(self, width):
         if self.help:
-            return [piece for line in context_help(self)
-                    for piece in (textwrap.wrap(line, max(20, width)) or [''])]
+            return context_help(self, width)
         return {1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
                 9: self.capability_lines, 4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines, 8: lambda width: [piece for line in self.investigation.lines() for piece in (textwrap.wrap(line, width) or [''])]}.get(self.page, self.process_lines)(width)
 
@@ -1077,7 +1076,9 @@ def draw(screen, view, interval, error=None):
         view.scroll = min(view.scroll, max(0, len(lines) - capacity))
         for i, line in enumerate(lines[view.scroll:view.scroll + capacity]):
             index = view.scroll + i
-            if view.page == 5 and not view.help:
+            if view.help:
+                attribute = accent if line.startswith(('HELP /', '-- ')) else (muted if index in (1, 2, 3) else 0)
+            elif view.page == 5 and not view.help:
                 attribute = accent | curses.A_REVERSE if index == 2 else (curses.A_BOLD if index >= 3 and index % 2 else 0)
             elif view.page == 7 and not view.workload_detail and not view.help:
                 attribute = accent | curses.A_REVERSE if line.startswith(">") or index == 3 else 0
@@ -1090,6 +1091,8 @@ def draw(screen, view, interval, error=None):
                 if line.startswith('[ All CPUs'):
                     view.cpu_regions[i + 3] = ('all', None)
             put(screen, i + 3, 1, line, attribute)
+            if view.help and w - 3 >= 60 and line.startswith('  ') and line[:20].strip():
+                put(screen, i + 3, 1, line[:20], accent, 20)
             if view.page == 1 and not view.help:
                 for start, end, kind, ids in view.topology_regions.get(i + 3, []):
                     attr = view.colors['cpu']
