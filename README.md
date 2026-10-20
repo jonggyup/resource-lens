@@ -6,7 +6,7 @@ resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
 **Version 0.15.1 is a preview with optional temporary CPU and disk controls.** Monitoring
-is read-only by default. **F2** (or click the mode indicator) enables previewed, confirmed CPU weight and
+is read-only by default. **C** (or click the mode indicator) enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
 limits and nice/per-process affinity editing remain future work.
@@ -20,7 +20,7 @@ python3 -m resourcelens
 resource-lens
 ```
 
-- **F2** or click **Read-only F2**: enable/disable control menus, then Enter or click the button.
+- **C** or click **Read-only C**: enable/disable control menus, then Enter or click the button.
 - **8 → select a process or cgroup → P → 3**: capture energy efficiency.
 - **2 → g** (or click a CPU): governor and CPU online/offline settings.
 
@@ -293,7 +293,7 @@ function-key or mouse sequences slowly, increase it explicitly:
 ESCDELAY=150 python3 -m resourcelens
 ```
 
-`q` / F10 exits without Escape-sequence detection. Active resource changes still
+`q` exits without Escape-sequence detection. Active resource changes still
 require the existing exit acknowledgement; a control operation in progress is
 not cancelled by Escape. Read-only collection runs separately from input and
 shutdown does not wait for an unfinished read-only sample. A final unfinished sample may be
@@ -355,7 +355,7 @@ metrics; a fresh live report has no before/after history yet.
 
 ### Per-service disk bandwidth
 
-Enable controls with **F2**, select a service on Applications (`8`), and press `b`.
+Enable controls with **C**, select a service on Applications (`8`), and press `b`.
 Enter a block device, direction, and rate, for example `sda write 10M`.
 `K/M/G` mean powers of 1024 bytes/sec; `max` removes that device's limit in the
 chosen direction. Review the device major/minor, backing devices, holders, old
@@ -479,17 +479,17 @@ wall-clock axis.
 
 ## Navigation and contextual help
 
-- **F1 / ?** opens help for the current page or CPU placement editor. Esc, F1
+- **?** opens help for the current page or CPU placement editor. Esc
   or ? returns to your previous scroll position. Help cannot execute controls.
 - **:** opens a searchable view switcher. Type `cpu`, `ram`, `net`, `services`
   or a view number, use Up/Down, and press Enter (or click a result). Esc cancels.
   This switcher only navigates views; it does not execute shell commands.
 - **j/k** scroll or select workloads, alongside arrow keys. Typed filter text
   and view-search text retain ordinary j/k characters.
-- **F4 / /** filters processes or workloads. **F10 / q** exits outside editors
+- **/** filters processes or workloads. **q** exits outside editors
   and dialogs, retaining the existing acknowledgement for active settings.
 - Bottom action labels are clickable. They adapt to the current context and
-  available width; F1 shows the complete help when some buttons cannot fit.
+  available width; ? shows the complete help when some buttons cannot fit.
 - The status line always identifies **Read-only** or **CONTROL** mode.
 
 These changes follow a review of htop, btop, k9s and lazygit. See

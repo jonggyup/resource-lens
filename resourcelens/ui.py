@@ -281,7 +281,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
     def workload_lines(self, width=100):
         rows = self.workload_rows()
         group = self.selected_workload()
-        mode = "CPU controls enabled: p placement | U undo placement | w weight | l quota | u Undo" if self.control else "Read-only | F2 enables runtime resource controls"
+        mode = "CPU controls enabled: p placement | U undo placement | w weight | l quota | u Undo" if self.control else "Read-only | C enables runtime resource controls"
         if not self.workload_detail or group is None:
             name_width = max(12, min(45, width - 32))
             lines = [f"{len(rows)} workloads | / find | Enter open | Filter: {clean(self.workload_filter) or '(none)'}", mode,
@@ -352,7 +352,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     f"{result['target']['unit']}: CPU {result['property']} confirmed in systemd and the kernel. u: Undo latest change.")}
 
     def control_label(self):
-        return '[CONTROL F2]' if self.control else '[Read-only F2]'
+        return '[CONTROL C]' if self.control else '[Read-only C]'
 
     def open_control_mode(self):
         if self.replay:
@@ -772,7 +772,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             except curses.error:
                 pass
             return True
-        if key == curses.KEY_F2 and not self.placement:
+        if key == ord('C') and not self.placement:
             self.open_control_mode()
             return True
         if self.profile_view:

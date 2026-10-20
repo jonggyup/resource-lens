@@ -1,3 +1,8 @@
+# Unreleased
+
+- Use C for the in-app control switch and advertise ?, / and q for help, filtering and exit.
+- Keep clickable actions and existing F1/F4/F10 aliases for compatibility.
+
 # 0.15.1
 
 - Launch without feature flags; enable/disable control menus with F2 or the clickable mode indicator.

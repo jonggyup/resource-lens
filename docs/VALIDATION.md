@@ -1,3 +1,11 @@
+# Regular-key navigation validation
+
+233 tests pass. C replaces F2 for control mode; footer actions advertise ?, / and q.
+Tests cover keyboard/mouse toggling, text/editor routing and function-key-free
+visible action labels. A real terminal verified C/Enter enables and disables controls
+and shows the updated indicator and footer. Earlier release checks below retain
+the shortcut names used at the time of those checks.
+
 # 0.15.1 in-app feature selection
 
 232 tests pass, including mode toggling without hardware access, retained session

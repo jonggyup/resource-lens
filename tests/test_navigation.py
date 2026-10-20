@@ -18,6 +18,14 @@ class Screen:
 
 
 class NavigationTests(unittest.TestCase):
+    def test_visible_shortcuts_do_not_require_function_keys(self):
+        view = View()
+        for page in range(10):
+            view.page = page
+            for label, key in actions(view):
+                self.assertNotRegex(label, r'\bF\d+\b')
+                self.assertNotIn(key, (curses.KEY_F1, curses.KEY_F2, curses.KEY_F4, curses.KEY_F10))
+
     def test_palette_matches_aliases_and_cancels(self):
         view = View()
         for query, page in [('services', 7), ('ram', 2), ('net', 6), ('4', 3)]:
@@ -87,7 +95,7 @@ class NavigationTests(unittest.TestCase):
             draw(screen, view, 1)
             self.assertTrue(view.action_regions)
             self.assertTrue(all(1 <= start < end <= width - 1 for start, end, _ in view.action_regions))
-            self.assertIn('[Read-only F2]', ' '.join(screen.lines.values()))
+            self.assertIn('[Read-only C]', ' '.join(screen.lines.values()))
         view.key(ord(':'))
         draw(Screen(24, 80), view, 1)
         row, (start, end, index) = next(iter(view.modal_regions.items()))

@@ -19,20 +19,20 @@ def actions(view):
     if view.browser:
         return [('Esc Back',27), ('Left Parent',curses.KEY_LEFT), ('Enter Open',10), ('V Memory',ord('V')),('P Investigate',ord('P')),('W CPU+waits',ord('W')), ('q Applications',ord('q'))]
     if view.page == 7 and view.application_mode == 'processes' and not view.help and not view.editing_filter:
-        return [('F1 Help',ord('?')),('F10 Quit',ord('q')),('g Cgroups',ord('g')),('Enter Open',10),('V Memory',ord('V')),('P Investigate',ord('P')),('W CPU+waits',ord('W')),('c CPU',ord('c')),('m Memory',ord('m')),('/ Search',ord('/'))]
+        return [('? Help',ord('?')),('q Quit',ord('q')),('g Cgroups',ord('g')),('Enter Open',10),('V Memory',ord('V')),('P Investigate',ord('P')),('W CPU+waits',ord('W')),('c CPU',ord('c')),('m Memory',ord('m')),('/ Search',ord('/'))]
     if view.editing_filter:
         return [('Enter Done', 10), ('Esc Clear', 27)]
     if view.help:
         return [('Esc Back', 27)]
     if view.placement:
-        return [('F1 Help', ord('?')), ('Enter Preview', 10), ('a All', ord('a')),
+        return [('? Help', ord('?')), ('Enter Preview', 10), ('a All', ord('a')),
                 ('r Inherit', ord('r')), ('Esc Cancel', 27)]
-    common = [('F1 Help', ord('?')), (': Views', ord(':'))]
+    common = [('? Help', ord('?')), (': Views', ord(':'))]
     local = {
         0: [('e Collapse' if view.overview_expanded else 'e Expand', ord('e'))],
         1: [('g CPU menu', ord('g')), ('u Undo', ord('u')), ('a Related apps', ord('a'))],
-        5: [('F4 Filter', ord('/')), ('c CPU sort', ord('c')), ('m RAM sort', ord('m'))],
-        7: [('g Processes', ord('g')), ('Enter Open', 10), ('D Details', ord('D')), ('F4 Filter', ord('/')), ('p Placement', ord('p')),
+        5: [('/ Filter', ord('/')), ('c CPU sort', ord('c')), ('m RAM sort', ord('m'))],
+        7: [('g Processes', ord('g')), ('Enter Open', 10), ('D Details', ord('D')), ('/ Filter', ord('/')), ('p Placement', ord('p')),
             ('w Weight', ord('w')), ('l Quota', ord('l')), ('U Undo place', ord('U')), ('P Investigate',ord('P')),('W CPU+waits',ord('W'))],
     }.get(view.page, [('Space Freeze', ord(' '))])
     # Quit stays discoverable even when only the first local action fits.
@@ -40,7 +40,7 @@ def actions(view):
     if view.page == 7:
         extra = [('o Overlay', ord('o'))]
     extra += [('0 Status', ord('0')), ('M Mark', ord('M')), ('9 Timeline', ord('9'))]
-    return common + [('F10 Quit', ord('q'))] + local + extra
+    return common + [('q Quit', ord('q'))] + local + extra
 
 
 def context_help(view):
@@ -58,7 +58,7 @@ def context_help(view):
             1: ['Right-click a logical CPU or press g for hardware settings.',
                 'Socket/core boxes group SMT siblings; positions are not chip coordinates.',
                 'u undoes the latest hardware change in this session.'],
-            5: ['F4 or / filters processes. Enter finishes; Esc clears the filter.',
+            5: ['/ filters processes. Enter finishes; Esc clears the filter.',
                 'c/m/n/p sort by CPU, memory, name or PID.'],
             7: ['Applications defaults to processes ranked by CPU. g toggles cgroup view.',
                 'Processes: c/m/n/p sorts CPU/memory/name/PID; Enter opens process details.',
@@ -69,12 +69,12 @@ def context_help(view):
                 'Browser: c/m/n sorts CPU/memory/name; children and direct PIDs rank together.',
                 'v / Right opens the actual cgroup hierarchy; T starts at root.',
                 'Browser: Enter or click opens a child/PID; Left/Backspace goes up; Esc goes back one level; q returns to Applications.',
-                'F4 or / filters workloads. p opens visual CPU placement.',
+                '/ filters workloads. p opens visual CPU placement.',
                 'w sets CPU weight; l sets quota; u undoes weight/quota.',
-                'U undoes CPU placement. Controls require F2 enablement and permission.'],
+                'U undoes CPU placement. Controls require C enablement and permission.'],
         }.get(view.page, ['Scroll to inspect every device, node and metric.',
                           'N/A means unavailable, not idle. Resource panels are read-only.'])
-    details += ['F2 or click the mode indicator: enable/disable control menus (no settings change).',
+    details += ['C or click the mode indicator: enable/disable control menus (no settings change).',
                 '1 overview | e expand overview | 8 applications',
                 'Applications: [ / ] detail tabs; D detail focus; Esc list focus; x clears hardware filter.',
                 'CPU/socket tiles: click or right-click opens settings; Shift-click shows allowed applications.',
@@ -83,13 +83,13 @@ def context_help(view):
                 'o on Workloads pins a service overlay; o elsewhere clears it.',
                 'M marks a baseline; 9 opens changes and before/after comparisons.',
                 'Replay: Left/Right step samples; Space plays/pauses (read-only).']
-    return ['HELP / ' + title, 'Esc, F1 or ?: return to the same view', '', *details, '',
+    return ['HELP / ' + title, 'Esc or ?: return to the same view', '', *details, '',
             'GLOBAL NAVIGATION', ': opens the searchable view switcher; type cpu, net, services, etc.',
             '1-9 select resource views; 0 opens capabilities; Tab / Shift-Tab switch views; tabs are clickable.',
             'Up/Down or j/k scroll; PgUp/PgDn, Home/End cover longer pages.',
             'Space freezes/unfreezes displayed samples (except in the CPU selector).',
-            'F1 or ? opens context help. The bottom action labels are clickable.',
-            'F10 or q exits outside editors/dialogs; active settings are acknowledged.',
+            '? opens context help. The bottom action labels are clickable.',
+            'q exits outside editors/dialogs; active settings are acknowledged.',
             '', 'READING METRICS', 'History runs oldest to newest; gaps are missing samples.',
             'CPU process usage: 100% is one logical CPU. Disk active time is not saturation.',
             'Network histories scale to visible peaks. Layered device counters overlap.',
