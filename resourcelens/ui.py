@@ -630,6 +630,9 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
         if left and y == self.screen_size[0]-2 and getattr(self,'health_region',None) and self.health_region[0] <= x < self.health_region[1] and not self.placement and not self.editing_filter and not self.profile_view and not self.memory_sharing:
             self.open_insights('health')
             return
+        if left and getattr(self,'guide_region',None) and y == 2 and self.guide_region[0] <= x < self.guide_region[1] and not self.profile_view and not self.memory_sharing and not self.browser:
+            self.open_insights('guide')
+            return
         if left and y == self.screen_size[0] - 2 and 1 <= x < 1 + len(self.control_label()) and not self.placement and not self.editing_filter:
             self.open_control_mode()
             return
@@ -806,8 +809,8 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
             except curses.error:
                 pass
             return True
-        if key in (ord('s'),ord('E'),ord('H')) and not self.placement and not self.profile_view and not self.memory_sharing:
-            self.open_insights({ord('s'):'search',ord('E'):'metrics',ord('H'):'health'}[key])
+        if key in (ord('s'),ord('E'),ord('H'),ord('G')) and not self.placement and not self.profile_view and not self.memory_sharing:
+            self.open_insights({ord('s'):'search',ord('E'):'metrics',ord('H'):'health',ord('G'):'guide'}[key])
             return True
         if key == ord('C') and not self.placement:
             self.open_control_mode()
@@ -1003,6 +1006,7 @@ def draw(screen, view, interval, error=None):
     h, w = screen.getmaxyx()
     view.screen_size = h, w
     view.action_regions = []
+    view.guide_region = None
     view.application_process_regions = []
     view.application_mode_region = None
     view.browser_button = None
@@ -1029,16 +1033,18 @@ def draw(screen, view, interval, error=None):
     put(screen, 0, 1, f"RESOURCE LENS  {state}  {interval:g}s  |  {stamp}", accent)
     if s and w >= 95:
         put(screen, 0, 60, s["hostname"], muted)
-    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net", "Apps", "Time", "Status")
+    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net", "Apps", "Timeline", "Status")
     view.tab_regions = []
     x = 1
+    compact_tabs = [f'{(i+1)%10}:{label}' for i,label in enumerate(labels)]
+    named_tabs = w >= sum(map(len,compact_tabs)) + len(labels) + 2
     for page, label in enumerate(labels):
-        text = f" {(page + 1) % 10} {label} " if w >= 105 else f" {(page + 1) % 10} "
+        text = f" {(page + 1) % 10} {label} " if w >= 105 else compact_tabs[page] if named_tabs else f" {(page + 1) % 10} "
         attr = accent | curses.A_REVERSE if page == view.page else muted
         put(screen, 1, x, text, attr)
         view.tab_regions.append((x, x + len(text), page))
         x += len(text) + 1
-    if w < 105:
+    if not named_tabs:
         put(screen, 1, x + 1, view.names[view.page], accent)
     mode = "Runtime resource controls enabled" if view.control else "Read-only"
     status = mode + " | newest samples at right"
@@ -1089,7 +1095,7 @@ def draw(screen, view, interval, error=None):
             view.overview_cards_regions = [(*geometry, page) for geometry, page in zip(layout, (1, 2, 3, 4, 6, 5))]
             for geometry, (title, hint, color, content) in zip(layout, cards):
                 draw_card(screen, put, geometry, title, hint, color, content, view.unicode)
-            status = mode + " | 2-8 details | newest samples at right"
+            status = "Click a card for details | G: start here | N/A: unavailable"
         else:
             lines = compact_overview(view)
             capacity = h - 5
@@ -1152,13 +1158,17 @@ def draw(screen, view, interval, error=None):
         status = f"{'Help' if view.help else view.names[view.page]} | {view.scroll + 1}-{min(len(lines), view.scroll + capacity)} of {len(lines)} | arrows scroll"
     if view.page == 0 and not view.help:
         put(screen, 2, 1, '[ - Collapse overview ] e' if view.overview_expanded else '[ + Expand overview ] e', accent)
+        if w >= 48:
+            label = '[ G Start here ]'
+            put(screen,2,29,label,accent | curses.A_REVERSE)
+            view.guide_region = (29,29+len(label))
     if view.page == 7 and not view.browser and not view.memory_sharing and not view.profile_view and not view.help and view.application_mode == 'cgroups':
         label = '[ Enter Open group ]'
         put(screen,2,1,label,accent | curses.A_REVERSE)
         view.browser_button = (1,1+len(label))
         put(screen,2,24,'T: root | [] metrics | D: details')
     if view.page == 7 and not view.browser and not view.memory_sharing and not view.profile_view and not view.help:
-        label = '[ g: '+('Cgroups' if view.application_mode == 'processes' else 'Processes')+' ]'
+        label = '[ g: '+('Service groups' if view.application_mode == 'processes' else 'Processes')+' ]'
         x = 1 if view.application_mode == 'processes' else max(1,w-len(label)-2)
         put(screen,2,x,label,accent | curses.A_REVERSE)
         view.application_mode_region = (x,x+len(label))

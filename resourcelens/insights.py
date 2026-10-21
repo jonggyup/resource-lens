@@ -2,6 +2,7 @@
 import curses
 import time
 from .focus import candidates
+from .user_guide import TASKS
 from .readability import wrap_lines
 
 # title, definition, source, limitation, useful next view
@@ -63,6 +64,7 @@ class InsightsView:
         sample = self.snapshot or {}
         if mode == 'search':
             items = search_entries(sample,self.names)
+        elif mode == 'guide':items = [('task',i,row[0]) for i,row in enumerate(TASKS)]
         elif mode == 'metrics':items = [('metric',i,row[0]) for i,row in enumerate(METRICS)]
         else:
             rows = health_rows(sample,bool(self.replay),stale_after=getattr(self,'health_stale_after',5))
@@ -79,18 +81,19 @@ class InsightsView:
             lines=wrap_lines(m['detail'],max(20,min(76,self.screen_size[1]-8)))
             count=max(1,self.screen_size[0]-10)
             m['scroll']=min(m['scroll'],max(0,len(lines)-count))
-            return ['METRIC GUIDE' if m['mode']=='metrics' else 'MEASUREMENT HEALTH',
-                    *lines[m['scroll']:m['scroll']+count], '', 'Arrows: scroll | Enter: related view | Esc: list']
+            return [{'guide':'START HERE', 'metrics':'METRIC GUIDE', 'health':'MEASUREMENT HEALTH'}[m['mode']],
+                    *lines[m['scroll']:m['scroll']+count], '',
+                    'Arrows: scroll | Enter: open '+self.names[m['related']]+' | Esc: list']
         items=self.insight_items()
         m['selected']=min(m['selected'],max(0,len(items)-1))
         count=max(1,self.screen_size[0]-12)
         start=m['selected']//count*count;m['offset']=start
-        title={'search':'FIND ANYTHING','metrics':'EXPLAIN A METRIC','health':'MEASUREMENT HEALTH'}[m['mode']]
+        title={'search':'FIND ANYTHING','metrics':'EXPLAIN A METRIC','health':'MEASUREMENT HEALTH','guide':'START HERE - choose a task'}[m['mode']]
         width=max(8,min(74,self.screen_size[1]-10))
         return [title,'Search: '+m['query']+'_',f'{len(items)} matches | arrows select | Enter or click opens',
                 *[('> ' if i==m['selected'] else '- ')+item[2][:width] for i,item in enumerate(items) if start<=i<start+count],
                 *([] if items else ['No matches. Backspace edits the search.']),
-                'Snapshot-based results. Esc closes.']
+                'Uppercase keys use Shift. Esc closes.' if m['mode']=='guide' else 'Snapshot-based results. Esc closes.']
 
     def insight_key(self,key):
         m=self.modal
@@ -100,6 +103,8 @@ class InsightsView:
             return True
         if m.get('detail'):
             if key in (10,13):
+                if m['mode']=='guide' and m['related']==7:
+                    self.application_mode='processes';self.filter='';self.relation=None
                 self.page=m['related'];self.scroll=0;self.focus=None;self.browser=None;self.help=False;self.modal=None
             elif key in (curses.KEY_DOWN,curses.KEY_NPAGE):m['scroll']+=1 if key==curses.KEY_DOWN else max(1,self.screen_size[0]-10)
             elif key in (curses.KEY_UP,curses.KEY_PPAGE):m['scroll']=max(0,m['scroll']-(1 if key==curses.KEY_UP else max(1,self.screen_size[0]-10)))
@@ -109,7 +114,10 @@ class InsightsView:
             if items:m['selected']=(m['selected']+(1 if key==curses.KEY_DOWN else -1))%len(items)
         elif key in (10,13) and items:
             kind,identity,label=items[min(m['selected'],len(items)-1)]
-            if kind=='metric':
+            if kind=='task':
+                title,page,steps=TASKS[identity]
+                m.update(detail=[title,'',*steps],related=page)
+            elif kind=='metric':
                 title,meaning,source,limit,page=METRICS[identity]
                 m.update(detail=[title,'','Meaning: '+meaning,'','Source: '+source,'','Limits: '+limit],related=page)
             elif kind=='health':

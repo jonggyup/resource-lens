@@ -1,3 +1,9 @@
+# 0.16.1
+
+- Add G / Start here task walkthroughs with a clickable Overview entry point.
+- Keep tab names visible at 80 columns and label service-group switching clearly.
+- Put everyday workflows first in README and add a concise, task-based user guide.
+
 # 0.16.0
 
 - Add s search across views, hardware, processes and cgroups with identity rechecks.

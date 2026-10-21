@@ -23,6 +23,32 @@ class InsightsTests(unittest.TestCase):
         self.view.key(ord('s'))
         for char in text:self.view.key(ord(char))
 
+    def test_start_here_click_and_task_navigation_never_change_settings(self):
+        draw(Screen(24,80),self.view,1)
+        self.assertIsNotNone(self.view.guide_region)
+        with patch.object(self.view,'job') as job:
+            self.view.mouse(self.view.guide_region[0]+1,2,curses.BUTTON1_CLICKED)
+            self.assertEqual(self.view.modal['mode'],'guide')
+            draw(Screen(24,80),self.view,1)
+            self.view.key(10)
+            self.assertIn('1. Start', '\n'.join(self.view.modal['detail']))
+            self.view.key(10)
+            self.assertEqual(self.view.page,0)
+            self.assertFalse(self.view.control)
+            job.assert_not_called()
+
+    def test_named_tabs_fit_at_80_columns_and_click(self):
+        screen=Screen(24,80)
+        draw(screen,self.view,1)
+        text=' '.join(value for (y,x),value in screen.lines.items() if y==1)
+        self.assertIn('2:CPU',text)
+        self.assertIn('8:Apps',text)
+        self.assertEqual(len(self.view.tab_regions),10)
+        self.assertTrue(all(end<80 for start,end,page in self.view.tab_regions))
+        start,end,page=self.view.tab_regions[6]
+        self.view.mouse(start,1,curses.BUTTON1_CLICKED)
+        self.assertEqual(self.view.page,6)
+
     def test_search_process_identity_and_reuse(self):
         self.search('demo-worker')
         self.view.key(10)

@@ -1,3 +1,16 @@
+# 0.16.1 first-use and task-guide validation
+
+247 tests pass. New checks exercise the Overview guide button, read-only task
+navigation, named 80-column tabs, bounded tab hit regions and tab clicks. A live
+80x24 terminal opened Start here by mouse, searched for the slow-process task,
+read its steps and opened Applications. The guide also rendered at 40x20.
+CPU topology rows and existing control confirmation flows remain unchanged.
+
+The README now leads with ordinary launch commands and common tasks. USER_GUIDE.md
+covers navigation, processes versus service groups, measurements, controls and
+comparisons with explicit limitations. The evaluation installation was refreshed
+to version 0.16.1. No system settings were changed during validation.
+
 # 0.16.0 discovery, impact and comparison validation
 
 245 tests pass. New cases cover search without executing typed actions, PID/start-time

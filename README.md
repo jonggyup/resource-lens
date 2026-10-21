@@ -1,34 +1,52 @@
 # Resource Lens
 
-A live Linux terminal dashboard for CPU, GPU, memory, disks, network, and processes.
-See what is busy, how usage changes, and whether workloads are waiting for
-resources. Runs over SSH and uses Python's standard library: no runtime Python
-packages, additional daemon or database. Monitoring needs no root access.
+See what is busy on a Linux machine, find the process or service behind it, and
+review resource settings before changing them. Resource Lens runs in a terminal,
+including over SSH. Monitoring needs no root access.
 
-**Version 0.16.0 is a preview with optional temporary CPU and disk controls.** Monitoring
-is read-only by default. **C** (or click the mode indicator) enables previewed, confirmed CPU weight and
-quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
-CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
-limits and nice/per-process affinity editing remain future work.
-It does not claim functionality is unique to Linux tools.
+## Start here
 
-## Start without feature flags
+From this project directory:
 
 ```bash
 python3 -m resourcelens
-# Or, after installation:
+# After installation, you can also run:
 resource-lens
 ```
 
-- **C** or click **Read-only C**: enable/disable control menus, then Enter or click the button.
-- **8 → select a process or cgroup → P → 3**: capture energy efficiency.
-- **2 → g** (or click a CPU): governor and CPU online/offline settings.
+**Press G (Shift+G), or click Start here on Overview, for a short task walkthrough.**
+You can explore immediately: the app starts in read-only mode and needs no feature flags.
 
-Enabling menus changes no OS settings. Each change still requires its own preview,
-confirmation and existing permissions. Disabling menus does not undo settings;
-re-enable them to use Undo. The mode is session-only; saved preferences never enable
-controls. Replay remains read-only. `--control` is an optional startup shortcut;
-energy and profiling CLI flags remain useful for scripted captures. No restart is needed.
+| What do you want to do? | Start with |
+| --- | --- |
+| Find what is busy | Overview; click a resource card for details |
+| Find a process, service or device | **s**, type a name or PID, then Enter |
+| Understand a slow process | **8** Applications → select a process → **P** Investigate |
+| Understand memory use | Select a process → **V** Inspect memory |
+| Understand a number or missing value | **E** explains metrics; **H** checks measurement health |
+| Change CPU or service settings | **C** enables menus; each change has its own preview |
+| Compare before and after | **M** marks a baseline; **9** opens Timeline |
+
+**Mouse:** tabs, resource cards and bottom buttons are clickable. Scroll with the wheel.
+**Keyboard:** arrows select or scroll, Enter opens, Esc goes back or cancels.
+From a main view, **q** exits; **?** explains the current view's shortcuts.
+Uppercase shortcuts use Shift: **E** means Shift+E, not Ctrl+E.
+
+Read the [short user guide](docs/USER_GUIDE.md) for everyday workflows, or the
+[measurement guide](docs/UNDERSTANDING.md) for sources, coverage and interpretation.
+
+### Three things to know
+
+- **N/A means unavailable**, not zero. Check H for the reason and next step.
+- **Process CPU at 100% means one logical CPU**, so a multithreaded process can exceed 100%.
+- **Applied settings remain after exit.** Disabling control menus does not undo them.
+  Undo history is available only in the current session.
+
+Version 0.16.1 is a preview. Controls include supported systemd CPU weight/quota,
+CPU placement, CPU governors, logical CPU online/offline, and per-service disk
+bandwidth. Existing permissions still apply. Memory limits, direct frequency limits
+and nice/per-process affinity editing remain future work. The app uses Python's
+standard library, with no required runtime Python packages or additional daemon.
 
 ## Save profiling evidence and compare runs
 
