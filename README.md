@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.15.2 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.16.0 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. **C** (or click the mode indicator) enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -476,6 +476,22 @@ percentages; disk/GPU histories show the busiest device, whose identity may
 change. Sampling defaults to one second. Frozen intervals are omitted from
 display history, so it is a sequence of samples rather than a continuous
 wall-clock axis.
+
+## Find, understand and compare
+
+- **s**: search views, CPUs, devices, interfaces, processes and cgroups. Type a name
+  or PID; Enter or click opens it. Search checks process and group identity again.
+- **E** (Shift+E): choose a metric to read its meaning, source and limitations.
+  Enter in its explanation opens a related view.
+- **H** (Shift+H), or click the freshness indicator: inspect measurement health,
+  including missing/stale values and practical next steps.
+- **i** in a control confirmation, or click **Impact**: inspect sampled relationships,
+  remaining eligible CPUs and relevant limits. Esc returns to the preview.
+- **M**, then **9**: compare the 30-second windows around a baseline. Up/Down chooses
+  an event; Page Up/Down scrolls paired bars, sample counts and changes.
+
+See [the interpretation and comparison guide](docs/UNDERSTANDING.md) for examples,
+coverage limits and the distinction between observed impact and a performance prediction.
 
 ## Readable views and dialogs
 

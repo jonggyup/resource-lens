@@ -1,4 +1,5 @@
 """Usability actions kept separate from core rendering and telemetry."""
+from .impact import impact_lines, impact_summary
 import curses
 import copy
 import textwrap
@@ -84,6 +85,7 @@ class UsabilityView:
                 'Affects this unit and descendants; ancestor limits still apply.',
                 'Cache hits bypass disk I/O. Kernel read-back does not prove workload enforcement.',
                 'The limit remains after exit. B on Applications undoes it.',
+                *impact_summary(self.snapshot, plan, 'disk'),
                 '[ Apply ] Enter: apply and verify', '[ Cancel ] Esc: cancel']
 
     def utility_modal_key(self, key):

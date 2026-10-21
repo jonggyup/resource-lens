@@ -1,3 +1,28 @@
+# 0.16.0 discovery, impact and comparison validation
+
+245 tests pass. New cases cover search without executing typed actions, PID/start-time
+reuse rejection, view/device/core discovery, clickable metric selection, zero versus
+missing/stale/replayed values, explicit permission errors, CPU-offline empty/unknown
+sets, impact return without applying, clickable health status, separate energy domains,
+interface replacement and undefined relative change from zero baselines.
+
+Live tmux checks exercised s → network, E → energy, H → Host CPU, M → 9 with
+before/after bars, and a 50x24 metric detail panel. A separate 120x42 run enabled
+control menus, opened CPU 1's offline preview, opened i impact details showing
+remaining host CPUs and unknown cgroup placement, and cancelled both dialogs.
+No Apply action was sent and no hardware or service settings were changed.
+
+Three local PTY trials measured navigation at 1.83–3.95 ms, Escape-to-frame at
+3.85–4.03 ms, and Escape-to-exit at 12.05–12.18 ms. These measure local curses
+flushing, not SSH or physical display latency. Search inventory is captured on open;
+render invalidation excludes its immutable item list to avoid repeatedly serializing it.
+
+The development host exposes no usable energy counters. Per-domain comparison
+arithmetic and missing/replaced data handling are fixture-tested; actual energy
+availability on this host remains unavailable. Kernel reference links in
+UNDERSTANDING.md were checked against the official kernel documentation. The local
+evaluation installation was refreshed to 0.16.0.
+
 # Process details and timeline readability follow-up
 
 236 tests pass. A 40x18 fixture verifies wrapping a long cgroup path, scrolling to

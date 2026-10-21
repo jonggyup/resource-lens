@@ -10,6 +10,8 @@ import textwrap
 import threading
 import time
 
+from .insights import InsightsView
+from .impact import impact_lines, impact_summary
 from .readability import draw_text
 from .presentation import GLYPHS, card_layout, chart, compact_overview, draw_card, overview_cards, palette
 from .controls import ControlSession
@@ -82,7 +84,7 @@ def pressure(snapshot, kind):
     return f"{kind.upper()} pressure (10s): {pct(value)}"
 
 
-class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView, Workspaces, ApplicationProcesses):
+class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView, UsabilityView, Workspaces, ApplicationProcesses):
     names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Applications", "Timeline", "Capabilities")
 
     def __init__(self, unicode=False, control=False, session=None):
@@ -363,6 +365,13 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
 
     def modal_lines(self):
         modal = self.modal
+        if modal['stage'] == 'impact':
+            lines = [part for line in modal['lines'] for part in (textwrap.wrap(line, max(20,min(76,self.screen_size[1]-8))) or [''])]
+            count = max(1, self.screen_size[0]-9)
+            modal['scroll'] = min(modal['scroll'],max(0,len(lines)-count))
+            return ['CONTROL IMPACT', *lines[modal['scroll']:modal['scroll']+count], 'Arrows: scroll | Enter or Esc: return to preview']
+        if modal['stage'] == 'insights':
+            return self.insight_lines()
         if modal['stage'] == 'control_mode':
             return ['RESOURCE CONTROLS',
                     'Current mode: ' + ('controls enabled' if self.control else 'monitoring only'),
@@ -401,6 +410,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     "Applies to this entire unit and its descendants.",
                     "Remains active after UI exit, until changed or reboot.",
                     "Undo restores the previous value using systemd.",
+                    *impact_summary(self.snapshot, plan, "service"),
                     "Enter: apply and verify | Esc: cancel"]
         if modal["stage"] == "quit":
             return ["Resource settings may still be active.", "Leaving the dashboard does not restore previous settings.",
@@ -411,6 +421,18 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
 
     def modal_key(self, key):
         stage = self.modal["stage"]
+        if stage == 'impact':
+            if key in (10,13,27):self.modal = self.modal['preview']
+            elif key == curses.KEY_DOWN:self.modal['scroll'] += 1
+            elif key == curses.KEY_UP:self.modal['scroll'] = max(0,self.modal['scroll']-1)
+            return True
+        if key == ord('i') and stage in ('confirm','hardware_confirm','placement_confirm','utility_disk_confirm'):
+            kind = {'confirm':'service','hardware_confirm':'hardware','placement_confirm':'placement','utility_disk_confirm':'disk'}[stage]
+            self.modal = dict(stage='impact', preview=self.modal, scroll=0,
+                              lines=impact_lines(self.snapshot,self.modal['plan'],kind))
+            return True
+        if stage == 'insights':
+            return self.insight_key(key)
         if stage == 'control_mode':
             if key in (10, 13):
                 if self.replay:
@@ -567,7 +589,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         if self.help:
             return context_help(self, width)
         return {1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
-                9: self.capability_lines, 4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines, 8: lambda width: [piece for line in self.investigation.lines() for piece in (textwrap.wrap(line, width) or [''])]}.get(self.page, self.process_lines)(width)
+                9: self.capability_lines, 4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines, 8: lambda width: [piece for line in self.investigation.lines(width) for piece in (textwrap.wrap(line, width) or [''])]}.get(self.page, self.process_lines)(width)
 
     def mouse(self, x, y, state):
         wheel_up = state & getattr(curses, "BUTTON4_PRESSED", 0)
@@ -575,9 +597,17 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
         left = state & (getattr(curses, "BUTTON1_CLICKED", 0) | getattr(curses, "BUTTON1_PRESSED", 0))
         right = state & (getattr(curses, "BUTTON3_CLICKED", 0) | getattr(curses, "BUTTON3_PRESSED", 0))
         if self.modal:
+            if self.modal['stage'] in ('insights','impact') and (wheel_up or wheel_down):
+                self.modal_key(curses.KEY_UP if wheel_up else curses.KEY_DOWN)
+                return
             hit = self.modal_regions.get(y)
             if left and hit and hit[0] <= x < hit[1]:
-                if self.modal['stage'] == 'control_mode':
+                if hit[2] == 'impact':
+                    self.modal_key(ord('i'))
+                elif self.modal['stage'] == 'insights' and not self.modal.get('detail'):
+                    self.modal['selected'] = hit[2]
+                    self.insight_key(10)
+                elif self.modal['stage'] == 'control_mode':
                     self.modal_key(27 if hit[2] == 'cancel' else 10)
                 elif self.modal['stage'] == 'focus':
                     self.modal['selected'] = hit[2]
@@ -596,6 +626,9 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     self.utility_modal_key(10)
                 elif self.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm') and hit[2] == 'cancel':
                     self.modal = None
+            return
+        if left and y == self.screen_size[0]-2 and getattr(self,'health_region',None) and self.health_region[0] <= x < self.health_region[1] and not self.placement and not self.editing_filter and not self.profile_view and not self.memory_sharing:
+            self.open_insights('health')
             return
         if left and y == self.screen_size[0] - 2 and 1 <= x < 1 + len(self.control_label()) and not self.placement and not self.editing_filter:
             self.open_control_mode()
@@ -772,6 +805,9 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     return False
             except curses.error:
                 pass
+            return True
+        if key in (ord('s'),ord('E'),ord('H')) and not self.placement and not self.profile_view and not self.memory_sharing:
+            self.open_insights({ord('s'):'search',ord('E'):'metrics',ord('H'):'health'}[key])
             return True
         if key == ord('C') and not self.placement:
             self.open_control_mode()
@@ -1134,11 +1170,17 @@ def draw(screen, view, interval, error=None):
         status = (view.recorder.error or 'REC ' + view.recorder.path) + ' | ' + status
     if view.incident_status:
         status = view.incident_status + " | " + status
+    if view.page == 8 and not view.help:
+        status = status.replace('arrows scroll', 'PgUp/PgDn scroll; Up/Down select event')
     message = error or ("; ".join(s["warnings"]) if s else "") or status
     if view.editing_filter:
         value = view.workload_filter if view.filter_context == "workloads" else view.filter
         message = f"Filter: {value}_ ({view.filter_context})  Enter: apply  Esc: clear"
-    message = view.control_label() + " " + message
+    freshness = 'Recorded' if view.replay else ('No sample' if not s else
+                 'Stale' if time.time()-s['timestamp'] > getattr(view,'health_stale_after',5) else 'Live')
+    health_label = ' [' + freshness + '; H health] '
+    view.health_region = (1+len(view.control_label()), 1+len(view.control_label())+len(health_label))
+    message = view.control_label() + health_label + message
     put(screen, h - 2, 1, message, view.colors["warning"] if error else muted)
     x = 1
     for label, key in actions(view):
@@ -1164,9 +1206,11 @@ def draw(screen, view, interval, error=None):
         put(screen, top + box_height - 1, left, "+" + "-" * (box_width - 2) + "+", accent, box_width)
         option_index = view.modal.get('offset', 0)
         for index, line in enumerate(lines[:box_height - 3]):
-            if view.modal['stage'] in ('hardware_menu', 'navigate', 'focus') and (line.startswith('> ') or line.startswith('- ')):
+            if view.modal['stage'] in ('hardware_menu', 'navigate', 'focus', 'insights') and (line.startswith('> ') or line.startswith('- ')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, option_index)
                 option_index += 1
+            if view.modal['stage'] in ('confirm','hardware_confirm','placement_confirm','utility_disk_confirm') and line.startswith('[ Impact ]'):
+                view.modal_regions[top + 1 + index] = (left, left + box_width, 'impact')
             if view.modal['stage'] == 'control_mode' and line.startswith(('[ Enable controls ]', '[ Disable controls ]', '[ Cancel ]')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, 'cancel' if line.startswith('[ Cancel ]') else 'toggle')
             if view.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm') and line.startswith(('[ Apply ]', '[ Cancel ]')):
@@ -1251,6 +1295,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             pass
         encoding = (sys.stdout.encoding or "").lower().replace("-", "")
         view, sequence = View(unicode=not ascii and encoding == "utf8", control=control and replay is None), -1
+        view.health_stale_after = max(5, interval * 3)
         view.proc_root = str(getattr(collector, "proc", "/proc"))
         for name,value in (preferences or {}).items():
             setattr(view, name, value)
@@ -1296,7 +1341,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, view.control, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort, view.browser.detail_scroll) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None, (view.profile_view.scroll, id(view.profile_view.result), view.profile_view.error, view.profile_view.choosing, view.profile_view.selection, view.profile_view.details) if view.profile_view else None)
+                      screen.getmaxyx(), stale, view.control, repr({k:v for k,v in view.modal.items() if k != 'items'}) if view.modal and view.modal['stage']=='insights' else repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort, view.browser.detail_scroll) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None, (view.profile_view.scroll, id(view.profile_view.result), view.profile_view.error, view.profile_view.choosing, view.profile_view.selection, view.profile_view.details) if view.profile_view else None)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render

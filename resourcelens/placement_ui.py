@@ -1,4 +1,5 @@
 """Topology-based workload CPU selection."""
+from .impact import impact_lines, impact_summary
 import curses
 import textwrap
 from .placement import PlacementSession, format_cpus
@@ -59,6 +60,7 @@ class PlacementView:
                 'CPU capacity is shared; this does not reserve exclusive cores.',
                 'Task affinity and child cgroups can narrow placement further.',
                 'The CPU set remains after exit. U on Applications undoes it.',
+                *impact_summary(self.snapshot, plan, 'placement'),
                 '[ Apply ] Enter: apply and verify', '[ Cancel ] Esc: cancel']
 
     def placement_confirm_key(self, key):

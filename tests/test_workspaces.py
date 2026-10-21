@@ -24,6 +24,7 @@ class WorkspaceTests(unittest.TestCase):
     def test_existing_navigation_preserves_overview_state(self):
         self.view.overview_expanded=True
         self.view.key(ord('H'));self.assertEqual(self.view.page,0)
+        self.assertEqual(self.view.modal['mode'],'health');self.view.key(27)
         self.view.key(ord('A'));self.assertEqual(self.view.page,0)
         self.view.key(ord('8'));self.assertEqual(self.view.page,7)
         self.view.key(ord('1'));self.assertEqual(self.view.page,0)

@@ -35,13 +35,22 @@ def metrics(sample, target=None):
             values[f'Service {direction} B/s'] = sum(rates) if rates and all(v is not None for v in rates) else None
         for kind, value in group.get('pressure', {}).items():
             values[kind.upper() + ' PSI %'] = value.get('avg10')
+        for domain in sample.get('energy', {}).get('domains', []):
+            values['Energy (hardware) '+domain['id']+' W'] = domain.get('watts')
         return values
     cpu = next((c for c in sample['cpu'] if c['id'] == 'cpu'), {})
     memory = sample['memory']
     values = {'Host CPU %': cpu.get('busy_pct'), 'RAM used bytes': memory.get('used')}
     for kind, value in sample.get('pressure', {}).items():
         values[kind.upper() + ' PSI %'] = value.get('some', {}).get('avg10')
-    # Do not add layered devices/interfaces into misleading global throughput.
+    # Keep devices and energy domains separate; their counters may overlap.
+    for field, directions in (('disks', ('read', 'write')), ('network', ('rx', 'tx'))):
+        for item in sample.get(field, []):
+            identity = item.get('identity') or (str(item.get('name'))+':'+str(item.get('ifindex')))
+            for direction in directions:
+                values[f"{field}:{identity} {direction} B/s"] = item.get(direction + '_bps')
+    for domain in sample.get('energy', {}).get('domains', []):
+        values['Energy (hardware) '+domain['id']+' W'] = domain.get('watts')
     return values
 
 
@@ -53,7 +62,7 @@ class Investigation:
 
     def observe(self, sample):
         self.samples.append({key: value for key, value in sample.items()
-                             if key in ('timestamp', 'cpu', 'memory', 'pressure', 'workloads')})
+                             if key in ('timestamp', 'cpu', 'memory', 'pressure', 'workloads', 'disks', 'network', 'energy')})
 
     def mark(self, label, timestamp=None, target=None, status='marker'):
         event = dict(timestamp=time.time() if timestamp is None else timestamp,
@@ -77,11 +86,11 @@ class Investigation:
             result.append({key: (sum(items) / len(items), len(items)) for key, items in values.items()})
         return result, [len(window) for window in windows]
 
-    def lines(self):
-        lines = ['CHANGE TIMELINE', 'M: mark a baseline | Up/Down: select an event', '',
+    def lines(self, width=80):
+        lines = ['CHANGE TIMELINE', 'M: mark baseline | Up/Down: event | PgUp/PgDn: scroll', '',
                  '-- How to read the comparison --',
                  'Values are averages from the 30 seconds before and after the event.',
-                 'A difference does not prove the event caused it.',
+                 'These are sample averages, not time-weighted values or proof of cause.',
                  'Missing samples are excluded. Request latency is not measured here.', '']
         if not self.events:
             return lines + ['No events yet. Press M to mark a baseline; control attempts are marked automatically.']
@@ -89,13 +98,28 @@ class Investigation:
         event = self.events[self.selected]
         pair, counts = self.compare(event)
         lines += [f"Selected: {event['label']} [{event['status']}]", f'Available samples: before {counts[0]}, after {counts[1]}',
-                  'Each value includes its sample count in parentheses.',
-                  'METRIC                         BEFORE(n)     AFTER(n)     CHANGE']
+                  'Bars share a scale within each metric; counts show available samples.']
+        bar_width = max(6, min(24, width - 32))
+        def display(key, value):
+            if value is None:return 'N/A'
+            if key.endswith(('bytes','B/s')):
+                from .ui import size
+                return size(value) + ('/s' if key.endswith('B/s') else '')
+            return f'{value:.2f}'
         for key in sorted(set(pair[0]) | set(pair[1])):
             before, after = pair[0].get(key), pair[1].get(key)
-            value = lambda item: 'N/A' if item is None else f'{item[0]:.2f}({item[1]})'
-            change = 'N/A' if before is None or after is None else f'{after[0] - before[0]:+.2f}'
-            lines.append(f'{key:<28} {value(before):>12} {value(after):>12} {change:>12}')
+            scale = max((abs(v[0]) for v in (before,after) if v is not None), default=0) or 1
+            lines += ['', key]
+            for label,value in (('Before',before),('After ',after)):
+                graph = '?' * bar_width if value is None else '#' * round(abs(value[0])/scale*bar_width)
+                lines.append(f"  {label} [{graph:<{bar_width}}] {display(key, value[0] if value else None)} (n={value[1] if value else 0})")
+            if before is None or after is None:
+                lines.append('  Change: unavailable; one window has no usable values.')
+            else:
+                delta=after[0]-before[0]
+                relative=f'{100*delta/abs(before[0]):+.1f}%' if before[0] else 'baseline is zero; relative change undefined'
+                lines.append('  Change: '+('+' if delta>=0 else '-')+display(key,abs(delta))+'; '+relative)
+        if not pair[0] and not pair[1]:lines.append('No usable measurements for this target in either window.')
         lines += ['', '-- Events: time / result / action --']
         for index, entry in enumerate(self.events):
             lines.append(('> ' if index == self.selected else '  ') + time.strftime('%H:%M:%S', time.localtime(entry['timestamp'])) +

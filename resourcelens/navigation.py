@@ -23,7 +23,7 @@ def actions(view):
     if view.browser:
         return [('Esc Back',27), ('Left Parent',curses.KEY_LEFT), ('Enter Open',10), ('V Memory',ord('V')),('P Investigate',ord('P')),('W CPU+waits',ord('W')), ('q Applications',ord('q'))]
     if view.page == 7 and view.application_mode == 'processes' and not view.help and not view.editing_filter:
-        return [('? Help',ord('?')),('q Quit',ord('q')),('g Cgroups',ord('g')),('Enter Open',10),('V Memory',ord('V')),('P Investigate',ord('P')),('W CPU+waits',ord('W')),('c CPU',ord('c')),('m Memory',ord('m')),('/ Search',ord('/'))]
+        return [('? Help',ord('?')),('q Quit',ord('q')),('g Cgroups',ord('g')),('Enter Open',10),('V Memory',ord('V')),('P Investigate',ord('P')),('s Find',ord('s')),('E Explain',ord('E')),('H Health',ord('H')),('W CPU+waits',ord('W')),('c CPU',ord('c')),('m Memory',ord('m')),('/ Search',ord('/'))]
     if view.editing_filter:
         return [('Enter Done', 10), ('Esc Clear', 27)]
     if view.help:
@@ -31,10 +31,11 @@ def actions(view):
     if view.placement:
         return [('? Help', ord('?')), ('Enter Preview', 10), ('a All', ord('a')),
                 ('r Inherit', ord('r')), ('Esc Cancel', 27)]
-    common = [('? Help', ord('?')), (': Views', ord(':'))]
+    common = [('? Help', ord('?')), ('s Find', ord('s'))]
     local = {
         0: [('e Collapse' if view.overview_expanded else 'e Expand', ord('e'))],
         1: [('g CPU menu', ord('g')), ('u Undo', ord('u')), ('a Related apps', ord('a'))],
+        8: [('PgDn Scroll', curses.KEY_NPAGE), ('Up Prev event', curses.KEY_UP), ('Down Next event', curses.KEY_DOWN)],
         5: [('/ Filter', ord('/')), ('c CPU sort', ord('c')), ('m RAM sort', ord('m'))],
         7: [('g Processes', ord('g')), ('Enter Open', 10), ('D Details', ord('D')), ('/ Filter', ord('/')), ('p Placement', ord('p')),
             ('w Weight', ord('w')), ('l Quota', ord('l')), ('U Undo place', ord('U')), ('P Investigate',ord('P')),('W CPU+waits',ord('W'))],
@@ -43,7 +44,7 @@ def actions(view):
     extra = [('f Focus', ord('f'))] if view.page in (0, 1, 2, 3, 4, 6) else []
     if view.page == 7:
         extra = [('o Overlay', ord('o'))]
-    extra += [('0 Status', ord('0')), ('M Mark', ord('M')), ('9 Timeline', ord('9'))]
+    extra += [('E Explain', ord('E')), ('H Health', ord('H')), ('0 Status', ord('0')), ('M Mark', ord('M')), ('9 Timeline', ord('9'))]
     return common + [('q Quit', ord('q'))] + local + extra
 
 
@@ -124,6 +125,10 @@ def context_help(view, width=80):
             ('Space', 'Pause live display updates. In the CPU editor, toggle a CPU.'),
             ('? / Esc', 'Close this help and return to your previous position.'),
             ('q', 'Quit from a main view. Editors and dialogs have their own Back action.')]),
+        ('Find and understand', [
+            ('s', 'Search views, processes, services and hardware; Enter or click opens a result.'),
+            ('E', 'Choose a metric to see its meaning, source and limitations.'),
+            ('H', 'Inspect measurement availability, freshness and next steps.')]),
         ('Controls and saved work', [
             ('C (Shift+C)', 'Enable or disable control menus. You can also click the mode indicator.'),
             ('', 'Enabling menus changes no settings. Each change needs confirmation and permission.'),

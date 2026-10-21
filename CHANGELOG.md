@@ -1,4 +1,9 @@
-# Unreleased
+# 0.16.0
+
+- Add s search across views, hardware, processes and cgroups with identity rechecks.
+- Add E metric explanations and H per-measurement health, including a clickable freshness indicator.
+- Add observed control-impact summaries and scrollable i details before Apply.
+- Show before/after bars, sample counts and changes; retain per-device throughput and separate hardware energy domains.
 
 - Make process details scrollable with wrapped paths, grouped fields and readable state names.
 - Match process-detail buttons to available actions and align cgroup table headings.

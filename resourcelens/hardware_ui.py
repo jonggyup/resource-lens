@@ -1,4 +1,5 @@
 """Mouse and keyboard CPU menus, shared by the curses view."""
+from .impact import impact_lines, impact_summary
 import curses
 from .hardware import Hardware
 
@@ -74,6 +75,7 @@ class HardwareView:
                 'Offline removes logical CPUs from scheduling; it is not physical removal.',
                 'Changes remain after exit. Batches can partially succeed.',
                 'u on CPU page restores this session\'s hardware changes.',
+                *impact_summary(self.snapshot, plan, 'hardware'),
                 '[ Apply ] Enter: apply and verify', '[ Cancel ] Esc: cancel']
 
     def hardware_key(self, key):
