@@ -483,6 +483,8 @@ Resource details, application inspection and dialogs use consistent bold heading
 field labels and actions, including on monochrome terminals. Investigation results
 separate resource usage, hardware energy, waiting, diagnostics and saved files.
 Memory inspection separates resident usage, explanations, breakdowns and limits.
+Process details explain state codes and wrap long cgroup paths; use arrows, the
+mouse wheel, Page Up/Down or Home/End to scroll, and Esc to return.
 The investigation chooser wraps explanations on smaller terminals; its choices
 remain available by mouse or number key. Press **?** for the current view's guide.
 

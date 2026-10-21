@@ -1017,7 +1017,8 @@ def draw(screen, view, interval, error=None):
         view.browser.draw(screen,s,w,h)
         tree = s.get('cgroup_tree') or {}
         coverage = "PARTIAL: unreadable directories / node limit" if tree.get('truncated') or tree.get('errors') else 'visible directories'
-        status = "Cgroup browser | "+coverage+" | direct PIDs; group counters include descendants"
+        status = ("Process details | arrows/wheel: scroll | Esc: back" if view.browser.process else
+                  "Cgroup browser | "+coverage+" | group totals include children")
     elif view.page == 7 and not view.help and view.application_mode == 'processes':
         status = view.draw_application_processes(screen,w,h)
     elif view.page == 7 and not view.help and w >= 100 and h >= 20:
@@ -1295,7 +1296,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
-                      screen.getmaxyx(), stale, view.control, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None, (view.profile_view.scroll, id(view.profile_view.result), view.profile_view.error, view.profile_view.choosing, view.profile_view.selection, view.profile_view.details) if view.profile_view else None)
+                      screen.getmaxyx(), stale, view.control, repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort, view.browser.detail_scroll) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None, (view.profile_view.scroll, id(view.profile_view.result), view.profile_view.error, view.profile_view.choosing, view.profile_view.selection, view.profile_view.details) if view.profile_view else None)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render

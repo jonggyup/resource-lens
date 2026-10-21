@@ -1,3 +1,12 @@
+# Process details and timeline readability follow-up
+
+236 tests pass. A 40x18 fixture verifies wrapping a long cgroup path, scrolling to
+its end, mouse-wheel movement, preserved process identity and Escape navigation.
+A live 60x22 terminal verified grouped process details, readable state names,
+keyboard scrolling, return to Applications and the timeline explanation. The
+render signature includes detail scroll so navigation redraws immediately without
+waiting for a new sample. The local evaluation installation was refreshed.
+
 # 0.15.2 app-wide readability validation
 
 235 tests pass. The existing hardware terminal test still checks keyboard menus

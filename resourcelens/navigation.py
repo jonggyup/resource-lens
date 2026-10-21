@@ -17,6 +17,9 @@ def actions(view):
         return [('Esc Cancel',27)]
     if view.memory_sharing:
         return [('Esc Back',27), ('Tab Next',9), ('r Refresh',ord('r'))]
+    if view.browser and view.browser.process:
+        return [('Esc Back',27), ('V Memory',ord('V')), ('P Investigate',ord('P')),
+                ('W CPU+waits',ord('W')), ('Down Scroll',curses.KEY_DOWN)]
     if view.browser:
         return [('Esc Back',27), ('Left Parent',curses.KEY_LEFT), ('Enter Open',10), ('V Memory',ord('V')),('P Investigate',ord('P')),('W CPU+waits',ord('W')), ('q Applications',ord('q'))]
     if view.page == 7 and view.application_mode == 'processes' and not view.help and not view.editing_filter:

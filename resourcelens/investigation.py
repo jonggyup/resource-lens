@@ -78,22 +78,25 @@ class Investigation:
         return result, [len(window) for window in windows]
 
     def lines(self):
-        lines = ['CHANGE TIMELINE | M mark current sample | Up/Down select event',
-                 'Comparison: sampled means, 30 seconds before/after; differences do not establish causality.',
-                 'Only available samples are used; no application latency is inferred.', '']
+        lines = ['CHANGE TIMELINE', 'M: mark a baseline | Up/Down: select an event', '',
+                 '-- How to read the comparison --',
+                 'Values are averages from the 30 seconds before and after the event.',
+                 'A difference does not prove the event caused it.',
+                 'Missing samples are excluded. Request latency is not measured here.', '']
         if not self.events:
             return lines + ['No events yet. Press M to mark a baseline; control attempts are marked automatically.']
         self.selected = max(0, min(self.selected, len(self.events) - 1))
         event = self.events[self.selected]
         pair, counts = self.compare(event)
         lines += [f"Selected: {event['label']} [{event['status']}]", f'Available samples: before {counts[0]}, after {counts[1]}',
+                  'Each value includes its sample count in parentheses.',
                   'METRIC                         BEFORE(n)     AFTER(n)     CHANGE']
         for key in sorted(set(pair[0]) | set(pair[1])):
             before, after = pair[0].get(key), pair[1].get(key)
             value = lambda item: 'N/A' if item is None else f'{item[0]:.2f}({item[1]})'
             change = 'N/A' if before is None or after is None else f'{after[0] - before[0]:+.2f}'
             lines.append(f'{key:<28} {value(before):>12} {value(after):>12} {change:>12}')
-        lines += ['', 'EVENTS (time / outcome / action)']
+        lines += ['', '-- Events: time / result / action --']
         for index, entry in enumerate(self.events):
             lines.append(('> ' if index == self.selected else '  ') + time.strftime('%H:%M:%S', time.localtime(entry['timestamp'])) +
                          f" [{entry['status']}] {entry['label']}")

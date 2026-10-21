@@ -13,6 +13,7 @@ class CgroupBrowser:
         self.inode = node.get('inode') if node else None
         self.selected = None
         self.process = None
+        self.detail_scroll = 0
         self.regions = []
         self.back = None
 
@@ -49,6 +50,7 @@ class CgroupBrowser:
         kind, identity, generation, data = rows[index]
         if kind == 'process':
             self.process = (identity, generation)
+            self.detail_scroll = 0
         else:
             self.trail.append((self.path, self.inode, self.selected))
             self.path, self.inode = identity, generation
@@ -88,6 +90,16 @@ class CgroupBrowser:
             return False
         if key in (curses.KEY_LEFT, curses.KEY_BACKSPACE, 127, 8):
             return self.up(snapshot)
+        elif self.process:
+            step = max(1, height - 9)
+            move = {curses.KEY_DOWN: 1, ord('j'): 1, curses.KEY_UP: -1, ord('k'): -1,
+                    curses.KEY_NPAGE: step, curses.KEY_PPAGE: -step}.get(key)
+            if move is not None:
+                self.detail_scroll = max(0, self.detail_scroll + move)
+            elif key == curses.KEY_HOME:
+                self.detail_scroll = 0
+            elif key == curses.KEY_END:
+                self.detail_scroll = 10**9
         elif not self.process:
             rows = self.rows(snapshot)
             index = self.selection(rows)
@@ -119,11 +131,11 @@ class CgroupBrowser:
 
     def draw(self, screen, snapshot, width, height):
         from .ui import put, pct, size
-        from .readability import draw_text
+        from .readability import draw_text, wrap_lines
         self.regions, self.back = [], (1, 14, 2)
-        put(screen,2,1,'[ < Parent ]',curses.A_BOLD)
+        put(screen,2,1,'[ < Back ]' if self.process_entry or self.process else '[ < Parent ]',curses.A_BOLD)
         put(screen,3,1,'PROCESS DETAILS' if self.process_entry else 'CGROUP BROWSER: '+self.path,curses.A_BOLD)
-        put(screen,4,1,'Enter: open | Left: parent | Esc: back | c/m/n sort: '+self.sort)
+        put(screen,4,1,'Arrows: scroll | V: memory | P: investigate' if self.process else 'Enter: open | Left: parent | sort: '+self.sort)
         tree = snapshot.get('cgroup_tree')
         if tree is None and not self.process_entry:
             put(screen,6,1,'This recording has no cgroup hierarchy data. Live collection or a new recording is required.')
@@ -141,21 +153,35 @@ class CgroupBrowser:
             if not p:
                 put(screen,7,1,'Process exited, moved, or PID was reused. Left/Esc returns to this group.')
                 return
-            lines = [f"PID {pid}: {p['name']}", f"Parent PID: {p.get('ppid')} | state: {p.get('state')}",
-                     f"CPU: {pct(p.get('cpu_pct'))} | RSS: {size(p.get('memory'))}",
-                     f"Start ticks: {starttime}", 'Cgroup: '+(p.get('cgroup') or 'unknown'),
-                     'V: inspect memory | P: investigate | Esc: back']
-            for i,line in enumerate(lines):draw_text(screen,7+i,1,line)
+            states = {'R': 'Running or ready for CPU', 'S': 'Sleeping; waiting for an event',
+                      'D': 'Uninterruptible wait (often I/O)', 'T': 'Stopped',
+                      't': 'Stopped by a debugger', 'Z': 'Zombie; waiting for its parent',
+                      'I': 'Idle kernel thread', 'X': 'Exited'}
+            state = p.get('state') or '?'
+            lines = [f"PID {pid}: {p['name']}", '', '-- Resource use --',
+                     f"CPU: {pct(p.get('cpu_pct'))}", '100% means one logical CPU is fully busy.',
+                     f"RAM (RSS): {size(p.get('memory'))}",
+                     'RSS includes shared mappings; use V to inspect sharing.',
+                     '', '-- Process identity --', f"State: {states.get(state, 'Unknown')} ({state})",
+                     f"Parent PID: {p.get('ppid')}", f"Start ticks: {starttime}",
+                     'Cgroup: '+(p.get('cgroup') or 'unknown'),
+                     '', 'V: inspect memory | P: investigate | Esc: back']
+            wrapped = wrap_lines(lines, width - 3)
+            capacity = max(1, height - 9)
+            self.detail_scroll = min(self.detail_scroll, max(0, len(wrapped) - capacity))
+            for i, line in enumerate(wrapped[self.detail_scroll:self.detail_scroll + capacity]):
+                draw_text(screen, 7+i, 1, line)
             return
         rows = self.rows(snapshot)
         selected = self.selection(rows)
         capacity = max(1,height-9)
         first = max(0,(selected or 0)-capacity+1)
-        put(screen,6,1,'TYPE / NAME                                      CPU         MEMORY',curses.A_BOLD)
+        name_width = max(8, width - 23)
+        put(screen,6,1,f"{'TYPE / NAME':<{name_width}} {'CPU':>7} {'MEMORY':>10}",curses.A_BOLD)
         for offset,(kind,identity,generation,data) in enumerate(rows[first:first+capacity]):
             name = PurePosixPath(identity).name+'/' if kind == 'group' else f"{identity} {data['name']}"
             label = ('CG ' if kind == 'group' else 'PID ')+name
-            line = f"{label[:max(16,width-28)]:<{max(16,width-28)}} {pct(data.get('cpu_pct')):>7} {size(data.get('memory_current' if kind=='group' else 'memory')):>10}"
+            line = f"{label[:name_width]:<{name_width}} {pct(data.get('cpu_pct')):>7} {size(data.get('memory_current' if kind=='group' else 'memory')):>10}"
             y=7+offset
             put(screen,y,1,line,curses.A_REVERSE if (kind,identity,generation)==self.selected else 0)
             self.regions.append((1,width-1,y,(kind,identity,generation)))

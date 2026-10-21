@@ -42,6 +42,25 @@ class BrowserTests(unittest.TestCase):
         self.sample['workloads']=[group('demo.service')]
         self.browser=CgroupBrowser(self.sample,'/demo.service')
 
+    def test_process_details_wrap_scroll_and_keep_identity(self):
+        process = self.sample['processes'][0]
+        process['cgroup'] = '/' + 'long-service-name/' * 12 + 'leaf'
+        self.browser.process_entry = True
+        self.browser.process = (10, 20)
+        screen = Screen(18, 40)
+        self.browser.draw(screen, self.sample, 40, 18)
+        self.assertIn('PID 10: parent', ' '.join(screen.lines.values()))
+        self.browser.key(curses.KEY_END, self.sample, 18)
+        screen.erase()
+        self.browser.draw(screen, self.sample, 40, 18)
+        self.assertGreater(self.browser.detail_scroll, 0)
+        self.assertIn('leaf', ' '.join(screen.lines.values()))
+        previous = self.browser.detail_scroll
+        self.browser.mouse(5, 10, curses.BUTTON4_PRESSED, self.sample, 18)
+        self.assertLess(self.browser.detail_scroll, previous)
+        self.assertEqual(self.browser.process, (10, 20))
+        self.assertFalse(self.browser.key(27, self.sample, 18))
+
     def test_direct_members_children_and_back_navigation(self):
         rows=self.browser.rows(self.sample)
         self.assertEqual([(r[0],r[1]) for r in rows],[('group','/demo.service/child'),('process',10)])

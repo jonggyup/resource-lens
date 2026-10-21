@@ -1,3 +1,9 @@
+# Unreleased
+
+- Make process details scrollable with wrapped paths, grouped fields and readable state names.
+- Match process-detail buttons to available actions and align cgroup table headings.
+- Explain timeline windows, sample counts and comparison limits in plain language.
+
 # 0.15.2
 
 - Apply shared heading, field-label and action styling across resource details and dialogs.
