@@ -57,17 +57,17 @@ def resource_lines(view, kind, width):
         m = s['memory']
         cards = [('SYSTEM RAM', [gauge(ratio(m['used'], m['total'])),
             f"Used {size(m['used'])} / {size(m['total'])}", f"Available {size(m['available'])}",
-            'Used = total - available; includes availability estimate.',
+            'Used = total minus estimated available RAM.',
             'History ' + view.trend(view.history['memory'], plot_width), pressure(s, 'memory')]),
             ('CACHE / SWAP', [f"Cache {size(m['cache'])} | Buffers {size(m['buffers'])}",
-                'Cache and available overlap; do not add these counters.',
+                'Cache overlaps available RAM; do not add them.',
                 'Swap ' + gauge(ratio(m['swap_used'], m['swap_total'])),
                 f"Swap {size(m['swap_used'])} / {size(m['swap_total'])}"])]
         for node in topology.get('memory_nodes', []):
             total, free = node['total'], node['free']
             occupied = max(0, total - free) if total is not None and free is not None else None
             cards.append((node['id'].upper() + ' MEMORY', [gauge(ratio(occupied, total)),
-                f"Total {size(total)} | Free {size(free)}", 'Gauge = non-free, including reclaimable pages.',
+                f"Total {size(total)} | Free {size(free)}", 'Non-free, including reclaimable memory.',
                 'Local CPUs: ' + (format_cpus(node['cpus']) or 'none reported')]))
         if focus is not None:
             cards = cards[:2] if focus == 'system' else [card for card in cards if card[0] == focus.upper() + ' MEMORY']
@@ -83,7 +83,7 @@ def resource_lines(view, kind, width):
                 history('disk', d, 'write_bps', 'Write history', unit=' B/s'),
                 f"READ  {size(d['read_bps'])}/s | {number(d['read_iops'])} IOPS",
                 f"WRITE {size(d['write_bps'])}/s | {number(d['write_iops'])} IOPS",
-                f"In flight {d['in_flight']} | Avg queue {number(d['queue_depth'], 2)}",
+                f"Pending I/O {d['in_flight']} | Average queue {number(d['queue_depth'], 2)}",
                 f"Device capacity {size(info.get('capacity'))}",
                 'Backing devices: ' + (', '.join(info.get('backing', [])) or 'none reported'),
                 'Used by: ' + (', '.join(info.get('holders', [])) or 'none reported'),
@@ -157,7 +157,7 @@ def expanded_overview(view, width):
     from .ui import pct, size
     groups = sorted(s.get('workloads', []), key=lambda g: g['cpu_pct'] or 0, reverse=True)
     content = panels([(g['unit'] or g['id'], [f"CPU {pct(g['cpu_pct'])} | RAM {size(g['memory_current'])}",
-                     f"{len(g['pids'])} visible processes", 'p on Workloads: CPU placement']) for g in groups[:6]], width)
+                     f"{len(g['pids'])} visible processes", 'p on Applications: choose CPUs']) for g in groups[:6]], width)
     section(f'WORKLOADS (top {min(6, len(groups))} of {len(groups)} by CPU)', 7, content or ['No workload accounting available.'])
     section('PROCESSES', 5, view.process_lines(width))
     return lines, links

@@ -58,7 +58,7 @@ class PlacementView:
                 'Applies to the service and descendants, including new threads.',
                 'CPU capacity is shared; this does not reserve exclusive cores.',
                 'Task affinity and child cgroups can narrow placement further.',
-                'Runtime setting survives exit. Workloads: U to Undo placement.',
+                'The CPU set remains after exit. U on Applications undoes it.',
                 '[ Apply ] Enter: apply and verify', '[ Cancel ] Esc: cancel']
 
     def placement_confirm_key(self, key):

@@ -5,7 +5,7 @@ See what is busy, how usage changes, and whether workloads are waiting for
 resources. Runs over SSH and uses Python's standard library: no runtime Python
 packages, additional daemon or database. Monitoring needs no root access.
 
-**Version 0.15.1 is a preview with optional temporary CPU and disk controls.** Monitoring
+**Version 0.15.2 is a preview with optional temporary CPU and disk controls.** Monitoring
 is read-only by default. **C** (or click the mode indicator) enables previewed, confirmed CPU weight and
 quota changes for supported systemd services/scopes, plus CPU placement on a socket/core topology map,
 CPU governors and logical CPU online/offline controls. Per-service disk bandwidth controls are also available. Memory controls, direct frequency
@@ -476,6 +476,15 @@ percentages; disk/GPU histories show the busiest device, whose identity may
 change. Sampling defaults to one second. Frozen intervals are omitted from
 display history, so it is a sequence of samples rather than a continuous
 wall-clock axis.
+
+## Readable views and dialogs
+
+Resource details, application inspection and dialogs use consistent bold headings,
+field labels and actions, including on monochrome terminals. Investigation results
+separate resource usage, hardware energy, waiting, diagnostics and saved files.
+Memory inspection separates resident usage, explanations, breakdowns and limits.
+The investigation chooser wraps explanations on smaller terminals; its choices
+remain available by mouse or number key. Press **?** for the current view's guide.
 
 ## Navigation and contextual help
 

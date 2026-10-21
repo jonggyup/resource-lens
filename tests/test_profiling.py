@@ -125,6 +125,19 @@ class ProfilingTests(unittest.TestCase):
                     view.key(10,24)
                 start.assert_called_once_with(True)
 
+    def test_chooser_keeps_all_modes_clickable_at_small_sizes(self):
+        from test_navigation import Screen
+        for width, height in ((40, 12), (40, 24), (80, 18), (120, 35)):
+            view = ProfileView(dict(pid=os.getpid()), choose=True)
+            view.draw(Screen(height, width), width, height)
+            self.assertEqual(len(view.regions), 3)
+            for left, right, row, mode in view.regions:
+                self.assertTrue(1 <= left < right < width)
+                self.assertLess(row, height - 2)
+                with patch.object(view, 'start') as start:
+                    view.mouse(left, row)
+                    start.assert_called_once_with(mode)
+
     def test_summary_keeps_failures_visible_and_details_separate(self):
         view=ProfileView(dict(pid=os.getpid()),choose=True)
         view.choosing=False

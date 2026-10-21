@@ -1,6 +1,6 @@
 """Hardware/application navigation with explicit accounting and placement semantics."""
 import curses
-import textwrap
+from .readability import draw_text, wrap_lines
 from .hardware import cpulist
 
 TABS = ('Usage', 'Processes', 'Placement', 'Limits', 'History')
@@ -92,7 +92,7 @@ class Workspaces:
             self.relation_label = 'Active I/O on '+disk['name']+'; matching accounting device only'
         elif self.page == 2:
             self.relation = ('memory',None)
-            self.relation_label = 'Accounted memory > 0; NUMA-node attribution unavailable'
+            self.relation_label = 'Memory charged to this group: > 0; NUMA-node attribution unavailable'
         else:
             self.modal = dict(stage='result',message='Per-application GPU/network attribution is unavailable. Host utilization is not attributed to applications.')
             return
@@ -109,20 +109,20 @@ class Workspaces:
             return ['No selected application.', self.workload_notice or 'Select a visible workload using arrows or click.',
                     self.relation_label, 'x clears the hardware relationship filter.']
         lines = [group.get('unit') or group['id'],
-                 'Grouping: '+group.get('kind','cgroup')+' | manager: '+str(group.get('manager') or 'unknown'),
-                 'Identity: '+group['id']+' | inode '+str(group.get('inode')),
-                 self.workload_notice or 'A workload group is not necessarily one desktop application.',
+                 'Group type: '+group.get('kind','cgroup')+' | manager: '+str(group.get('manager') or 'unknown'),
+                 'Cgroup: '+group['id']+' | inode '+str(group.get('inode')),
+                 self.workload_notice or 'A group may contain several processes or services.',
                  ' | '.join(('['+name+']') if i==self.app_tab else name for i,name in enumerate(TABS)),
                  '[ / ] tabs | D detail focus | Esc list focus', '']
         if self.app_tab == 0:
             lines += [f"CPU {pct(group.get('cpu_pct'))} (100% = one logical CPU)",
-                      'Accounted memory '+size(group.get('memory_current')),
-                      'Share of host RAM '+bar(ratio(group.get('memory_current'),self.snapshot['memory'].get('total')),min(26,max(8,width-22))),
+                      'Memory charged to this group: '+size(group.get('memory_current')),
+                      'Host RAM share: '+bar(ratio(group.get('memory_current'),self.snapshot['memory'].get('total')),min(26,max(8,width-22))),
                       f"Block I/O: read {size(io_rate(group,'read'))}/s | write {size(io_rate(group,'write'))}/s",
                       *indicators(self.snapshot,group), '',
                       'o: allowed CPU overlay | d: first mapped accounting disk',
                       'GPU / network per-application usage: unavailable',
-                      'Nested cgroup counters can overlap; do not sum rows.','', 'Accounting devices:']
+                      'Parent totals include children; adding rows can double-count usage.','', 'Disk accounting:']
             cpu_values = self.history['workload:'+group['id']]
             maximum = max(100,max((v for v in cpu_values if v is not None),default=100))
             lines[7:7] = [f'CPU history 0-{maximum:.0f}%:',self.trend(cpu_values,max(8,width-4),maximum)]
@@ -141,7 +141,7 @@ class Workspaces:
             lines += ['Allowed CPUs: '+(','.join(map(str,sorted(ids))) if ids is not None else 'unknown'),
                       'Allowed placement is not per-core execution attribution.',
                       'Thread affinity and child cgroups may narrow this set.',
-                      'o opens the CPU topology overlay; p edits placement with --control.',
+                      'o shows placement on the CPU map; p edits it after C enables controls.',
                       'NUMA memory residency: unavailable; no node use inferred.']
         elif self.app_tab == 3:
             limits = group.get('limits', {})
@@ -150,7 +150,7 @@ class Workspaces:
                       'Tightest observed memory maximum: '+size(limits.get('memory_max'))]
             lines += ['w weight | l quota | p placement | b disk bandwidth',
                       'u Undo CPU | U Undo placement | B Undo disk',
-                      'Controls require live --control mode and authorization.',
+                      'Press C to enable controls. Existing permissions still apply.',
                       'Local and ancestor limits (nearest first):']
             for ancestor in group.get('limits',{}).get('ancestors',[]):
                 lines += [ancestor['path']]
@@ -168,7 +168,7 @@ class Workspaces:
                 target = event.get('target') or {}
                 if target.get('id')==group['id'] and target.get('inode')==group.get('inode'):
                     lines.append('['+event['status']+'] '+event['label'])
-        return [part for line in lines for part in (textwrap.wrap(str(line),max(20,width)) or [''])]
+        return wrap_lines(lines, max(20, width))
 
     def draw_applications(self, screen, width, height):
         from .ui import put, pct, size
@@ -178,9 +178,9 @@ class Workspaces:
         capacity = max(1,height-9)
         selected = next((i for i,g in enumerate(rows) if g['id']==self.workload_id),0)
         first = max(0,min(selected-capacity+1,len(rows)-capacity))
-        put(screen,3,1,'APPLICATIONS / '+str(len(rows))+' groups',curses.A_BOLD,left-2)
+        put(screen,3,1,'SERVICE GROUPS / '+str(len(rows)),curses.A_BOLD,left-2)
         put(screen,4,1,'/ search | c/m/n/i sort',limit=left-2)
-        put(screen,5,1,self.relation_label or 'Explicit cgroup/systemd grouping',limit=left-2)
+        put(screen,5,1,self.relation_label or 'Services and process groups',limit=left-2)
         put(screen,6,1,'NAME                 CPU / RAM',limit=left-2)
         for i,group in enumerate(rows[first:first+capacity]):
             y=7+i
@@ -203,5 +203,5 @@ class Workspaces:
         else:
             self.scroll=0
         for i,line in enumerate(lines[self.scroll:self.scroll+count]):
-            put(screen,5+i,left+2,line,limit=width-left-4)
+            draw_text(screen,5+i,left+2,line,limit=width-left-4,accent=self.colors["accent"])
         return 'Applications | '+('detail scroll' if self.workload_detail else 'arrows select')+' | [ / ] tabs | x clear relationship'

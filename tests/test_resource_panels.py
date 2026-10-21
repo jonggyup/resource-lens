@@ -75,5 +75,5 @@ class ResourcePanelsTests(unittest.TestCase):
         view.snapshot['resource_topology']['memory_nodes'] = [dict(id='node0', total=1000, free=100, cpus=[0])]
         text = '\n'.join(resource_lines(view, 'memory', 117))
         self.assertIn('including reclaimable', text)
-        self.assertIn('Cache and available overlap', text)
+        self.assertIn('Cache overlaps available RAM', text)
         self.assertIn('90.0%', text)

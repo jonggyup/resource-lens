@@ -1,3 +1,20 @@
+# 0.15.2 app-wide readability validation
+
+235 tests pass. The existing hardware terminal test still checks keyboard menus
+and clicks on the CPU topology; confirmation-size guards, replay isolation and
+input routing remain covered. New chooser checks cover all three clickable modes
+at 40x12, 40x24, 80x18 and 120x35. The fake screen now preserves the suffix when a
+field label is redrawn, matching terminal behavior.
+
+Real tmux checks at 110x32 visited CPU, memory, disk, GPU, network and Status,
+opened investigation choices and live memory inspection, and enabled controls to
+open the CPU menu without applying changes. At 40x18, all investigation choices
+remained visible. Documentation and the local evaluation installation are updated.
+
+Three local PTY trials measured navigation at 1.91–3.98 ms, Escape-to-frame at
+3.84–4.15 ms, and Escape-to-exit at 11.24–11.90 ms. These are local curses-flush
+measurements, not SSH or physical display latency. No system settings were changed.
+
 # Help readability validation
 
 234 tests pass. Help tests cover 20/37/60/77/117-column wrapping, process/cgroup

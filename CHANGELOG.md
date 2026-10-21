@@ -1,4 +1,8 @@
-# Unreleased
+# 0.15.2
+
+- Apply shared heading, field-label and action styling across resource details and dialogs.
+- Group investigation results, memory inspection and capability details into readable sections.
+- Reflow investigation choices for smaller terminals and clarify application and control text.
 
 - Group help by current task, with highlighted headings and keys, aligned descriptions,
   and a stacked layout for narrow terminals. Simplify the control-mode dialog.

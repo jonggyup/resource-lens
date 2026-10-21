@@ -70,7 +70,7 @@ def capability_lines(sample, error=None, replay=False):
              'Recorded capabilities; not current permissions.' if replay else 'Permission checks describe this process; systemd authorization is checked on apply.',
              f"Snapshot age: {max(0, time.time()-sample['timestamp']):.1f}s" if not replay else 'Historical snapshot (replay)',
              f"Collector wall: {ms:.1f} ms | CPU: {cpu:.1f} ms | monitor peak RSS: {rss/1048576:.1f} MiB" if all(v is not None for v in (ms,cpu,rss)) else 'Collector overhead: unavailable in this sample',
-             'Collector error: ' + (error or 'none reported'), '']
+             'Collector error: ' + (error or 'none reported'), '', '-- Available measurements --']
     for title, available, reason in [
         ('CPU usage', bool(sample.get('cpu')), 'Needs readable /proc/stat'),
         ('Memory', sample.get('memory', {}).get('total') is not None, 'Needs readable /proc/meminfo'),
@@ -80,13 +80,13 @@ def capability_lines(sample, error=None, replay=False):
         ('cgroup v2', caps.get('cgroup_v2'), 'Requires a unified cgroup hierarchy'),
         ('systemd controls', caps.get('systemctl'), 'Requires systemctl and an accessible owning manager')]:
         lines.append(f"{title}: {'available' if available else 'unavailable/unknown'}" + ('' if available else ' — ' + reason))
-    lines += ['Controllers exposed: ' + (caps.get('controllers') or 'unknown'),
+    lines += ['', '-- Resource controls --', 'Controllers exposed: ' + (caps.get('controllers') or 'unknown'),
               'Writable governor files: ' + str(caps.get('writable_governors', 'unknown')),
               'Writable CPU online files: ' + str(caps.get('writable_online', 'unknown')),
               f"Skipped/exited/unreadable processes: {sample.get('processes_skipped', 'unknown')}",
               'Workload files may be inactive despite controller availability at the root.',
-              'Use C to enable control menus. Permission denied? Use manager authorization',
-              'or the explicitly installed narrow helper; monitoring never requires elevation.']
+              'Press C to enable control menus. Monitoring needs no elevated permissions.',
+              'If a change is denied, use manager authorization or an explicitly installed helper.']
     energy=sample.get('energy')
     if energy:
         lines += ['', 'HARDWARE ENERGY: '+energy['status'],energy['scope']]

@@ -119,6 +119,7 @@ class CgroupBrowser:
 
     def draw(self, screen, snapshot, width, height):
         from .ui import put, pct, size
+        from .readability import draw_text
         self.regions, self.back = [], (1, 14, 2)
         put(screen,2,1,'[ < Parent ]',curses.A_BOLD)
         put(screen,3,1,'PROCESS DETAILS' if self.process_entry else 'CGROUP BROWSER: '+self.path,curses.A_BOLD)
@@ -142,9 +143,9 @@ class CgroupBrowser:
                 return
             lines = [f"PID {pid}: {p['name']}", f"Parent PID: {p.get('ppid')} | state: {p.get('state')}",
                      f"CPU: {pct(p.get('cpu_pct'))} | RSS: {size(p.get('memory'))}",
-                     f"Start ticks: {starttime}", 'Exact cgroup: '+(p.get('cgroup') or 'unknown'),
-                     'V: memory sharing inspector | process details are read-only.']
-            for i,line in enumerate(lines):put(screen,7+i,1,line)
+                     f"Start ticks: {starttime}", 'Cgroup: '+(p.get('cgroup') or 'unknown'),
+                     'V: inspect memory | P: investigate | Esc: back']
+            for i,line in enumerate(lines):draw_text(screen,7+i,1,line)
             return
         rows = self.rows(snapshot)
         selected = self.selection(rows)

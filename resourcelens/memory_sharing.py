@@ -164,20 +164,24 @@ class MemorySharingView:
             private=sum(values[k] for k in ('Private_Clean','Private_Dirty')) if all(k in values for k in ('Private_Clean','Private_Dirty')) else None
             shared=sum(values[k] for k in ('Shared_Clean','Shared_Dirty')) if all(k in values for k in ('Shared_Clean','Shared_Dirty')) else None
             rss=values.get('Rss')
-            lines=['RESIDENT MEMORY (RAM, not virtual reservation)',
+            lines=['-- Memory in RAM --',
+                   'Resident memory is in RAM; virtual reservation is separate.',
                    'RSS '+size(rss)+' | PSS '+size(values.get('Pss'))+' | private resident '+size(private),
                    'Shared resident mappings '+size(shared),
                    'Private '+bar(100*private/rss if rss and private is not None else None,min(30,max(8,width-15))),
                    'Shared  '+bar(100*shared/rss if rss and shared is not None else None,min(30,max(8,width-15))),
-                   'PSS apportions shared pages; RSS counts each resident mapping.',
+                   '', '-- Reading these values --',
+                   'RSS counts resident mappings. PSS divides shared pages among their users.',
                    'Private resident = Private_Clean + Private_Dirty (USS-style estimate).',
                    'Shared counters may include multiple mappings within one process.',
                    'Do not add thread RSS: threads in a process share one address space.',
+                   '', '-- Memory breakdown --',
                    'PSS categories: anonymous '+size(values.get('Pss_Anon'))+' | file '+size(values.get('Pss_File'))+' | shmem '+size(values.get('Pss_Shmem')),
                    'Swap '+size(values.get('Swap'))+' | proportional swap '+size(values.get('SwapPss')),
                    'Hugetlb: shared '+size(values.get('Shared_Hugetlb'))+' | private '+size(values.get('Private_Hugetlb')),
                    'Hugetlb counters are separate; RSS/PSS may exclude these pages.',
-                   'No physical page IDs, DIMM placement or exact cross-process shared-byte attribution.']
+                   '', '-- Measurement limits --',
+                   'Physical page IDs, DIMM placement and exact shared bytes between processes are unavailable.']
         elif self.tab==1:
             lines=[f"{len(result['threads'])} observed threads in TGID {result['pid']}: one shared address space.",
                    'Stacks/TLS are per-thread regions within that address space; resident totals are not per-thread.','']
@@ -194,7 +198,7 @@ class MemorySharingView:
         return lines+(['PARTIAL: scan limits or unreadable/exited entries; absence is not proof of no sharing.'] if result['partial'] else [])+['',*result['warnings'], 'Inspection is a point-in-time, non-atomic observation; r refreshes.']
 
     def draw(self,screen,width,height):
-        import textwrap
+        from .readability import draw_text, wrap_lines
         from .ui import put
         put(screen,2,1,f"MEMORY SHARING / PID {self.target['pid']} {self.target['name']}",curses.A_BOLD)
         self.regions=[];x=1
@@ -203,6 +207,6 @@ class MemorySharingView:
             put(screen,3,x,label,curses.A_REVERSE if self.tab==tab else curses.A_BOLD)
             self.regions.append((x,x+len(label),3,tab));x+=len(label)+1
         if self.result:put(screen,4,1,'Observed '+time.strftime('%H:%M:%S',time.localtime(self.result['timestamp']))+' | r refresh | Esc back')
-        lines=[piece for line in self.lines(width-3) for piece in (textwrap.wrap(line,max(10,width-3)) or [''])]
+        lines=wrap_lines(self.lines(width-3),width-3)
         capacity=max(1,height-7);self.scroll=min(self.scroll,max(0,len(lines)-capacity))
-        for i,line in enumerate(lines[self.scroll:self.scroll+capacity]):put(screen,5+i,1,line)
+        for i,line in enumerate(lines[self.scroll:self.scroll+capacity]):draw_text(screen,5+i,1,line)

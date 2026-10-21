@@ -2,6 +2,7 @@
 import curses
 import copy
 import textwrap
+from .readability import wrap_lines
 from .usability import save_preferences, export_report, capability_lines
 from .disk_controls import DiskSession
 
@@ -17,8 +18,7 @@ class UsabilityView:
         self.disk_session = DiskSession()
 
     def capability_lines(self, width):
-        return [part for line in capability_lines(self.snapshot, self.collector_error, bool(self.replay))
-                for part in (textwrap.wrap(line, max(20,width)) or [''])]
+        return wrap_lines(capability_lines(self.snapshot, self.collector_error, bool(self.replay)), max(20,width))
 
     def utility_key(self, key):
         if key == ord('0'):
@@ -71,9 +71,9 @@ class UsabilityView:
         if modal['stage'] == 'utility_disk':
             devices = ', '.join(d['name'] for d in self.snapshot['disks'])
             return ['Set runtime disk bandwidth for '+modal['target']['unit'],
-                    'Visible devices: '+devices, 'Enter: DEVICE read|write RATE',
+                    'Visible devices: '+devices, 'Format: DEVICE read|write RATE',
                     'Example: sda write 10M  (M = MiB/s); max removes this limit.',
-                    'Applies to unit descendants; buffered/cache traffic may differ.',
+                    'Includes child groups. Cached or buffered traffic may differ.',
                     'Value: '+modal['value']+'_', 'Enter: preview | Esc: cancel']
         plan = modal['plan']
         dev = plan['device']
@@ -83,7 +83,7 @@ class UsabilityView:
                 f"{plan['direction']} bytes/sec: {plan['before'][plan['direction']].get(dev['path'], 'max')} -> {plan['value'] if plan['value'] is not None else 'max'}",
                 'Affects this unit and descendants; ancestor limits still apply.',
                 'Cache hits bypass disk I/O. Kernel read-back does not prove workload enforcement.',
-                'Runtime setting remains after exit. B on Workloads: Undo.',
+                'The limit remains after exit. B on Applications undoes it.',
                 '[ Apply ] Enter: apply and verify', '[ Cancel ] Esc: cancel']
 
     def utility_modal_key(self, key):

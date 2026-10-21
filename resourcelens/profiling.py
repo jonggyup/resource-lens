@@ -370,12 +370,14 @@ class ProfileView:
                 'major_faults_per_second':'Major faults / second',
                 'surviving_threads_runqueue_wait_seconds_per_second':'Runqueue wait (thread-seconds / second)',
                 'throttled_seconds_per_second':'Throttled seconds / second'}
+        lines += ['', '-- Resource usage --']
         lines += [labels.get(k,k)+': '+(size(v) if k=='rss_end_bytes' else f'{v:.3f}') for k,v in r['metrics'].items() if not k.startswith(('scheduler.','energy.'))]
         if r.get('energy',{}).get('status','disabled')!='disabled':
             from .energy import lines as energy_lines
-            lines += energy_lines(r['energy'])
+            lines += ['', '-- Hardware energy --', *energy_lines(r['energy'])]
         trace=r.get('scheduler',{})
         if trace.get('status','disabled')!='disabled':
+            lines += ['', '-- Time spent waiting --']
             if self.details:
                 from .scheduler_trace import summary_lines
                 lines += summary_lines(trace)
@@ -394,34 +396,40 @@ class ProfileView:
             lines.append('Wait evidence is incomplete or unavailable. Press D for the reason and coverage.')
         if r['status']!='complete':lines += r['warnings']
         if self.details:
+            lines += ['', '-- Diagnostics and CPU stacks --']
             if r['status']=='complete':lines += r['warnings']
             if r['profile'].get('diagnostic'):lines.extend(r['profile']['diagnostic'].splitlines())
             if r['profile']['status']=='recorded':
                 lines += (read(self.directory/'perf-report.txt') or '').splitlines()[:100]
             lines += ['CPU stacks: perf report -i '+str(self.directory/'perf.data'),
                       'Compare: resource-lens --compare BASELINE_DIR CANDIDATE_DIR']
-        lines += ['Saved to: '+str(self.directory)]
+        lines += ['', '-- Saved capture --', 'Saved to: '+str(self.directory)]
         return lines
 
     def draw(self,screen,width,height):
         from .ui import put
-        import textwrap
+        from .readability import draw_text, wrap_lines
         self.regions=[]
         if self.choosing:
             target='PID '+str(self.target['pid']) if self.target.get('pid') else str(self.target.get('cgroup'))
             put(screen,2,1,'INVESTIGATE / '+target,curses.A_BOLD)
             put(screen,3,1,'Choose what to capture. All run for 10 seconds.')
-            options=[('1  CPU usage','Which functions are using CPU? Start here.'),
-                     ('2  CPU + waits','Also show where threads stop and how long they wait for CPU.'),
-                     ('3  Energy efficiency','Hardware-domain joules and watts during this workload; not process attribution.')]
+            options=[('1  CPU usage','Find functions using CPU.'),
+                     ('2  CPU + waits','See where threads stop and wait for CPU.'),
+                     ('3  Energy efficiency','Hardware energy during the capture, not per-process energy.')]
+            row=5 if height >= 14 else 4
+            budget=max(0,(height-12)//3)
             for index,(label,explanation) in enumerate(options):
-                row=5+index*3
+                if row >= height-3:break
                 put(screen,row,1,'[ '+label+' ]',curses.A_REVERSE if self.selection==index else curses.A_BOLD)
                 self.regions.append((1,min(width-1,len(label)+5),row,2 if index==2 else bool(index)))
-                put(screen,row+1,3,explanation)
-            put(screen,14,1,'CPU + waits adds tracing overhead and needs scheduler tracing permission.')
-            put(screen,16,1,'Click a choice, press 1/2/3, or use arrows then Enter. Esc goes back.')
+                explanation_lines=wrap_lines([explanation],width-5)
+                for offset,line in enumerate(explanation_lines[:budget]):
+                    put(screen,row+1+offset,3,line)
+                row += 2+min(budget,len(explanation_lines))
+            if row < height-3:
+                put(screen,row,1,'Wait tracing needs permission and adds overhead.')
             return
-        wrapped=[piece for line in self.lines() for piece in (textwrap.wrap(line,max(10,width-3)) or [''])]
+        wrapped=wrap_lines(self.lines(), width-3)
         self.scroll=min(self.scroll,max(0,len(wrapped)-max(1,height-5)))
-        for i,line in enumerate(wrapped[self.scroll:self.scroll+max(1,height-5)]):put(screen,i+2,1,line)
+        for i,line in enumerate(wrapped[self.scroll:self.scroll+max(1,height-5)]):draw_text(screen,i+2,1,line)

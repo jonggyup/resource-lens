@@ -14,7 +14,8 @@ class Screen:
     def erase(self): self.lines = {}
     def refresh(self): pass
     def addnstr(self, y, x, text, length, attr=0):
-        self.lines[(y, x)] = text[:length]
+        written = text[:length]
+        self.lines[(y, x)] = written + self.lines.get((y, x), "")[len(written):]
 
 
 class NavigationTests(unittest.TestCase):

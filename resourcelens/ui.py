@@ -10,6 +10,7 @@ import textwrap
 import threading
 import time
 
+from .readability import draw_text
 from .presentation import GLYPHS, card_layout, chart, compact_overview, draw_card, overview_cards, palette
 from .controls import ControlSession
 from .hardware_ui import HardwareView
@@ -339,7 +340,7 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
             elif kind in ('placement_apply', 'placement_undo'):
                 self.placement = None
                 self.page, self.workload_detail, self.scroll = 7, True, 0
-                self.modal = dict(stage='result', message='CPU placement restored and verified.' if kind == 'placement_undo' else 'CPU placement verified in systemd and the kernel. U on Workloads: Undo placement.')
+                self.modal = dict(stage='result', message='CPU placement restored and verified.' if kind == 'placement_undo' else 'CPU placement verified in systemd and the kernel. U on Applications: undo placement.')
             elif kind == "hardware_prepare":
                 self.modal = {"stage": "hardware_confirm", "plan": result}
             elif kind.startswith("hardware_"):
@@ -402,9 +403,10 @@ class View(HardwareView, PlacementView, NavigationView, FocusView, UsabilityView
                     "Undo restores the previous value using systemd.",
                     "Enter: apply and verify | Esc: cancel"]
         if modal["stage"] == "quit":
-            return ["CPU changes may still be active.", "Runtime settings remain after leaving this dashboard.",
-                    "This session's Undo history is lost when you exit.",
-                    "Enter: exit and keep settings | Esc: return | u: Undo (disk, placement, hardware, workload)"]
+            return ["Resource settings may still be active.", "Leaving the dashboard does not restore previous settings.",
+                    "Undo history is available only until you exit.",
+                    "Enter: exit and keep settings | Esc: go back",
+                    "u: undo the latest disk, placement, hardware or service change"]
         return [modal["message"], "", "Enter or Esc: close | 8: inspect workloads"]
 
     def modal_key(self, key):
@@ -1084,13 +1086,14 @@ def draw(screen, view, interval, error=None):
                 attribute = accent | curses.A_REVERSE if line.startswith(">") or index == 3 else 0
             else:
                 attribute = color if index < 5 else (accent if i == 0 else 0)
-            if view.page in (2, 3, 4, 6) and not view.help and line.startswith('+'):
+            if view.page in (2, 3, 4, 6) and not view.help and (line.startswith('+') or
+                    (line.startswith('| ') and index > 0 and lines[index - 1].startswith('+'))):
                 attribute = view.colors[{2: 'memory', 3: 'disk', 4: 'gpu', 6: 'network'}[view.page]] | curses.A_BOLD
             if view.page == 1 and not view.help:
                 view.topology_regions[i + 3] = view.topology_line_regions.get(index, [])
                 if line.startswith('[ All CPUs'):
                     view.cpu_regions[i + 3] = ('all', None)
-            put(screen, i + 3, 1, line, attribute)
+            draw_text(screen, i + 3, 1, line, attribute, accent=accent)
             if view.help and w - 3 >= 60 and line.startswith('  ') and line[:20].strip():
                 put(screen, i + 3, 1, line[:20], accent, 20)
             if view.page == 1 and not view.help:
@@ -1167,7 +1170,7 @@ def draw(screen, view, interval, error=None):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, 'cancel' if line.startswith('[ Cancel ]') else 'toggle')
             if view.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm') and line.startswith(('[ Apply ]', '[ Cancel ]')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, 'apply' if line.startswith('[ Apply ]') else 'cancel')
-            put(screen, top + 1 + index, left + 2, line, curses.A_REVERSE | (curses.A_BOLD if index == 0 else 0), content_width)
+            draw_text(screen, top + 1 + index, left + 2, line, curses.A_REVERSE | (curses.A_BOLD if index == 0 else 0), content_width, accent=accent)
     screen.refresh()
 
 

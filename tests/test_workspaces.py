@@ -63,7 +63,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(self.view.app_tab,0)
         text='\n'.join(self.view.application_lines(80))
         self.assertIn('GPU / network per-application usage: unavailable',text)
-        self.assertIn('Grouping:',text)
+        self.assertIn('Group type:',text)
         self.assertIn('CPU history',text)
 
     def test_history_reset_on_cgroup_replacement(self):
