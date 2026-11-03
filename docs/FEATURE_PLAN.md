@@ -1,3 +1,9 @@
+# Historical feature plan
+
+For the current forward plan, see [BLUEPRINT.md](BLUEPRINT.md). The entries below
+record earlier implementation plans; consult the current user guide for shipped
+behavior and the blueprint for proposed work.
+
 # 0.8.0
 
 - Add a Capabilities page with collection wall/CPU time, peak RSS, permissions hints,

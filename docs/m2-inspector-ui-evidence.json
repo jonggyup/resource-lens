@@ -1,0 +1,20 @@
+{
+  "method": "Read-only PTY walkthrough using synthetic recorded CPU-quota evidence.",
+  "evidence": "Synthetic counters; not live enforcement or independent usability validation.",
+  "terminal": {
+    "columns": 100,
+    "rows": 24
+  },
+  "live_collector": "forbidden by constructor guard",
+  "key_to_matching_output_ms": {
+    "open_applications": 2.978,
+    "search_and_inspect": 4.84,
+    "open_configuration_evidence": 1.747,
+    "open_counter_evidence": 2.146,
+    "open_exact_group": 2.108,
+    "restore_evidence_view": 3.318,
+    "reject_live_capture_in_replay": 2.495,
+    "return_to_applications": 0.483
+  },
+  "exit_code": 0
+}

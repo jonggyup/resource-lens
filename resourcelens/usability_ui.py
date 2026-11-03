@@ -6,6 +6,7 @@ import textwrap
 from .readability import wrap_lines
 from .usability import save_preferences, export_report, capability_lines
 from .disk_controls import DiskSession
+from .control_workflow import preview_note
 
 
 class UsabilityView:
@@ -83,7 +84,8 @@ class UsabilityView:
                 'Holders: '+(', '.join(dev['holders']) or 'none reported'),
                 f"{plan['direction']} bytes/sec: {plan['before'][plan['direction']].get(dev['path'], 'max')} -> {plan['value'] if plan['value'] is not None else 'max'}",
                 'Affects this unit and descendants; ancestor limits still apply.',
-                'Cache hits bypass disk I/O. Kernel read-back does not prove workload enforcement.',
+                preview_note('disk'),
+                'Cache hits bypass disk I/O.',
                 'The limit remains after exit. B on Applications undoes it.',
                 *impact_summary(self.snapshot, plan, 'disk'),
                 '[ Apply ] Enter: apply and verify', '[ Cancel ] Esc: cancel']

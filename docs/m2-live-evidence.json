@@ -1,0 +1,11 @@
+{
+  "method": "Read-only own-process inspector and 0.2-second counters-only capture, with no perf or resource policy changes.",
+  "process_visible": true,
+  "context_ready": true,
+  "finding_rules": ["insufficient_evidence", "ancestry_coverage"],
+  "capture_status": "complete",
+  "stack_capture": "disabled",
+  "observations": 2,
+  "capture_context_permissions": "0600",
+  "limitation": "Warmup inspection and capture completion check; not evidence of quota enforcement or application performance."
+}

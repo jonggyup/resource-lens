@@ -2,6 +2,7 @@
 from .impact import impact_lines, impact_summary
 import curses
 from .hardware import Hardware
+from .control_workflow import preview_note
 
 
 class HardwareView:
@@ -74,7 +75,8 @@ class HardwareView:
                 'Governor policies may include CPUs outside the selected scope.',
                 'Offline removes logical CPUs from scheduling; it is not physical removal.',
                 'Changes remain after exit. Batches can partially succeed.',
-                'u on CPU page restores this session\'s hardware changes.',
+                preview_note('hardware'),
+                'J Changes or u on CPU restores the latest session hardware change.',
                 *impact_summary(self.snapshot, plan, 'hardware'),
                 '[ Apply ] Enter: apply and verify', '[ Cancel ] Esc: cancel']
 

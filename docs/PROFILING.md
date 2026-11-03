@@ -1,4 +1,4 @@
-# Investigation sessions (0.15.0 preview)
+# Investigation sessions
 
 Use this workflow to preserve evidence before and after a workload or configuration
 change. It combines Resource Lens counters with Linux perf; it is not a replacement
@@ -7,21 +7,29 @@ for perf, an automatic regression verdict, or a complete kernel profiler.
 ## Interactive capture
 
 Open Applications (`8`), select a process, and press **P** for **Investigate**.
-Choose **CPU usage**, **CPU + waits**, or **Energy efficiency**. Energy captures
+Choose **CPU usage**, **CPU + waits**, **Energy efficiency**, or **Counters only**. Energy captures
 hardware-domain counters without CPU stack sampling; see [energy](ENERGY.md).
-Click a choice, press 1/2/3, or use arrows then
+Click a choice, press 1/2/3/4, or use arrows then
 Enter. No collection starts until you choose; Escape closes the menu. In cgroup
 mode (`g`), the target is the selected group; inside the hierarchy it is the open
 group or PID. The target identity is checked, so a stale selection cannot silently choose a
 replacement. Recording replay cannot initiate a live profile.
 
-Collection runs in a background thread for ten seconds. The screen displays the
+Choose 5/10/30 seconds with the duration buttons or `[` / `]`; the default is ten.
+Counters-only disables perf and scheduler tracing explicitly. Collection runs in
+a background thread. The screen displays the
 saved directory, collection status and a short counter/wait summary. Press **D**
 for coverage, diagnostics, switch-out stacks and the first 100 lines of the CPU
 report; D again returns to the summary. Arrow keys or mouse wheel scroll. **Esc cancels and
 returns immediately**; workers finish cleanup in the background. A completed
 capture remains saved. Pressing Escape again follows the existing navigation.
 The footer's action is clickable. Existing hardware/control shortcuts remain intact.
+
+Enter on a process opens the inspector before capture; `I` does so for a group.
+Its findings retain scope, evidence and missing-data limits. Capturing from it
+saves private `capture-context.json` alongside the session, with findings and target
+identity at selection time. This is not a continuously updated capture diagnosis.
+Return from capture/memory inspection to the same target/section/scroll position.
 
 Artifacts go under `$XDG_STATE_HOME/resource-lens/profiles/` or
 `~/.local/state/resource-lens/profiles/`. If the dashboard exits before background
@@ -31,7 +39,9 @@ it. The perf child has a bounded sleep duration even if the dashboard terminates
 ## Scheduler tracing: W / --scheduler
 
 In Applications or a process/cgroup detail view, press **W** instead of P to add
-scheduler tracing to the ten-second capture. W is a direct shortcut for **CPU + waits**; the P menu offers both modes. Escape returns immediately and requests background cleanup.
+scheduler tracing to the ten-second capture. W is a direct shortcut for **CPU + waits**;
+the P menu offers duration selection and counters-only capture too. Escape returns
+immediately and requests background cleanup.
 The report is scrollable using Up/Down or the mouse wheel. F1 documents the shortcut.
 
 ```bash
@@ -221,3 +231,19 @@ References: [Linux scheduler tracepoints](https://github.com/torvalds/linux/blob
 [Linux perf record](https://github.com/torvalds/linux/blob/master/tools/perf/Documentation/perf-record.txt),
 [perf security](https://www.kernel.org/doc/html/latest/admin-guide/perf-security.html),
 [proc counters](https://www.kernel.org/doc/html/latest/filesystems/proc.html).
+
+# Saved sessions in the dashboard
+
+Press **L** for Sessions, or use `resource-lens --sessions [PATH]` fully offline.
+Enter reopens a saved profile; **b** selects a baseline and **c** compares a candidate
+profile/repeat set with the same calculations as `--compare`. Coverage, status,
+repeat counts/spread and environment changes remain visible. Partial/cancelled
+captures cannot be used as complete comparison runs.
+
+In a complete profile, **o** adds `name | unit | value | provenance` measured over
+the displayed capture window. `outcomes.json` stores this supplementary evidence
+with a profile content digest; `session.json` remains unchanged. Mismatched units
+and mixed structured/unknown units are omitted from matched-outcome comparisons.
+Legacy numeric outcomes retain units embedded in their names. **x** exports a
+private redacted summary; raw captures/perf files remain unredacted originals.
+See [Sessions](SESSIONS.md) for import budgets and offline guarantees.

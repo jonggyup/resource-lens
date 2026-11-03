@@ -163,8 +163,12 @@ class MetricsTests(unittest.TestCase):
         with patch.object(self.collector, "run_query", return_value=completed):
             self.assertEqual(self.collector.sample()["gpus"][0]["busy_pct"], 90)
         completed.returncode = 1
+        observed = self.collector.source_quality['gpus']['observed_at_wall']
         with patch.object(self.collector, "run_query", return_value=completed):
-            self.assertEqual(self.collector.sample()["gpus"], [])
+            sample = self.collector.sample()
+            self.assertEqual(sample['gpus'][0]['busy_pct'], 90)
+            self.assertEqual(sample['source_quality']['gpus']['status'], 'unavailable')
+            self.assertEqual(sample['source_quality']['gpus']['observed_at_wall'], observed)
 
     def test_json_is_finite(self):
         encoded = json.dumps(self.collector.sample(), allow_nan=False)

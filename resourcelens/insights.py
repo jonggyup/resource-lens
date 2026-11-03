@@ -4,6 +4,7 @@ import time
 from .focus import candidates
 from .user_guide import TASKS
 from .readability import wrap_lines
+from .model import source_quality
 
 # title, definition, source, limitation, useful next view
 METRICS = [
@@ -20,27 +21,51 @@ METRICS = [
 
 
 def health_rows(sample, replay=False, now=None, stale_after=5):
-    """Availability is per metric; freshness is only as precise as the snapshot."""
+    """Prefer source timestamps/outcomes; legacy recordings keep snapshot freshness."""
     sample = sample or {}
     age = max(0, (time.time() if now is None else now) - sample.get('timestamp', 0))
-    def row(name, value, source, step, reason=''):
-        status = 'recorded' if replay and value is not None else ('stale' if age > stale_after else 'live') if value is not None else 'unavailable'
+    def row(name, value, source, step, reason='', quality_id=None):
+        metric_age = age
+        quality = None
+        invalid = False
+        if quality_id and quality_id in sample.get('source_quality', {}):
+            try:
+                quality = source_quality(sample, quality_id)
+                if quality.observed_at_wall is not None:
+                    metric_age = max(0, (sample.get('timestamp', 0) if replay else time.time() if now is None else now) - quality.observed_at_wall)
+            except ValueError:
+                invalid = True
+        status = 'recorded' if replay and value is not None else ('stale' if metric_age > stale_after else 'live') if value is not None else 'unavailable'
+        if quality and not replay:
+            if value is not None and quality.status in ('unavailable', 'error'):
+                status = 'stale'
+            elif value is not None and quality.status in ('partial', 'unknown') and status != 'stale':
+                status = quality.status
+        if quality:
+            detail = (quality.reason or quality.status).replace('_', ' ')
+            reason = f'{detail}; source age: {metric_age:.1f}s' if quality.observed_at_wall is not None else detail + '; no source observation yet'
+        if invalid:
+            status, reason = 'unknown', 'Invalid source metadata; freshness cannot be established.'
         # Only report permission denial when the collector explicitly says so.
         if value is None and any(word in reason.lower() for word in ('permission denied', 'operation not permitted')):
             status = 'permission denied'
-        return (name, status, source, reason or ('No usable value in this sample.' if value is None else f'Snapshot age: {age:.1f}s' if not replay else 'Historical sample; not current hardware state.'), step)
+        return (name, status, source, reason or ('No usable value in this sample.' if value is None else f'Snapshot age: {metric_age:.1f}s' if not replay else 'Historical sample; not current hardware state.'), step)
     cpu = next((c for c in sample.get('cpu', []) if c['id'] == 'cpu'), {})
-    rows = [row('Host CPU', cpu.get('busy_pct'), '/proc/stat', 'Open CPU (2); allow two samples for interval rates.'),
-            row('Available RAM', sample.get('memory', {}).get('available'), '/proc/meminfo', 'Open Memory (3); check whether /proc/meminfo is readable.')]
+    rows = [row('Host CPU', cpu.get('busy_pct'), '/proc/stat', 'Open CPU (2); allow two samples for interval rates.', quality_id='cpu'),
+            row('Available RAM', sample.get('memory', {}).get('available'), '/proc/meminfo', 'Open Memory (3); check whether /proc/meminfo is readable.', quality_id='memory.available')]
     for kind in ('cpu','memory','io'):
-        rows.append(row(kind.upper()+' pressure', sample.get('pressure',{}).get(kind,{}).get('some',{}).get('avg10'), '/proc/pressure/'+kind, 'Check kernel PSI support and visibility in this namespace.'))
+        rows.append(row(kind.upper()+' pressure', sample.get('pressure',{}).get(kind,{}).get('some',{}).get('avg10'), '/proc/pressure/'+kind, 'Check kernel PSI support and visibility in this namespace.', quality_id='pressure.'+kind))
     for field, key, label, source, step in (
         ('disks','read_bps','Disk','/proc/diskstats','Open Disk (4); allow two samples and check device visibility.'),
         ('network','rx_bps','Network','/proc/net/dev','Open Network (7); check interface visibility and allow two samples.'),
         ('gpus','busy_pct','GPU','driver / optional nvidia-smi','Open GPU (5); check driver telemetry support.')):
         items = sample.get(field, [])
-        if not items:rows.append(row(label, None, source, step))
-        for item in items:rows.append(row(label+' '+str(item.get('name') or item.get('id')), item.get(key), source, step, str(item.get('error') or '')))
+        quality_id = 'gpus' if field == 'gpus' else None
+        if not items:rows.append(row(label, None, source, step, quality_id=quality_id))
+        for item in items:rows.append(row(label+' '+str(item.get('name') or item.get('id')), item.get(key), source, step, str(item.get('error') or ''), quality_id=quality_id))
+    if 'frequencies' in sample.get('source_quality', {}):
+        frequency = next((c['frequency_mhz'] for c in sample.get('cpu', []) if c.get('frequency_mhz') is not None), None)
+        rows.append(row('CPU frequency', frequency, 'cpufreq scaling_cur_freq', 'Open CPU (2); frequency reads run separately from CPU usage.', quality_id='frequencies'))
     domains = sample.get('energy',{}).get('domains',[])
     if not domains:rows.append(row('Energy', None, 'powercap / hwmon', 'Open Status (0); hardware or the host may not expose energy counters.'))
     for d in domains:
@@ -64,6 +89,8 @@ class InsightsView:
         sample = self.snapshot or {}
         if mode == 'search':
             items = search_entries(sample,self.names)
+            from .actions import search_actions
+            items += search_actions(self)
         elif mode == 'guide':items = [('task',i,row[0]) for i,row in enumerate(TASKS)]
         elif mode == 'metrics':items = [('metric',i,row[0]) for i,row in enumerate(METRICS)]
         else:
@@ -123,7 +150,7 @@ class InsightsView:
             elif kind=='health':
                 name,status,source,reason,step=identity
                 m.update(detail=[name,'State: '+status,'Source: '+source,'',reason,'','Next step: '+step,
-                                 'Freshness is snapshot-level, not a per-sensor timestamp.'],related=9)
+                                 'Source timestamps are used where recorded; older data uses snapshot freshness.'],related=9)
             else:self.open_search_result(kind,identity)
         elif key in (curses.KEY_BACKSPACE,127,8):m['query']=m['query'][:-1];m['selected']=0
         elif 32<=key<127 and len(m['query'])<80:m['query']+=chr(key);m['selected']=0
@@ -132,6 +159,26 @@ class InsightsView:
     def open_search_result(self,kind,identity):
         from .cgroup_browser import CgroupBrowser
         sample=self.snapshot or {}
+        if kind == 'action':
+            from .actions import dispatch
+            self.modal = None
+            dispatch(self, identity['id'], identity['request'], identity.get('scope_id'))
+            return
+        current = self.active_inspector()
+        if current and kind in ('process', 'group'):
+            if kind == 'process':
+                p = next((p for p in sample.get('processes', []) if (p['pid'], p.get('starttime')) == identity), None)
+                request = ('process', p['pid'], p['starttime'], p.get('cgroup')) if p else None
+            else:
+                node = next((n for n in sample.get('cgroup_tree', {}).get('nodes', []) if (n['path'], n.get('inode')) == identity), None)
+                group = next((g for g in sample.get('workloads', []) if (g['id'], g.get('inode')) == identity), None)
+                row = node or group
+                request = ('cgroup', row['path'], row['inode'], row.get('device'), 'visible') if node else ('cgroup', row['path'], row['inode'], row.get('device')) if group else None
+            if request is None:
+                return self.search_gone()
+            self.modal = None
+            self.inspect_request(request)
+            return
         self.browser=None;self.focus=None;self.help=False;self.scroll=0
         if kind=='view':self.page=identity
         elif kind=='resource':
@@ -151,7 +198,9 @@ class InsightsView:
             group=next((g for g in sample.get('workloads',[]) if (g['id'],g.get('inode'))==identity),None)
             if not node and not group:return self.search_gone()
             self.page=7;self.application_mode='cgroups';self.relation=None;self.workload_filter=''
-            if node:self.browser=CgroupBrowser(sample,path)
+            if node:
+                self.browser=CgroupBrowser(sample,path)
+                self.browser.context_detail=True
             else:self.workload_id=path;self.workload_identity=identity;self.workload_detail=True
         self.modal=None
 

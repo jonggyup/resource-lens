@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "purpose": "M1 executable resolver acceptance scenarios, originally specified during M0",
+  "cases": [
+    {
+      "id": "child-limit-under-service",
+      "process": {"pid": 42, "start_ticks": 100, "membership": "/system.slice/build.service/jobs"},
+      "visible_root": "/",
+      "visibility": "to_system_root",
+      "groups": {
+        "/system.slice": {"device": 1, "inode": 10, "cpu.max": "max 100000"},
+        "/system.slice/build.service": {"device": 1, "inode": 11, "cpu.max": "200000 100000"},
+        "/system.slice/build.service/jobs": {"device": 1, "inode": 12, "cpu.max": "50000 100000"}
+      },
+      "expected": {
+        "exact_cgroup": "/system.slice/build.service/jobs",
+        "service_path": "/system.slice/build.service",
+        "quota_pct": 50,
+        "quota_source": "/system.slice/build.service/jobs",
+        "ancestry_visibility": "to_system_root"
+      }
+    },
+    {
+      "id": "hidden-parent-above-visible-root",
+      "process": {"pid": 42, "start_ticks": 100, "membership": "/job"},
+      "visible_root": "/",
+      "visibility": "to_visible_root",
+      "groups": {
+        "/": {"device": 2, "inode": 20, "cpu.max": "75000 100000"},
+        "/job": {"device": 2, "inode": 21, "cpu.max": "max 100000"}
+      },
+      "expected": {
+        "exact_cgroup": "/job",
+        "service_path": null,
+        "quota_pct": 75,
+        "quota_source": "/",
+        "ancestry_visibility": "to_visible_root",
+        "unrestricted": false
+      }
+    },
+    {
+      "id": "unreadable-parent-is-not-unlimited",
+      "process": {"pid": 42, "start_ticks": 100, "membership": "/parent/job.service"},
+      "visible_root": "/",
+      "visibility": "to_system_root",
+      "groups": {
+        "/parent": {"device": 1, "inode": 30, "cpu.max": null, "reason": "permission_denied"},
+        "/parent/job.service": {"device": 1, "inode": 31, "cpu.max": "max 100000"}
+      },
+      "expected": {
+        "exact_cgroup": "/parent/job.service",
+        "service_path": "/parent/job.service",
+        "quota_pct": null,
+        "ancestry_visibility": "partial",
+        "constraint_state": "unknown",
+        "unrestricted": false
+      }
+    },
+    {
+      "id": "explicit-unlimited-differs-from-missing",
+      "process": {"pid": 42, "start_ticks": 100, "membership": "/job.service"},
+      "visible_root": "/",
+      "visibility": "to_system_root",
+      "groups": {"/job.service": {"device": 1, "inode": 40, "cpu.max": "max 100000", "memory.max": "0"}},
+      "expected": {
+        "quota_pct": null,
+        "constraint_state": "unlimited",
+        "memory_max": 0,
+        "ancestry_visibility": "to_system_root"
+      }
+    },
+    {
+      "id": "process-moves-during-detail-read",
+      "before": {"pid": 42, "start_ticks": 100, "membership": "/old.service"},
+      "after": {"pid": 42, "start_ticks": 100, "membership": "/new.service"},
+      "expected": {"same_process_identity": true, "attach_old_group_evidence": false, "detail_status": "partial"}
+    },
+    {
+      "id": "pid-reused-during-detail-read",
+      "before": {"pid": 42, "start_ticks": 100, "membership": "/job.service"},
+      "after": {"pid": 42, "start_ticks": 200, "membership": "/job.service"},
+      "expected": {"same_process_identity": false, "attach_old_group_evidence": false}
+    },
+    {
+      "id": "cgroup-replaced-at-same-path",
+      "before": {"path": "/job.service", "device": 1, "inode": 50, "generation": 0},
+      "after": {"path": "/job.service", "device": 1, "inode": 51, "generation": 0},
+      "expected": {"same_cgroup_identity": false, "retain_old_history": false}
+    },
+    {
+      "id": "observed-recreation-with-reused-inode",
+      "before": {"path": "/job.service", "device": 1, "inode": 50, "generation": 0},
+      "after": {"path": "/job.service", "device": 1, "inode": 50, "generation": 1},
+      "expected": {"same_cgroup_identity": false, "retain_old_history": false}
+    }
+  ]
+}

@@ -75,12 +75,27 @@ Mark M immediately around the change of interest. Automatic control events also
 appear in Timeline. Collect up to 30 seconds on each side; Up/Down selects an event.
 Page Up/Down scrolls results, and Home/End jumps to the ends.
 
-Each metric has Before/After bars on the same per-metric scale, numeric sample
-means, available sample counts and absolute/relative changes. Missing values are
-excluded; a missing side has no change estimate. A zero baseline has no defined
-relative percentage. These are sample averages, not time-weighted integration.
-Uneven sampling and short windows can change comparisons. The exact event timestamp
-is excluded from both windows, and collection retains at most 600 snapshots.
+Each metric shows time-weighted Before/After means, usable seconds / requested
+seconds, coverage and absolute/relative changes. Missing values are excluded; a
+missing side has no change estimate. A zero baseline has no defined relative
+percentage. Coverage below 80% is incomplete. Collection retains at most 600 snapshots.
+
+For a control event, the baseline ends at apply start. The transition lasts until
+verified completion, and is excluded. Only a verified outcome opens a post-change
+window. Manual markers have no transition. Other control attempts interrupt
+windows; scope changes and incompatible cgroup identities break intervals.
+
+Rates use overlap with their preceding `elapsed_s` interval, clipped to the previous
+observation. This assumes a constant interval rate, so boundary splits are approximate.
+RAM and PSI gauges use the preceding observed value until the next observation,
+with a 2.5-second hold limit. Missing data cannot extend that hold indefinitely.
+Per-metric coverage uses the full requested window even when it has not filled yet.
+Systemd invocation is checked during control operations; it is not sampled throughout
+observation. A later restart retaining the same cgroup can therefore confound results.
+
+**J Changes** lists outcomes from CPU, disk, placement and hardware controls. **n/p**
+selects entries; **u** reviews restoration using the latest active domain receipt.
+Recorded events preserve the transition timestamps, but cannot authorize a live restore.
 
 Host comparisons include CPU, RAM, pressure, disk and interface rates, and exposed
 energy-domain watts. Device/interface identities keep replacement histories apart

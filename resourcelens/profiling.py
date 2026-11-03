@@ -87,7 +87,7 @@ def metrics(first, last, elapsed, cgroup=False, schedstats=False):
     return {k:v for k,v in result.items() if v>=0 and math.isfinite(v)}
 
 
-def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=None, perf=True, expected_start=None, expected_inode=None, outcomes=None, scheduler=False, energy=False, work_units=None, work_unit="unit"):
+def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=None, perf=True, expected_start=None, expected_inode=None, expected_device=None, outcomes=None, scheduler=False, energy=False, work_units=None, work_unit="unit"):
     if work_units is not None and (not energy or not math.isfinite(work_units) or work_units<=0):
         raise ValueError('Positive finite --work-units requires --energy')
     if work_unit!='unit' and not energy:
@@ -108,9 +108,12 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
         cgroup=str(Path(cgroup).resolve())
         if not Path(cgroup).is_relative_to(root):
             raise ValueError('Cgroup must be inside /sys/fs/cgroup')
-        generation=Path(cgroup).stat().st_ino
+        group_info=Path(cgroup).stat()
+        generation, generation_device=group_info.st_ino, group_info.st_dev
         if expected_inode is not None and generation!=expected_inode:
             raise ValueError('Cgroup identity changed; select it again')
+        if expected_device is not None and generation_device!=expected_device:
+            raise ValueError('Cgroup filesystem changed; select it again')
     else:
         try:
             generation=identity(Path('/proc')/str(pid))
@@ -161,7 +164,13 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
             else:
                 info['profile']['reason']='perf is not installed; install the Linux perf package for this kernel.'
         while True:
-            current=Path(cgroup).stat().st_ino if cgroup else identity(Path('/proc')/str(pid))
+            if cgroup:
+                current_info=Path(cgroup).stat()
+                current=current_info.st_ino
+                if current_info.st_dev!=generation_device:
+                    raise ValueError('Cgroup filesystem changed; partial session only')
+            else:
+                current=identity(Path('/proc')/str(pid))
             if current!=generation:
                 raise ValueError('Target exited or identity changed; partial session only')
             sample=target_sample(pid,cgroup)
@@ -249,17 +258,15 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
 
 
 def compare(baseline, candidate):
-    def load(path):
-        path=Path(path)
-        files=[path/'session.json'] if (path/'session.json').exists() else sorted(path.glob('*/session.json'))
-        if not files or len(files)>1000:raise ValueError('Expected 1–1000 saved sessions per comparison side')
-        results=[]
-        for file in files:
-            with open(file) as f:r=json.load(f)
-            if r.get('schema')!=1:raise ValueError('Unsupported session schema')
-            results.append(r)
-        return results
-    a,b=load(baseline),load(candidate)
+    from .evidence import profile_runs
+    return compare_runs(profile_runs(baseline),profile_runs(candidate))
+
+
+def compare_runs(a,b):
+    """The same repeat statistics for validated saved evidence and the CLI."""
+    from .evidence import validate_profile
+    if not a or not b or max(len(a),len(b))>1000:raise ValueError('Expected 1–1000 profiles per comparison side')
+    for record in a+b:validate_profile(record)
     warnings=['Descriptive comparison only; match workload, warmup, build and load before attributing a regression.',
               'CPU percentages and stack samples do not predict application latency.']
     if min(len(a),len(b))<3:warnings.append('Fewer than three repeats on at least one side; variability is poorly estimated.')
@@ -268,6 +275,15 @@ def compare(baseline, candidate):
     if len({bool(r['target'].get('cgroup')) for r in a+b})!=1:
         raise ValueError('Cannot compare a process with a cgroup scope')
     if len({r['label'] for r in a+b})!=1:warnings.append('Workload labels differ; verify equivalent workloads.')
+    outcome_units={}
+    incompatible_outcomes=set()
+    for record in a+b:
+        for name,metadata in record.get('outcome_metadata',{}).items():
+            unit=metadata['unit']
+            if name in outcome_units and outcome_units[name]!=unit:incompatible_outcomes.add(name)
+            outcome_units[name]=unit
+    for name in outcome_units:
+        if any(name in r.get('outcomes',{}) and name not in r.get('outcome_metadata',{}) for r in a+b):incompatible_outcomes.add(name)
     configurations=[]
     for r in a+b:
         if r['environment'] not in configurations:configurations.append(r['environment'])
@@ -280,19 +296,27 @@ def compare(baseline, candidate):
     rows={}
     sets=[dict(r['metrics'],**{'outcome.'+k:v for k,v in r.get('outcomes',{}).items()}) for r in a+b]
     common=set.intersection(*(set(r) for r in sets))
+    common-={'outcome.'+name for name in incompatible_outcomes}
+    if incompatible_outcomes:warnings.append('Measured outcome units differ; those outcomes are omitted.')
     energy_runs=[r.get('energy',{}) for r in a+b]
-    if len({r.get('host') for r in energy_runs})>1:
+    if len({r.get('host') for r in energy_runs})>1 or any(r.get('status','disabled')!='disabled' and not r.get('host') for r in energy_runs):
         warnings.append('Energy host identity differs or is missing; hardware energy comparisons omitted.')
         common={k for k in common if not k.startswith('energy.')}
     if len({r.get('work_unit') for r in energy_runs})>1:
         warnings.append('Completed-work units differ; joules/work comparisons omitted.')
         common={k for k in common if not k.endswith('.joules_per_work_unit')}
     energy_domains={}
+    domain_signatures={}
     import hashlib
     for r in energy_runs:
         for d in r.get('domains',[]):
             key='energy.'+hashlib.sha256(d['id'].encode()).hexdigest()[:16]
+            domain_signatures.setdefault(key,set()).add((d['id'],d['source'],d['label']))
             energy_domains[key]={'id':d['id'],'label':d['label'],'source':d['source']}
+    changed_domains={key for key,signatures in domain_signatures.items() if len(signatures)>1}
+    if changed_domains:
+        common={key for key in common if not any(key.startswith(prefix+'.') for prefix in changed_domains)}
+        warnings.append('Energy domain identity/source changed; those hardware metrics are omitted.')
     if any(r.get('status','disabled')!='disabled' for r in energy_runs):
         warnings.append('Energy is per hardware domain across all workloads, not attributed application energy. Overlapping domains must not be added.')
     if any(set(r)!=common for r in sets):warnings.append('Some metrics are unavailable in some sessions; only common metrics compared.')
@@ -305,18 +329,20 @@ def compare(baseline, candidate):
                       'candidate':[r.get('scheduler',{}).get('status','disabled') for r in b]}
     if any(status!='disabled' for side in scheduler_status.values() for status in side) and any(status!='complete' for side in scheduler_status.values() for status in side):
         warnings.append('Scheduler tracing is not complete for every run; consult scheduler status before comparing waits.')
-    return dict(energy_domains=energy_domains,energy_status={'baseline':[r.get('energy',{}).get('status','disabled') for r in a],'candidate':[r.get('energy',{}).get('status','disabled') for r in b]},scheduler=scheduler_status,metrics=rows,environment_changes=changes,configurations=configurations,warnings=warnings,
+    return dict(outcome_units=outcome_units,energy_domains=energy_domains,energy_status={'baseline':[r.get('energy',{}).get('status','disabled') for r in a],'candidate':[r.get('energy',{}).get('status','disabled') for r in b]},scheduler=scheduler_status,metrics=rows,environment_changes=changes,configurations=configurations,warnings=warnings,
                 profiles={'baseline':[r['profile']['status'] for r in a],'candidate':[r['profile']['status'] for r in b]})
 
 
 class ProfileView:
-    def __init__(self, target, choose=False):
+    def __init__(self, target, choose=False, context=None):
         from .usability import state_dir
         import uuid
         self.directory=state_dir()/'profiles'/uuid.uuid4().hex
         self.stop=threading.Event();self.result=None;self.error=None;self.scroll=0
         self.target=dict(target)
-        self.choosing=choose;self.selection=0;self.details=False;self.regions=[]
+        self.target.setdefault('duration',10)
+        self.context=context;self.context_error=None
+        self.choosing=choose;self.selection=0;self.details=False;self.regions=[];self.duration_regions=[]
         self.started=False
         if not choose:self.start(bool(target.get('scheduler')))
 
@@ -325,20 +351,31 @@ class ProfileView:
         self.target['scheduler']=scheduler==1
         if scheduler==2:
             self.target.update(energy=True,perf=False)
+        elif scheduler==3:
+            self.target.update(perf=False,scheduler=False)
         self.started=True;self.choosing=False;self.scroll=0
         def worker():
-            try:self.result=capture(self.directory,**self.target,stop=self.stop)
+            try:
+                self.result=capture(self.directory,**self.target,stop=self.stop)
+                if self.context is not None:
+                    try:write(self.directory/'capture-context.json',self.context)
+                    except (OSError,ValueError) as exc:self.context_error=str(exc)
             except Exception as exc:self.error=str(exc)
         threading.Thread(target=worker,daemon=True).start()
 
     def key(self,key,height):
         if key in (27,ord('q'),curses.KEY_F10):self.stop.set();return False
         if self.choosing:
-            if key in (curses.KEY_DOWN,curses.KEY_UP,ord('j'),ord('k'),9):self.selection=(self.selection+(-1 if key in (curses.KEY_UP,ord('k')) else 1))%3
-            elif key in (10,13):self.start(2 if self.selection==2 else bool(self.selection))
+            if key in (ord('['),ord(']')):
+                durations=(5,10,30)
+                index=durations.index(self.target['duration']) if self.target['duration'] in durations else 1
+                self.target['duration']=durations[(index+(-1 if key==ord('[') else 1))%3]
+            elif key in (curses.KEY_DOWN,curses.KEY_UP,ord('j'),ord('k'),9):self.selection=(self.selection+(-1 if key in (curses.KEY_UP,ord('k')) else 1))%4
+            elif key in (10,13):self.start(self.selection if self.selection>=2 else bool(self.selection))
             elif key==ord('1'):self.start(False)
             elif key==ord('2'):self.start(True)
             elif key==ord('3'):self.start(2)
+            elif key==ord('4'):self.start(3)
             return True
         if key in (ord('d'),ord('D')):
             self.details=not self.details;self.scroll=0
@@ -350,6 +387,10 @@ class ProfileView:
 
     def mouse(self,x,y):
         if self.choosing:
+            for left,right,row,duration in self.duration_regions:
+                if row==y and left<=x<right:
+                    self.target['duration']=duration
+                    return
             for left,right,row,mode in self.regions:
                 if row==y and left<=x<right:
                     self.start(mode)
@@ -358,14 +399,19 @@ class ProfileView:
     def lines(self):
         from .ui import size
         target='PID '+str(self.target['pid']) if self.target.get('pid') else 'Cgroup '+str(self.target.get('cgroup'))
-        mode='Energy efficiency' if self.target.get('energy') else ('CPU + waits' if self.target.get('scheduler') else 'CPU usage')
+        mode='Energy efficiency' if self.target.get('energy') else ('CPU + waits' if self.target.get('scheduler') else 'Counters only' if self.target.get('perf') is False else 'CPU usage')
         lines=['INVESTIGATE / '+target+' / '+mode]
         if self.error:return lines+[self.error,'Esc returns.']
         if self.result is None:
-            return lines+['Collecting for 10 seconds in the background.','Esc cancels and returns immediately.','Saving to: '+str(self.directory)]
+            return lines+[f"Collecting for {self.target['duration']:g} seconds in the background.",'Esc cancels and returns immediately.','Saving to: '+str(self.directory)]
         r=self.result
         lines += ['Capture: '+r['status']+(' | Hardware-domain energy' if self.target.get('energy') else ' | CPU stacks: '+r['profile']['status']),
                   'D: '+('Summary' if self.details else 'Details and stacks')+' | Esc: Back']
+        samples=r.get('samples',[])
+        if samples:
+            span=samples[-1]['elapsed']-samples[0]['elapsed']
+            lines += [f"Counter coverage: {len(samples)} observations over {span:.2f}s; requested {r.get('requested_seconds',self.target['duration']):g}s."]
+        if self.context_error:lines.append('Capture context could not be saved: '+self.context_error)
         labels={'cpu_percent':'CPU (% of one CPU)', 'rss_end_bytes':'Resident memory at end',
                 'major_faults_per_second':'Major faults / second',
                 'surviving_threads_runqueue_wait_seconds_per_second':'Runqueue wait (thread-seconds / second)',
@@ -409,24 +455,30 @@ class ProfileView:
     def draw(self,screen,width,height):
         from .ui import put
         from .readability import draw_text, wrap_lines
-        self.regions=[]
+        self.regions=[];self.duration_regions=[]
         if self.choosing:
             target='PID '+str(self.target['pid']) if self.target.get('pid') else str(self.target.get('cgroup'))
             put(screen,2,1,'INVESTIGATE / '+target,curses.A_BOLD)
-            put(screen,3,1,'Choose what to capture. All run for 10 seconds.')
+            put(screen,3,1,'Duration:',curses.A_BOLD)
+            x=11
+            for duration in (5,10,30):
+                label=f'[{duration}s]'
+                put(screen,3,x,label,curses.A_REVERSE if duration==self.target['duration'] else curses.A_BOLD)
+                self.duration_regions.append((x,x+len(label),3,duration));x+=len(label)+1
             options=[('1  CPU usage','Find functions using CPU.'),
                      ('2  CPU + waits','See where threads stop and wait for CPU.'),
-                     ('3  Energy efficiency','Hardware energy during the capture, not per-process energy.')]
-            row=5 if height >= 14 else 4
-            budget=max(0,(height-12)//3)
+                     ('3  Energy efficiency','Hardware energy during the capture, not per-process energy.'),
+                     ('4  Counters only','Resource counters without perf or scheduler tracing.')]
+            row=5 if height >= 16 else 4
+            budget=max(0,min(2,(height-9)//4-1))
             for index,(label,explanation) in enumerate(options):
                 if row >= height-3:break
                 put(screen,row,1,'[ '+label+' ]',curses.A_REVERSE if self.selection==index else curses.A_BOLD)
-                self.regions.append((1,min(width-1,len(label)+5),row,2 if index==2 else bool(index)))
+                self.regions.append((1,min(width-1,len(label)+5),row,index if index>=2 else bool(index)))
                 explanation_lines=wrap_lines([explanation],width-5)
                 for offset,line in enumerate(explanation_lines[:budget]):
                     put(screen,row+1+offset,3,line)
-                row += 2+min(budget,len(explanation_lines))
+                row += (1 if height < 14 else 2)+min(budget,len(explanation_lines))
             if row < height-3:
                 put(screen,row,1,'Wait tracing needs permission and adds overhead.')
             return

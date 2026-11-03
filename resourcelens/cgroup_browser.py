@@ -14,12 +14,32 @@ class CgroupBrowser:
         self.selected = None
         self.process = None
         self.detail_scroll = 0
+        self.context_detail = False
+        self.context_region = None
+        self.inspector = None
+        self.pending_action = None
         self.regions = []
         self.back = None
 
     def node(self, snapshot):
         return next((n for n in snapshot.get('cgroup_tree', {}).get('nodes', [])
                      if n['path'] == self.path and n.get('inode') == self.inode), None)
+
+    def ensure_inspector(self, snapshot):
+        if self.inspector is not None:
+            return self.inspector
+        if not (self.process or self.context_detail):
+            return None
+        from .inspector import Inspector
+        if self.process:
+            pid, start = self.process
+            row = next((p for p in snapshot.get('processes', []) if (p['pid'], p.get('starttime')) == self.process), None)
+            request = ('process', pid, start, row.get('cgroup') if row else self.path)
+        else:
+            node = self.node(snapshot) or {}
+            request = ('cgroup', self.path, self.inode, node.get('device'), 'visible')
+        self.inspector = Inspector(request, tab=2 if self.context_detail else 0)
+        return self.inspector
 
     def rows(self, snapshot):
         if not self.node(snapshot):
@@ -49,6 +69,7 @@ class CgroupBrowser:
             return
         kind, identity, generation, data = rows[index]
         if kind == 'process':
+            self.inspector = None
             self.process = (identity, generation)
             self.detail_scroll = 0
         else:
@@ -75,8 +96,25 @@ class CgroupBrowser:
     def key(self, key, snapshot, height):
         if key in (ord('q'), curses.KEY_F10):
             return False
+        if self.inspector is not None:
+            result = self.inspector.key(key, height)
+            self.detail_scroll = self.inspector.scroll
+            if result == 'handled':
+                return True
+            if result == 'close':
+                self.inspector = None
+            elif result is not None:
+                self.pending_action = result
+                return True
         if self.process_entry and key in (27,curses.KEY_LEFT,curses.KEY_BACKSPACE,127,8):
             return False
+        if not self.process and key == ord('D'):
+            self.context_detail = not self.context_detail
+            self.detail_scroll = 0
+            return True
+        if self.context_detail and key in (27, curses.KEY_LEFT, curses.KEY_BACKSPACE, 127, 8):
+            self.context_detail = False
+            return True
         if key in (ord('c'),ord('m'),ord('n')):
             self.sort={ord('c'):'cpu',ord('m'):'memory',ord('n'):'name'}[key]
             return True
@@ -90,7 +128,7 @@ class CgroupBrowser:
             return False
         if key in (curses.KEY_LEFT, curses.KEY_BACKSPACE, 127, 8):
             return self.up(snapshot)
-        elif self.process:
+        elif self.process or self.context_detail:
             step = max(1, height - 9)
             move = {curses.KEY_DOWN: 1, ord('j'): 1, curses.KEY_UP: -1, ord('k'): -1,
                     curses.KEY_NPAGE: step, curses.KEY_PPAGE: -step}.get(key)
@@ -117,8 +155,23 @@ class CgroupBrowser:
         return True
 
     def mouse(self, x, y, state, snapshot, height):
+        if self.inspector is not None:
+            if state & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED) and y == 2 and 1 <= x < 14:
+                return self.key(27, snapshot, height)
+            result = self.inspector.mouse(x, y, state, height)
+            self.detail_scroll = self.inspector.scroll
+            if result and result != 'handled':
+                self.pending_action = result
+            return
         if state & (curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED):
+            if self.context_region and y == self.context_region[2] and self.context_region[0] <= x < self.context_region[1]:
+                self.context_detail = not self.context_detail
+                self.detail_scroll = 0
+                return
             if self.back and y == self.back[2] and self.back[0] <= x < self.back[1]:
+                if self.context_detail:
+                    self.context_detail = False
+                    return
                 return False if self.process_entry else self.up(snapshot)
             for start,end,row,identity in self.regions:
                 if row == y and start <= x < end:
@@ -129,13 +182,29 @@ class CgroupBrowser:
             if state & button:
                 for _ in range(3):self.key(key,snapshot,height)
 
-    def draw(self, screen, snapshot, width, height):
+    def draw(self, screen, snapshot, width, height, view=None):
         from .ui import put, pct, size
         from .readability import draw_text, wrap_lines
         self.regions, self.back = [], (1, 14, 2)
+        self.context_region = None if self.process else (1, 18, 4)
+        node = self.node(snapshot)
+        if (self.process_entry or self.context_detail or self.process and node is not None):
+            inspector = self.ensure_inspector(snapshot)
+            if inspector:
+                if view is None:
+                    from types import SimpleNamespace
+                    from .diagnostics import DiagnosticHistory
+                    history = DiagnosticHistory(); history.observe(snapshot)
+                    view = SimpleNamespace(snapshot=snapshot, replay=True, paused=False, diagnostic_history=history,
+                        page=7, browser=self, application_mode='cgroups', application_process=None,
+                        active_inspector=lambda: self.inspector)
+                inspector.scroll = self.detail_scroll
+                inspector.draw(screen, view, width, height)
+                self.detail_scroll = inspector.scroll
+                return
         put(screen,2,1,'[ < Back ]' if self.process_entry or self.process else '[ < Parent ]',curses.A_BOLD)
         put(screen,3,1,'PROCESS DETAILS' if self.process_entry else 'CGROUP BROWSER: '+self.path,curses.A_BOLD)
-        put(screen,4,1,'Arrows: scroll | V: memory | P: investigate' if self.process else 'Enter: open | Left: parent | sort: '+self.sort)
+        put(screen,4,1,'Arrows: scroll | V: memory | P: investigate' if self.process else '[ D Constraints ] | Enter: open | Left: parent')
         tree = snapshot.get('cgroup_tree')
         if tree is None and not self.process_entry:
             put(screen,6,1,'This recording has no cgroup hierarchy data. Live collection or a new recording is required.')
@@ -147,6 +216,14 @@ class CgroupBrowser:
         node = node or {}
         if not self.process_entry:
             put(screen,5,1,f"Group CPU {pct(node.get('cpu_pct'))} | memory {size(node.get('memory_current'))} (includes descendants)")
+        if self.context_detail and not self.process:
+            from .targets import context_lines
+            lines = wrap_lines(context_lines(snapshot, ('cgroup', self.path, self.inode, node.get('device'), 'visible')), width - 3)
+            capacity = max(1, height - 9)
+            self.detail_scroll = min(self.detail_scroll, max(0, len(lines) - capacity))
+            for i, line in enumerate(lines[self.detail_scroll:self.detail_scroll + capacity]):
+                draw_text(screen, 7+i, 1, line)
+            return
         if self.process:
             pid,starttime = self.process
             p = next((p for p in snapshot.get('processes',[]) if (p['pid'],p.get('starttime')) == (pid,starttime) and (self.process_entry or p.get('cgroup') == self.path)),None)
@@ -164,8 +241,10 @@ class CgroupBrowser:
                      'RSS includes shared mappings; use V to inspect sharing.',
                      '', '-- Process identity --', f"State: {states.get(state, 'Unknown')} ({state})",
                      f"Parent PID: {p.get('ppid')}", f"Start ticks: {starttime}",
-                     'Cgroup: '+(p.get('cgroup') or 'unknown'),
+                     'Cgroup: '+(p.get('cgroup') or 'unknown ('+str(p.get('cgroup_reason') or 'not recorded').replace('_', ' ')+')'),
                      '', 'V: inspect memory | P: investigate | Esc: back']
+            from .targets import context_lines
+            lines += ['', *context_lines(snapshot, ('process', pid, starttime, p.get('cgroup')))]
             wrapped = wrap_lines(lines, width - 3)
             capacity = max(1, height - 9)
             self.detail_scroll = min(self.detail_scroll, max(0, len(wrapped) - capacity))

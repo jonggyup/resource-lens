@@ -25,7 +25,7 @@ def draw(screen,view,interval,error=None):
  original(screen,view,interval,error)
  os.write(fd,(json.dumps(dict(ns=time.perf_counter_ns(),page=view.page,filter=view.filter,editing=view.editing_filter,ready=view.snapshot is not None))+'\\n').encode())
 ui.draw=draw
-ui.run(Collector(nvidia=False),60)
+ui.run(Collector(nvidia=False,background=True),60)
 '''
     env={**os.environ,'TERM':'xterm-256color','RL_BENCH_FD':str(writer)}
     env.pop('ESCDELAY',None)

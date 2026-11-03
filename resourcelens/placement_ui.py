@@ -3,6 +3,7 @@ from .impact import impact_lines, impact_summary
 import curses
 import textwrap
 from .placement import PlacementSession, format_cpus
+from .control_workflow import preview_note
 
 
 class PlacementView:
@@ -57,7 +58,8 @@ class PlacementView:
                 'Requested CPUs: ' + (format_cpus(plan['value']) or 'inherit parent'),
                 'Expected effective CPUs: ' + format_cpus(plan['effective']),
                 'Applies to the service and descendants, including new threads.',
-                'CPU capacity is shared; this does not reserve exclusive cores.',
+                preview_note('placement'),
+                'CPU capacity is shared; no exclusive cores are reserved.',
                 'Task affinity and child cgroups can narrow placement further.',
                 'The CPU set remains after exit. U on Applications undoes it.',
                 *impact_summary(self.snapshot, plan, 'placement'),

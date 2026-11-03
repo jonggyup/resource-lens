@@ -1,3 +1,8 @@
+# Historical roadmap
+
+For the current forward plan, see [BLUEPRINT.md](BLUEPRINT.md). The entries below
+record earlier release plans and may contain superseded priorities or workflows.
+
 # 0.8.0
 
 - Add a Capabilities page with collection wall/CPU time, peak RSS, permissions hints,

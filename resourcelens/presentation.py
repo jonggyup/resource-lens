@@ -3,6 +3,20 @@
 import curses
 
 
+def source_note(sample, name):
+    """A source's status and age at this snapshot, also meaningful in replay."""
+    from .model import source_quality
+    if name not in sample.get('source_quality', {}):
+        return ''
+    try:
+        quality = source_quality(sample, name)
+    except ValueError:
+        return name + ': invalid source metadata'
+    age = max(0, sample['timestamp'] - quality.observed_at_wall) if quality.observed_at_wall is not None else None
+    state = quality.status + (': ' + quality.reason.replace('_', ' ') if quality.reason else '')
+    return name + ' ' + state + (f' | age {age:.1f}s at sample' if age is not None else ' | no observation yet')
+
+
 GLYPHS = frozenset("─│┌┐└┘▁▂▃▄▅▆▇█░·")
 
 
@@ -140,6 +154,9 @@ def overview_cards(view, width, height, colors):
                      ("Unavailable does not mean idle.", muted)]
         if gpu:
             gpu_lines[2] = (clean(gpu["status"]), muted)
+    note = source_note(s, 'gpus')
+    if note:
+        gpu_lines.insert(0, (note, muted))
 
     network = view.primary_network()
     net_lines = []
@@ -190,6 +207,8 @@ def compact_overview(view):
              f"Memory  {pct(ratio(m['used'], m['total']))} | {size(m['used'])}/{size(m['total'])}"]
     gpu = max((g["busy_pct"] for g in s["gpus"] if g["busy_pct"] is not None), default=None)
     lines.append("GPU     " + (pct(gpu) if gpu is not None else "Usage unavailable"))
+    if source_note(s, 'gpus'):
+        lines.append(source_note(s, 'gpus'))
     for d in s["disks"]:
         lines.append(f"Disk {clean(d['name'])}  R {size(d['read_bps'])}/s W {size(d['write_bps'])}/s")
     net = view.primary_network()

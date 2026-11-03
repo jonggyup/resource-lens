@@ -1,3 +1,43 @@
+# Unreleased — M0/M1/M2/M3/M4 and M5 PR14
+
+- Explain exact cgroup memory current/swap/peak, memory.stat categories, high/max/swap
+  boundaries, pressure and local/subtree events separately from process RSS/PSS.
+- Add a runtime MemoryHigh editor with page-aligned previews, fresh unit/cgroup and
+  ancestor checks, systemd/kernel verification, shared Changes and fresh restoration
+  previews. Timeout/partial outcomes remain unconfirmed; existing helper policy stays
+  CPU/disk-only. MemoryMax remains a separate deferred control workflow.
+
+- Add L Sessions and --sessions for bounded discovery/import of saved profiles and
+  recordings, isolated offline replay and captured rule-version evidence.
+- Compare profiles/repeat sets interactively, with capture coverage, repeat spread,
+  configuration differences, optional measured outcomes and private redacted exports.
+- Keep measured outcomes in digest-bound sidecars with explicit units, provenance
+  and capture windows; preserve raw originals and reject partial run comparisons.
+- Add scoped CPU/memory/I/O pressure and memory-event findings, incident persistence
+  and deduplication, and resource-specific PSI percent / throttle ms/s / event units.
+- Strengthen import validation and file/content binding; bound replay windows by bytes,
+  retain legacy formats, and add editable Timeline/Changes windows and min/max values.
+
+- Add collection-stage timings, reproducible benchmarks and identity/quality contracts.
+- Inspect exact process/cgroup constraints in a bounded background worker, preserving
+  service association, visible-ancestor coverage, counter intervals and memory-event scope.
+- Separate optional frequency/GPU reads from CLI fast sampling; cache hardware
+  inventory and report each source's observation age and read failures.
+- Add D / clickable Constraints in the cgroup browser and exact context in process details.
+- Preserve old recordings and reject evidence from moved, reused or replaced targets.
+- Add a unified process/group inspector with Summary, Usage, Constraints, Evidence and Actions.
+- Explain validated quota configuration, local/ancestor counter activity and missing evidence
+  with versioned deterministic rules; preserve recorded scopes and interpretation limits.
+- Add related-group navigation with stable Back state and identity-bound named search actions.
+- Add 5/10/30-second capture choices, explicit counters-only mode, result coverage and
+  private selection-time capture context. Replay continues to reject live inspection/capture.
+- Connect inspector service-control review to existing CPU, placement and disk previews,
+  with an explicit process-to-service scope handoff and separate shared-hardware menu.
+- Add J Changes across control domains, blocked/unconfirmed/verified outcomes,
+  verification timestamps, measurement-health links and guarded session restoration.
+- Compare time-weighted baseline/post-verification windows with per-metric coverage,
+  transition exclusion, identity boundaries and incomplete-window labels.
+
 # 0.16.1
 
 - Add G / Start here task walkthroughs with a clickable Overview entry point.

@@ -25,15 +25,18 @@ def main():
     parser.add_argument("--count", type=int, help="number of JSON samples (default: stream until interrupted)")
     parser.add_argument("--no-nvidia", action="store_true", help="do not invoke nvidia-smi")
     parser.add_argument("--ascii", action="store_true", help="use ASCII charts and borders in the terminal")
-    parser.add_argument("--control", action="store_true", help="enable previewed CPU and per-service disk bandwidth controls")
+    parser.add_argument("--control", action="store_true", help="enable previewed CPU, service disk bandwidth and MemoryHigh controls")
     parser.add_argument('--record', metavar='FILE', help='record samples and UI events to a new private JSONL file')
     parser.add_argument('--record-max-mb', type=int, default=256, help='recording size cap in MiB (default 256)')
     parser.add_argument('--replay', metavar='FILE', help='inspect a recording without accessing live telemetry or controls')
+    parser.add_argument('--sessions',nargs='?',const='',metavar='PATH',help='open the offline Sessions browser, optionally at a saved evidence path')
     parser.add_argument('--no-config', action='store_true', help='ignore saved presentation preferences')
     parser.add_argument('--report', metavar='FILE', help='export a private JSON investigation report and exit')
     parser.add_argument('--report-identifiers', action='store_true', help='include host and event identifiers in --report')
     parser.add_argument('--incidents', metavar='DIR', help='opt-in bounded sustained-pressure capture directory')
-    parser.add_argument('--alert-threshold', type=float, default=20, help='PSI percent or quota throttled time percent (default 20)')
+    parser.add_argument('--alert-threshold', type=float, default=20, help='PSI some.avg10 percent (default 20)')
+    parser.add_argument('--alert-quota-ms-per-s',type=float,default=200,help='quota throttle-counter threshold in ms/s (default 200; not bounded at 1000)')
+    parser.add_argument('--alert-memory-events',type=int,default=1,help='selected-group memory counter increase in events (default 1)')
     parser.add_argument('--alert-duration', type=float, default=10, help='sustained threshold seconds (default 10)')
     parser.add_argument('--alert-cooldown', type=float, default=60, help='minimum seconds between captures (default 60)')
     parser.add_argument('--helper', metavar='PATH', help='explicit root-owned helper zipapp; requires configured sudo and unit allowlist')
@@ -52,7 +55,7 @@ def main():
     parser.add_argument('--work-unit',default='unit',help='completed-work label, e.g. request, job, or token')
     args = parser.parse_args()
     if args.energy_info:
-        if any((args.profile,args.compare,args.replay,args.record,args.control,args.once,args.json,args.report,args.energy,args.incidents,args.pid is not None,args.cgroup,args.work_units is not None,args.work_unit!='unit',args.scheduler)):
+        if any((args.sessions is not None,args.profile,args.compare,args.replay,args.record,args.control,args.once,args.json,args.report,args.energy,args.incidents,args.pid is not None,args.cgroup,args.work_units is not None,args.work_unit!='unit',args.scheduler)):
             parser.error('--energy-info is a standalone discovery command')
         from .energy import EnergyMeter
         print(json.dumps(EnergyMeter().sample(),indent=2,allow_nan=False))
@@ -60,7 +63,7 @@ def main():
     if args.profile or args.compare:
         if args.profile and args.compare:
             parser.error('choose --profile or --compare')
-        if any((args.replay,args.record,args.control,args.once,args.json,args.report,args.incidents)):
+        if any((args.sessions is not None,args.replay,args.record,args.control,args.once,args.json,args.report,args.incidents)):
             parser.error('profiling/comparison cannot be combined with dashboard, recording or snapshot modes')
         if args.compare and (args.pid is not None or args.cgroup or args.no_perf or args.label or args.outcome or args.duration != 10 or args.scheduler or args.energy or args.work_units is not None or args.work_unit!='unit'):
             parser.error('capture options require --profile, not --compare')
@@ -82,6 +85,8 @@ def main():
             return 1
     if args.pid is not None or args.cgroup or args.no_perf or args.label or args.duration != 10 or args.outcome or args.scheduler or args.energy or args.work_units is not None or args.work_unit!='unit':
         parser.error('--pid/--cgroup/--duration/--label/--no-perf/--scheduler/--energy/--work-units require --profile')
+    if args.sessions is not None and any((args.replay,args.record,args.control,args.once,args.json,args.report,args.incidents,args.helper)):
+        parser.error('--sessions is offline and cannot be combined with live/replay/report modes')
     if not math.isfinite(args.interval) or not 0.2 <= args.interval <= 60:
         parser.error("--interval must be between 0.2 and 60 seconds")
     if args.count is not None and (not args.json or args.count < 1):
@@ -110,7 +115,7 @@ def main():
     try:
         replay = Replay(args.replay) if args.replay else None
         recorder = Recorder(args.record, args.record_max_mb * 1024 * 1024) if args.record else None
-        collector = None if replay else Collector(nvidia=not args.no_nvidia)
+        collector = None if replay or args.sessions is not None else Collector(nvidia=not args.no_nvidia, background=True)
         prefs = {}
         if not args.no_config:
             try:
@@ -118,7 +123,8 @@ def main():
             except (OSError,ValueError) as exc:
                 print('Preferences ignored: '+str(exc),file=sys.stderr)
         if args.incidents:
-            incidents = IncidentCapture(args.incidents,args.alert_threshold,args.alert_duration,args.alert_cooldown,interval=args.interval)
+            incidents = IncidentCapture(args.incidents,args.alert_threshold,args.alert_duration,args.alert_cooldown,interval=args.interval,
+                                        quota_ms_per_s=args.alert_quota_ms_per_s,memory_events=args.alert_memory_events)
         if args.report:
             view = View()
             if replay:
@@ -164,7 +170,7 @@ def main():
                 if args.once or (args.count is not None and count >= args.count) or (replay and count >= len(replay.offsets)):
                     break
         else:
-            run(collector, args.interval, ascii=args.ascii, control=args.control, recorder=recorder, replay=replay, preferences=prefs, incidents=incidents, helper=args.helper)
+            run(collector, args.interval, ascii=args.ascii, control=args.control, recorder=recorder, replay=replay, preferences=prefs, incidents=incidents, helper=args.helper,sessions=args.sessions)
     except (KeyboardInterrupt, BrokenPipeError):
         return 0
     except (OSError, ValueError, ControlError) as exc:

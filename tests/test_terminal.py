@@ -14,6 +14,31 @@ import unittest
 
 
 class TerminalTests(unittest.TestCase):
+    def test_memoryhigh_preview_apply_restore_in_synthetic_terminal(self):
+        result=subprocess.run([sys.executable,'scripts/verify_memory_ui.py'],capture_output=True,text=True,timeout=20)
+        self.assertEqual(result.returncode,0,result.stderr)
+        report=json.loads(result.stdout)
+        self.assertEqual(report['host_operations'],'forbidden')
+        self.assertEqual(report['fixture_result']['writes'],[128*1024**2,None])
+        self.assertEqual(report['fixture_result']['unchanged_max'],512*1024**2)
+
+    def test_offline_sessions_incident_comparison_and_export_in_terminal(self):
+        result=subprocess.run([sys.executable,'scripts/verify_sessions_ui.py'],capture_output=True,text=True,timeout=20)
+        self.assertEqual(result.returncode,0,result.stderr)
+        report=json.loads(result.stdout)
+        self.assertEqual(report['live_operations'],'forbidden')
+        self.assertEqual(report['raw_originals'],'unchanged')
+        self.assertEqual(report['comparison_cpu_change_percent'],100)
+
+    def test_synthetic_control_review_apply_observe_restore_in_terminal(self):
+        result = subprocess.run([sys.executable,'scripts/verify_controls_ui.py'],
+                                capture_output=True,text=True,timeout=12)
+        self.assertEqual(result.returncode,0,result.stderr)
+        report=json.loads(result.stdout)
+        self.assertEqual(report['host_control_access'],'forbidden')
+        self.assertEqual(report['fixture_result']['calls'],[['quota',25],['quota',None]])
+        self.assertIsNone(report['fixture_result']['final_quota'])
+
     def test_escape_exit_latency_with_live_and_stalled_collection(self):
         for slow in (False, True):
             with self.subTest(stalled_collector=slow):

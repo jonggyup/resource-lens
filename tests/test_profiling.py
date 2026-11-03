@@ -130,7 +130,7 @@ class ProfilingTests(unittest.TestCase):
         for width, height in ((40, 12), (40, 24), (80, 18), (120, 35)):
             view = ProfileView(dict(pid=os.getpid()), choose=True)
             view.draw(Screen(height, width), width, height)
-            self.assertEqual(len(view.regions), 3)
+            self.assertEqual(len(view.regions), 4)
             for left, right, row, mode in view.regions:
                 self.assertTrue(1 <= left < right < width)
                 self.assertLess(row, height - 2)

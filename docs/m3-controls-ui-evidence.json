@@ -1,0 +1,43 @@
+{
+  "scenario": "M3 process-to-service control and restoration",
+  "evidence": "Synthetic telemetry and in-memory settings; no live enforcement claim.",
+  "rendering": "Full redraw instrumentation; timings are local checks, not benchmarks.",
+  "host_control_access": "forbidden",
+  "terminal_sizes": [
+    [
+      110,
+      40
+    ],
+    [
+      60,
+      14
+    ]
+  ],
+  "key_to_matching_output_ms": {
+    "inspect_process": 4.572,
+    "review_service_scope": 4.11,
+    "open_quota_editor": 2.433,
+    "prepare_without_write": 3.078,
+    "apply_and_verify": 6.871,
+    "open_changes": 5.768,
+    "review_restore": 4.036,
+    "restore_and_verify": 6.483,
+    "return_to_inspector": 3.786,
+    "reopen_shared_history": 5.582,
+    "small_terminal_history": 208.073
+  },
+  "fixture_result": {
+    "calls": [
+      [
+        "quota",
+        25
+      ],
+      [
+        "quota",
+        null
+      ]
+    ],
+    "final_quota": null
+  },
+  "exit_code": 0
+}

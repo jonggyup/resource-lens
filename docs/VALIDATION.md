@@ -1,3 +1,68 @@
+# M5 PR14 memory observation and MemoryHigh
+
+**398 tests pass**, including exact memory observation, scope/identity binding,
+page alignment, write denial, timeout-after-write, partial read-back, stale apply/
+restoration previews and unchanged helper authorization. The synthetic terminal
+walkthrough verifies observation → scope review → full preview → apply → fresh
+restoration, with host operations forbidden. See [PR14 validation](M5_MEMORYHIGH_VALIDATION.md).
+No host memory policy was changed; disposable live enforcement remains unvalidated.
+
+# M4 saved investigations and broader findings
+
+2026-11-02: **368 tests pass**, including offline Sessions startup, bounded artifact
+validation, compatible saved-run comparison, measured outcomes, redacted export,
+scoped pressure/memory-event rules and incident reproducibility. The synthetic PTY
+walkthrough forbids live collection/capture/control calls and checks unchanged raw
+originals. See [M4 validation](M4_VALIDATION.md) for artifacts and remaining limits.
+
+# M3 controls and observation
+
+See [M3 validation](M3_VALIDATION.md) for 333 passing tests, process-to-service scope
+review, unified Changes, guarded restoration, time-weighted observation and the
+synthetic terminal walkthrough. All policy writes in automated tests use mocks or
+fixtures. Live enforcement and independent-user validation remain separate checks.
+
+# M2 inspector, CPU findings and capture workflow
+
+2026-10-30: **311 tests pass**. New checks cover deterministic CPU quota findings,
+negative/stale/reset/scope/configuration cases, counter-rate units, bounded history,
+offline replay, ancestor-only constraints, stable Back navigation, scoped search
+actions, keyboard/mouse evidence, small layouts, capture durations and private context.
+
+The real 100×24 PTY walkthrough uses clearly labelled synthetic replay data and
+forbids construction of a live collector. A separate own-process read-only
+counters capture completed and saved a 0600 context file. See
+[M2_VALIDATION.md](M2_VALIDATION.md) for reproduction, structured artifacts and
+limits. No resource policy was changed; these checks do not add live quota
+enforcement or independent-user usability evidence.
+
+# M1 exact-target context and source-aware collection
+
+2026-10-27: **291 tests pass**. New coverage exercises exact child constraints,
+visible/hidden mount ancestry, scope/identity changes, memory-event scope, malformed
+reads, bounded scans, coalesced workers, cache invalidation, source freshness and
+offline detail replay. Existing PTY CPU menu/tile interactions remain intact.
+
+Live read-only context inspection and independent collection/input measurements
+are recorded in [M1_VALIDATION.md](M1_VALIDATION.md). One-second main collection
+p95 was 67.23 ms in this run; 200 ms sampling used 24.54% of one logical CPU.
+The comparison is short and uncontrolled; background sources may still be pending
+while a fast sample completes. No resource policy was changed.
+
+# M0 collection instrumentation and contract validation
+
+2026-10-27: **268 tests pass**, including new identity/quality contracts, legacy
+recording compatibility, additive sample metadata and deterministic benchmark
+timing/cadence checks. Existing metric/control/UI tests and PTY workflows pass.
+
+Read-only live collection and input benchmarks are recorded in
+[M0_BASELINE.md](M0_BASELINE.md), with structured cost/count evidence and method
+limitations. Collection at a one-second interval had 72.20 ms median / 858.94 ms
+p95 wall time on this environment; the CPU-reading stage showed the large tail.
+The 200 ms case used 32.18% of one logical CPU for collection/JSON encoding.
+These are baseline observations, not optimization or cross-host support claims.
+No host resource policies were changed.
+
 # 0.16.1 first-use and task-guide validation
 
 247 tests pass. New checks exercise the Overview guide button, read-only task

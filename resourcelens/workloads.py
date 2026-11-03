@@ -89,6 +89,14 @@ class WorkloadCollector:
                 cache[relative] = {"path": relative, **raw, "quota_pct": quota_percent(raw["cpu.max"])}
             chain.append(cache[relative])
             current = current.parent
+        # A visible mount may be a constrained subtree. Include readable root
+        # settings without treating absent true-root controller files as zero.
+        if '/' not in cache:
+            cache['/'] = {name: read(self.root / name) or None for name in (
+                'cpu.max', 'cpu.weight', 'memory.high', 'memory.max', 'io.max', 'cpuset.cpus.effective')}
+        root_raw = cache['/']
+        if root_raw['cpu.max'] is not None or root_raw['memory.max'] is not None:
+            chain.append(dict(path='/', **root_raw, quota_pct=quota_percent(root_raw['cpu.max'])))
         quotas = [(entry["quota_pct"], entry["path"]) for entry in chain if entry["quota_pct"] is not None]
         memory = [(limit_number(entry["memory.max"]), entry["path"]) for entry in chain
                   if limit_number(entry["memory.max"]) is not None]
@@ -98,7 +106,8 @@ class WorkloadCollector:
                 "quota_complete": bool(chain) and all(entry["cpu.max"] is not None for entry in chain),
                 "memory_max": mem, "memory_source": mem_source,
                 "memory_complete": bool(chain) and all(entry["memory.max"] is not None for entry in chain),
-                "cpu_controller_active": bool(chain and chain[0]["cpu.max"] is not None)}
+                "cpu_controller_active": bool(chain and chain[0]["cpu.max"] is not None),
+                "ancestry_visibility": "to_visible_root"}
 
     def sample(self, processes, elapsed):
         groups = {}
@@ -121,10 +130,11 @@ class WorkloadCollector:
             if directory is None:
                 continue
             try:
-                group["inode"] = directory.stat().st_ino
+                info = directory.stat()
+                group["inode"], group['device'] = info.st_ino, info.st_dev
             except OSError:
                 continue
-            identity = (group["id"], group["inode"])
+            identity = (group["id"], group['device'], group["inode"])
             old = self.previous.get(identity, {})
             stats = key_values(read(directory / "cpu.stat"))
             group["cpu_stat"] = stats
@@ -162,12 +172,13 @@ class WorkloadCollector:
         while pending:
             directory = pending.pop()
             try:
-                inode = directory.stat().st_ino
+                info = directory.stat()
+                inode = info.st_ino
                 path = '/' + str(directory.relative_to(self.root)) if directory != self.root else '/'
-                identity = (path, inode)
+                identity = (path, info.st_dev, inode)
                 stats = key_values(read(directory / 'cpu.stat'))
                 usage = delta(stats['usage_usec'], self.hierarchy_previous.get(identity), elapsed) if 'usage_usec' in stats else None
-                nodes.append(dict(path=path, inode=inode, cpu_pct=usage / 10000 if usage is not None else None,
+                nodes.append(dict(path=path, inode=inode, device=info.st_dev, cpu_pct=usage / 10000 if usage is not None else None,
                                   memory_current=limit_number(read(directory / 'memory.current'))))
                 previous[identity] = stats.get('usage_usec')
                 with os.scandir(directory) as entries:

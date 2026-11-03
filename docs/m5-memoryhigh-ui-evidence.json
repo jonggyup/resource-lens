@@ -1,0 +1,41 @@
+{
+  "scenario": "M5 PR14 MemoryHigh observation/review/apply/restore",
+  "evidence": "Synthetic counters and in-memory settings; no live enforcement or latency claim.",
+  "host_operations": "forbidden",
+  "rendering": "Full redraw instrumentation; timings are local checks, not benchmarks.",
+  "terminal_sizes": [
+    [
+      110,
+      40
+    ],
+    [
+      60,
+      14
+    ]
+  ],
+  "key_to_matching_output_ms": {
+    "inspect_process": 4.401,
+    "read_exact_group_memory": 4.064,
+    "review_service_scope": 6.278,
+    "open_memory_editor": 4.719,
+    "fresh_preview_without_write": 8.335,
+    "refuse_unreviewed_apply": 0.21,
+    "review_full_preview": 8.342,
+    "apply_and_verify": 9.186,
+    "fresh_restoration_preview": 7.378,
+    "review_restoration": 7.27,
+    "restore_and_verify": 8.314,
+    "shared_changes_history": 7.044,
+    "small_terminal_history": 208.627
+  },
+  "fixture_result": {
+    "writes": [
+      134217728,
+      null
+    ],
+    "final_high": null,
+    "unchanged_max": 536870912,
+    "observed_usage": 268435456
+  },
+  "exit_code": 0
+}

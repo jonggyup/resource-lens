@@ -1,3 +1,52 @@
+# M5 PR14 memory observation and MemoryHigh
+
+Inspector m explains exact cgroup memory accounting separately from process RSS/PSS.
+Service review r → h opens a runtime MemoryHigh editor with fresh usage, page-aligned
+values, ancestor boundaries and explicit reclaim/stall warnings. Apply and restoration
+both require a fully reviewed preview. Shared Changes preserves verified/unconfirmed
+status and uses fresh restoration checks. MemoryMax and swap controls remain deferred.
+
+See [MemoryHigh](MEMORYHIGH.md) and [PR14 validation](M5_MEMORYHIGH_VALIDATION.md).
+Fixtures and the synthetic terminal walkthrough do not establish live enforcement;
+the disposable owned-service release check remains outstanding. Helper authorization
+remains CPU/disk-only.
+
+# M4 saved investigations and broader findings
+
+L / --sessions opens bounded saved evidence discovery, isolated replay, profile/repeat
+comparison and redacted exports. Optional measured outcomes have explicit units,
+provenance and windows in private supplementary sidecars. Imported data is validated;
+raw originals are retained. Scoped pressure/memory-event findings preserve rule
+versions, local/subtree scope and incident deduplication/persistence.
+
+See [Sessions](SESSIONS.md) and [M4 validation](M4_VALIDATION.md). Automated fixture
+and offline terminal checks do not establish independent-user usability or live
+enforcement. M5 PR14 adds memory observation and MemoryHigh controls separately.
+
+# M3 controls and observation
+
+The inspector's r action reviews the service target and scope expansion before
+opening existing control editors. CPU, placement, disk and hardware controls share
+result/history presentation. J Changes shows outcomes, verification times, time-weighted
+observation and guarded restoration of the latest active domain receipt. Keyboard,
+mouse, scrolling and small-terminal paths are covered with mocked controls.
+
+See [M3 validation](M3_VALIDATION.md). Live enforcement and independent-user validation
+are not established by the synthetic walkthrough. M4 adds saved investigations
+and comparisons; the existing backend authorization/conflict checks remain in place.
+
+# M2 inspector workflow
+
+Process Enter and group I open a shared inspector with Summary, Usage, Constraints,
+Evidence and Actions. Findings distinguish quota configuration, scoped counter
+activity and missing evidence. Related-group navigation preserves Back state.
+Named actions, clickable findings and evidence navigation support keyboard/mouse
+use; P offers durations and an explicit counters-only choice.
+
+See [current user guide](USER_GUIDE.md), [M2 validation](M2_VALIDATION.md) and the
+[forward blueprint](BLUEPRINT.md). M3 control/observation integration follows;
+independent-user validation remains outstanding. Earlier delivery notes follow.
+
 # 0.15.0 energy investigation
 
 P now offers three choices, including Energy efficiency. The CPU view shows live

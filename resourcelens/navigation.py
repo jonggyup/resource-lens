@@ -11,12 +11,20 @@ def actions(view):
     if view.profile_view:
         profile=view.profile_view
         if profile.choosing:
-            return [('1 CPU usage',ord('1')),('2 CPU + waits',ord('2')),('3 Energy',ord('3')),('Enter Start',10),('Esc Back',27)]
+            return [('Esc Back',27),('Enter Start',10),('] Duration',ord(']')),('1 CPU usage',ord('1')),('2 CPU + waits',ord('2')),('3 Energy',ord('3')),('4 Counters',ord('4'))]
         if profile.result is not None or profile.error is not None:
             return [('D Summary' if profile.details else 'D Details',ord('D')),('Esc Back',27)]
         return [('Esc Cancel',27)]
     if view.memory_sharing:
         return [('Esc Back',27), ('Tab Next',9), ('r Refresh',ord('r'))]
+    if view.browser and view.active_inspector():
+        if view.active_inspector().help:
+            return [('Esc Back',27)]
+        from .actions import BY_ID
+        return [('Esc Back',27), ('5 Actions',ord('5')), *[
+            (BY_ID[name].key+' '+BY_ID[name].label, ord(BY_ID[name].key))
+            for name in ('profile', 'memory', 'show_evidence', 'review_controls', 'show_changes', 'show_constraints', 'waits', 'open_group', 'open_service', 'open_ancestor')],
+            ('? Help',ord('?')), ('s Find',ord('s'))]
     if view.browser and view.browser.process:
         return [('Esc Back',27), ('V Memory',ord('V')), ('P Investigate',ord('P')),
                 ('W CPU+waits',ord('W')), ('Down Scroll',curses.KEY_DOWN)]
@@ -37,14 +45,14 @@ def actions(view):
         1: [('g CPU menu', ord('g')), ('u Undo', ord('u')), ('a Related apps', ord('a'))],
         8: [('PgDn Scroll', curses.KEY_NPAGE), ('Up Prev event', curses.KEY_UP), ('Down Next event', curses.KEY_DOWN)],
         5: [('/ Filter', ord('/')), ('c CPU sort', ord('c')), ('m RAM sort', ord('m'))],
-        7: [('g Processes', ord('g')), ('Enter Open', 10), ('D Details', ord('D')), ('/ Filter', ord('/')), ('p Placement', ord('p')),
+        7: [('g Processes', ord('g')), ('Enter Open', 10), ('D Details', ord('D')), ('/ Filter', ord('/')), ('p Placement', ord('p')), ('I Inspect',ord('I')),
             ('w Weight', ord('w')), ('l Quota', ord('l')), ('U Undo place', ord('U')), ('P Investigate',ord('P')),('W CPU+waits',ord('W'))],
     }.get(view.page, [('Space Freeze', ord(' '))])
     # Quit stays discoverable even when only the first local action fits.
     extra = [('f Focus', ord('f'))] if view.page in (0, 1, 2, 3, 4, 6) else []
     if view.page == 7:
         extra = [('o Overlay', ord('o'))]
-    extra += [('E Explain', ord('E')), ('H Health', ord('H')), ('0 Status', ord('0')), ('M Mark', ord('M')), ('9 Timeline', ord('9'))]
+    extra += [('L Sessions',ord('L')), ('J Changes', ord('J')), ('E Explain', ord('E')), ('H Health', ord('H')), ('0 Status', ord('0')), ('M Mark', ord('M')), ('9 Timeline', ord('9'))]
     return common + [('q Quit', ord('q'))] + local + extra
 
 
@@ -69,6 +77,7 @@ def context_help(view, width=80):
                 ('g', 'Switch to cgroups: services and groups of processes.')]))
         else:
             sections.append(('Services and cgroups', [
+                ('I', 'Inspect findings, usage, constraints, evidence and actions for the selected group.'),
                 ('Enter / Right', 'Open the selected group to see its children and processes.'),
                 ('c / m / n / i', 'Sort by CPU usage / memory / name / disk I/O.'),
                 ('/', 'Filter the group list.'),
@@ -85,13 +94,15 @@ def context_help(view, width=80):
                 ('p / U', 'Choose its CPUs / undo the last CPU placement change.'),
                 ('w / l / u', 'Set CPU weight / set CPU quota / undo the last change.'),
                 ('b / B', 'Limit disk bandwidth / undo the last disk limit.'),
+                ('h', 'Review a runtime MemoryHigh reclaim/throttling boundary; J Changes reviews restoration.'),
                 ('d', 'Open the disk used by the selected service.'),
                 ('o', 'Pin this service on resource views.')]))
         sections.append(('Investigate the selection', [
             ('P', 'Choose CPU usage, CPU + waits, or Energy efficiency.'),
             ('W', 'Start CPU + waits directly: where the selected work spends time waiting.'),
             ('V', 'Inspect memory allocation, shared address spaces and mapped files.'),
-            ('', 'Captures run for 10 seconds. Esc cancels; D switches result details.'),
+            ('', 'P: choose 5/10/30 seconds, including counters-only capture. W starts ten seconds directly.'),
+            ('', 'Esc cancels; D switches capture result details.'),
             ('', 'Energy is measured for hardware domains, not attributed to a process.')]))
     else:
         rows = {

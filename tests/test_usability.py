@@ -96,6 +96,7 @@ class UsabilityTests(unittest.TestCase):
             text=path.read_text()
             self.assertNotIn('secret-name',text)
             self.assertNotIn('/private/path',text)
+            self.assertIn('requested_seconds',text)
             self.assertIn('available_samples',text)
             with self.assertRaises(FileExistsError):export_report(view,path)
             path.unlink();export_report(view,path,False)

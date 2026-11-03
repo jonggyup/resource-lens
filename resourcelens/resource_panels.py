@@ -137,6 +137,10 @@ def resource_lines(view, kind, width):
              'network': 'Each RX/TX history scales to its visible peak, not link utilization. Do not sum layered interfaces.'}
     history_lines = ['History ' + view.trend(view.history['gpu'], plot_width)] if kind == 'gpu' and focus is None else []
     tail = [view.marker_line(plot_width), *indicators(s), *view.overlay_lines()]
+    from .presentation import source_note
+    source = 'gpus' if kind == 'gpu' else 'resource_topology'
+    if source_note(s, source):
+        tail.insert(0, source_note(s, source))
     return panels(cards, width) + history_lines + [piece for line in tail + [notes[kind]] for piece in (textwrap.wrap(line, width) or [''])]
 
 

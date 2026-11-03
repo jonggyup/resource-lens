@@ -1,0 +1,44 @@
+{
+  "method": "Local PTY key-to-curses-flush measurements (not physical display/SSH latency).",
+  "trials": [
+    {
+      "navigation_ms": [
+        3.673,
+        1.575,
+        4.287,
+        3.145,
+        3.626
+      ],
+      "40_character_burst_ms": 1.168,
+      "burst_frames": 1,
+      "escape_to_frame_ms": 2.217,
+      "escape_to_exit_ms": 22.792
+    },
+    {
+      "navigation_ms": [
+        3.422,
+        0.869,
+        3.404,
+        2.895,
+        3.656
+      ],
+      "40_character_burst_ms": 1.267,
+      "burst_frames": 1,
+      "escape_to_frame_ms": 2.309,
+      "escape_to_exit_ms": 22.712
+    },
+    {
+      "navigation_ms": [
+        3.677,
+        1.014,
+        3.054,
+        2.979,
+        3.933
+      ],
+      "40_character_burst_ms": 1.278,
+      "burst_frames": 1,
+      "escape_to_frame_ms": 2.318,
+      "escape_to_exit_ms": 22.749
+    }
+  ]
+}

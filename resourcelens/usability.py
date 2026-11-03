@@ -86,7 +86,22 @@ def capability_lines(sample, error=None, replay=False):
               f"Skipped/exited/unreadable processes: {sample.get('processes_skipped', 'unknown')}",
               'Workload files may be inactive despite controller availability at the root.',
               'Press C to enable control menus. Monitoring needs no elevated permissions.',
-              'If a change is denied, use manager authorization or an explicitly installed helper.']
+              'Denied changes need manager authorization. The optional helper covers CPU/disk only; MemoryHigh uses current manager permissions.']
+    stages = meta.get('stages', {})
+    measured = [(name, value) for name, value in stages.items()
+                if isinstance(value, dict) and all(type(value.get(key)) in (int, float)
+                    for key in ('duration_ms', 'cpu_ms'))] if isinstance(stages, dict) else []
+    if measured:
+        lines += ['', '-- Slowest collection stages (wall / thread CPU) --']
+        for name, cost in sorted(measured, key=lambda item: item[1]['duration_ms'], reverse=True)[:5]:
+            lines.append(f"{name}: {cost['duration_ms']:.2f} ms / {cost['cpu_ms']:.2f} ms")
+        lines.append('Stage timings describe cost, not measurement availability or freshness.')
+    if sample.get('source_quality'):
+        from .presentation import source_note
+        lines += ['', '-- Source quality and age --']
+        for name in sample['source_quality']:
+            lines.append(source_note(sample, name))
+        lines.append('Source work/worker CPU costs are separate from main collector stage costs.')
     energy=sample.get('energy')
     if energy:
         lines += ['', 'HARDWARE ENERGY: '+energy['status'],energy['scope']]
@@ -107,23 +122,29 @@ def export_report(view, path=None, redact=True):
     sample = view.snapshot or {}
     events = []
     for event in view.investigation.events:
+        comparison = view.investigation.comparison(event)
         means, counts = view.investigation.compare(event)
-        events.append(dict(timestamp=event['timestamp'], status=event['status'],
-                           label='Event' if redact else event['label'],
-                           target=None if redact else event.get('target'),
-                           sampled_means=means, available_samples=counts))
+        events.append(dict(event,comparison=comparison,sampled_means=means,available_samples=counts))
+    from .diagnostics import explain
+    context=sample.get('target_context') or {}
+    request=context.get('request')
+    findings=[f.to_dict() for f in explain(view.diagnostic_history,sample,request,now=sample['timestamp'])] if request else []
     report = dict(format='resource-lens-report', version=1, redacted=redact,
                   hostname=None if redact else sample.get('hostname'), timestamp=sample.get('timestamp'),
                   events=events, collector=sample.get('collector'),
+                  findings=findings,interpretation='Current rule versions applied to retained recorded observations',
+                  configuration=context.get('limits'),
                   current_metrics=metrics(sample) if sample else {},
                   retained_samples=len(view.investigation.samples),
-                  notes=['30-second before/after sample means, not causal evidence.',
-                         'Only retained available samples contribute; counts accompany each metric.',
+                  notes=['30-second time-weighted windows; transition excluded, not causal evidence.',
+                         'Coverage accompanies each metric; unknown durations do not establish complete observation.',
+                         'sampled_means and available_samples are legacy unweighted compatibility fields.',
                          'Redacted export omits host names, paths, process names and marker labels.'])
-    with os.fdopen(os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600), 'w') as file:
-        json.dump(report, file, indent=2, allow_nan=False)
-        file.write('\n')
-    return str(path)
+    if redact:
+        from .redaction import redact as anonymize
+        report=anonymize(report,sample)
+    from .redaction import write_new_json
+    return write_new_json(path,report)
 
 
 def tree_rows(rows):

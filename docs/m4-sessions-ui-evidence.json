@@ -1,0 +1,33 @@
+{
+  "scenario": "M4 saved incident, profiles, measured outcomes, comparison and export",
+  "evidence": "Synthetic fixtures only; no live enforcement, latency measurement or independent-user claim.",
+  "live_operations": "forbidden",
+  "rendering": "Full redraw instrumentation; timings are local checks, not benchmarks.",
+  "terminal_sizes": [
+    [
+      110,
+      40
+    ],
+    [
+      60,
+      14
+    ]
+  ],
+  "key_to_matching_output_ms": {
+    "open_incident_offline": 108.196,
+    "inspect_saved_target": 16.928,
+    "read_captured_findings": 13.769,
+    "return_to_sessions": 1.335,
+    "open_baseline": 103.683,
+    "save_measured_outcome": 105.062,
+    "select_baseline": 2.127,
+    "open_candidate": 103.5,
+    "compare_without_cli": 105.748,
+    "export_redacted_summary": 115.331,
+    "small_terminal_comparison": 3.032
+  },
+  "raw_originals": "unchanged",
+  "comparison_cpu_change_percent": 100,
+  "redaction": "identifiers absent; units retained",
+  "exit_code": 0
+}

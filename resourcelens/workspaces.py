@@ -146,7 +146,7 @@ class Workspaces:
         elif self.app_tab == 3:
             limits = group.get('limits', {})
             lines += ['Tightest observed CPU quota: '+pct(limits.get('quota_pct')),
-                      'Quota ancestry: '+('complete' if limits.get('quota_complete') else 'incomplete; tighter limits may be unreadable'),
+                      'Visible quota ancestry: '+('readable to mount boundary' if limits.get('quota_complete') else 'incomplete; tighter limits may be unreadable'),
                       'Tightest observed memory maximum: '+size(limits.get('memory_max'))]
             lines += ['w weight | l quota | p placement | b disk bandwidth',
                       'u Undo CPU | U Undo placement | B Undo disk',
@@ -157,6 +157,8 @@ class Workspaces:
                 for key in ('cpu.max','cpu.weight','cpuset.cpus.effective','memory.high','memory.max','io.max'):
                     value = ancestor.get(key)
                     lines.append('  '+key+': '+(value if value is not None else 'unavailable/inactive'))
+            from .targets import context_lines
+            lines += ['', *context_lines(self.snapshot, ('cgroup', group['path'], group['inode'], group.get('device')))]
         else:
             key = 'workload:'+group['id']
             values = self.history[key]

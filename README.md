@@ -21,13 +21,22 @@ You can explore immediately: the app starts in read-only mode and needs no featu
 | --- | --- |
 | Find what is busy | Overview; click a resource card for details |
 | Find a process, service or device | **s**, type a name or PID, then Enter |
-| Understand a slow process | **8** Applications → select a process → **P** Investigate |
-| Understand memory use | Select a process → **V** Inspect memory |
+| Understand a slow process | **8** Applications → select a process → Enter inspector |
+| Understand memory use | **m** in the inspector explains cgroup memory; **V** inspects process RSS/PSS |
 | Understand a number or missing value | **E** explains metrics; **H** checks measurement health |
 | Change CPU or service settings | **C** enables menus; each change has its own preview |
 | Compare before and after | **M** marks a baseline; **9** opens Timeline |
+| Review controls and results | **r** in the inspector reviews service scope; **J** opens Changes |
+| Reopen evidence or compare saved runs | **L Sessions**; **b** selects a baseline, **c** compares |
+| Review a service memory boundary | **r** in the inspector → **h MemoryHigh**; **J / u** reviews restoration |
 
 **Mouse:** tabs, resource cards and bottom buttons are clickable. Scroll with the wheel.
+
+MemoryHigh has a separate, scrollable preview showing fresh usage, affected scope,
+page alignment and ancestor restrictions. It is a reclaim/throttling boundary and
+usage may exceed it. The editor changes only runtime MemoryHigh; MemoryMax is
+observable but has no new control editor. Existing manager permissions apply, and
+the CPU/disk helper does not authorize memory changes. See [MemoryHigh workflow](docs/MEMORYHIGH.md).
 **Keyboard:** arrows select or scroll, Enter opens, Esc goes back or cancels.
 From a main view, **q** exits; **?** explains the current view's shortcuts.
 Uppercase shortcuts use Shift: **E** means Shift+E, not Ctrl+E.
@@ -51,9 +60,10 @@ standard library, with no required runtime Python packages or additional daemon.
 ## Save profiling evidence and compare runs
 
 Press `P` on a selected process or cgroup in Applications (`8`) to open **Investigate**.
-Choose **CPU usage**, **CPU + waits**, or **Energy efficiency**. The energy mode
+Choose **CPU usage**, **CPU + waits**, **Energy efficiency**, or **Counters only**. The energy mode
 records hardware-domain joules and watts without attributing them to the process.
-Click a choice or press 1/2/3. All capture for 10 seconds; `W` starts CPU + waits directly. Esc cancels immediately.
+Click a choice or press 1/2/3/4. Choose 5/10/30 seconds with the duration buttons
+or `[` / `]`; `W` starts CPU + waits directly for ten seconds. Esc cancels immediately.
 Results open with a summary; `D` shows stacks, diagnostics and coverage details. Sessions save resource counters,
 configuration and optional Linux perf call stacks. `V` still opens memory inspection.
 
@@ -67,6 +77,20 @@ python3 -m resourcelens --profile ./waits --pid 1234 --duration 10 --scheduler
 Replace the PID with your target. Repeat into new run directories to see variability.
 See [profiling commands, permissions, interpretation and limits](docs/PROFILING.md).
 This is a first profiling workflow, not a complete kernel regression analyzer.
+
+### Inspect usage, restrictions and evidence
+
+Enter on a process opens Summary, Usage, Constraints, Evidence and Actions.
+Use Tab / `[` / `]` or section numbers 1–5. Click a finding or press `e` for its
+sources, interval counters and interpretation limits. `g` opens its exact group,
+`o` its associated service, and `a` a limiting ancestor; Esc restores the previous
+target and view. In service-group mode, `I` opens inspection while Enter keeps
+hierarchy browsing; `D` inside that browser opens Constraints.
+
+Configured ceilings and observed quota-counter activity are shown separately.
+Group evidence includes other members/descendants and does not measure process
+request delay. Missing ancestry stays unknown. Scoped search also includes named
+actions and disabled reasons. See [M2 workflows and validation](docs/M2_VALIDATION.md).
 
 ## Energy efficiency
 
@@ -261,12 +285,33 @@ per-core service execution; thread affinity and child cgroups may narrow it.
 Press `o` outside Applications to clear it. Exited/replaced cgroups are not reattached.
 
 Press `M` to mark a baseline; `9` opens Timeline. Up/Down selects an event.
-Control apply/Undo attempts also create events with verified or unconfirmed outcomes.
-Charts include a separate marker row. Comparisons report available sample means
-in the 30 seconds before/after an event, with per-metric counts and absolute changes.
+Control review/apply/Undo attempts create events with blocked, unconfirmed or verified
+outcomes. **J Changes** lists all domains; **n/p** selects an entry, **u** reviews
+restoration of the latest active change in its domain, and **H** opens health.
+Charts include a separate marker row. Comparisons report time-weighted means and
+per-metric coverage in 30-second windows. Baseline ends at apply start; post-change
+starts at verified completion. Transition time is excluded, and coverage under 80%
+is incomplete. Unconfirmed attempts have no post-change window.
 A pinned-service baseline compares that service; otherwise it compares the host.
 These are descriptive observations, not causal attribution or latency predictions.
 Live comparisons retain up to 600 UI-observed samples; collection can outpace UI updates.
+Use **[ / ]** in Timeline or Changes to choose 5/15/30/60-second windows. Each metric
+also shows min/max and the number of contributing intervals.
+
+**L Sessions** opens saved profiles, recordings and incident captures. Discovery
+scans only the bounded state directories and explicitly imported paths. **i** imports
+a local recording/profile path without moving it. Enter opens a profile or isolated
+offline replay; **L** returns from replay to Sessions. **b** selects a profile or
+repeat set as baseline; **c** compares the selected candidate using matched metric
+names, repeat counts/spread, coverage and configuration differences. Partial captures
+remain readable and cannot be used as complete comparison runs.
+
+For fully offline use, run `python3 -m resourcelens --sessions [PATH]`. This mode
+does not construct a live collector. In a saved profile, **o** records an optional
+measured application outcome as `name | unit | value | provenance` for the displayed
+capture window. Outcomes go into a private, content-bound sidecar. **x** exports a
+private redacted summary with consistent identifier aliases; raw originals remain
+unchanged and are not redacted. See [saved investigations](docs/SESSIONS.md).
 
 ```bash
 # Record to a NEW file (existing files are never overwritten).
@@ -398,7 +443,8 @@ measure the workload to establish enforcement. See [live enforcement evidence](d
 
 ```bash
 python3 -m resourcelens --incidents ./incidents \
-  --alert-threshold 20 --alert-duration 10 --alert-cooldown 60
+  --alert-threshold 20 --alert-quota-ms-per-s 200 --alert-memory-events 1 \
+  --alert-duration 10 --alert-cooldown 60
 ```
 
 Opt-in capture triggers when host CPU/memory/I/O PSI avg10 reaches the threshold
@@ -505,8 +551,10 @@ wall-clock axis.
   including missing/stale values and practical next steps.
 - **i** in a control confirmation, or click **Impact**: inspect sampled relationships,
   remaining eligible CPUs and relevant limits. Esc returns to the preview.
+- **r** in the inspector: review the service control scope before opening an editor.
+- **J**: Changes across domains, verification results, observation and session restoration.
 - **M**, then **9**: compare the 30-second windows around a baseline. Up/Down chooses
-  an event; Page Up/Down scrolls paired bars, sample counts and changes.
+  an event; Page Up/Down scrolls time-weighted means, coverage and changes.
 
 See [the interpretation and comparison guide](docs/UNDERSTANDING.md) for examples,
 coverage limits and the distinction between observed impact and a performance prediction.
@@ -863,6 +911,12 @@ command arguments and environments are not collected.
 
 ## Verification and development
 
+The [collection benchmark](docs/BENCHMARKING.md) measures per-stage wall/CPU costs,
+actual sampling cadence and JSON encoding. Status (`0`) also shows the slowest
+collection stages and source ages. See the [M0 baseline](docs/M0_BASELINE.md) and
+[M1 validation](docs/M1_VALIDATION.md) for measured results
+and the [data contracts](docs/DATA_CONTRACTS.md) for optional identity/quality metadata.
+
 ```bash
 python3 -m unittest discover -s tests -v
 git diff --check
@@ -896,12 +950,11 @@ Architecture:
 - `resourcelens/controls.py`: systemd runtime operations, verification and session Undo.
 - `resourcelens/__main__.py`: CLI and text/JSON modes.
 
-Further resource controls should retain capability detection, effective-setting
-feedback and explicit Undo. Further hardware controls and per-application
-allocation must remain distinguishable. See
-[docs/ROADMAP.md](docs/ROADMAP.md) and the proposed
-[feature sequence](docs/FEATURE_PLAN.md), which distinguishes the implemented
-CPU milestone from remaining plans.
+The [improvement blueprint](docs/BLUEPRINT.md) is the current forward plan. It
+defines the intended workflows, architecture, implementation milestones and
+acceptance criteria for resource inspection, explanations, controls and debugging.
+The [older roadmap](docs/ROADMAP.md) and
+[feature sequence](docs/FEATURE_PLAN.md) remain as historical planning records.
 
 Metric references: [Linux disk statistics](https://docs.kernel.org/admin-guide/iostats.html),
 [Linux PSI](https://docs.kernel.org/accounting/psi.html),

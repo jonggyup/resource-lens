@@ -1,0 +1,1024 @@
+{
+  "schema": 1,
+  "resource_lens_version": "0.16.1",
+  "timestamp": 1793156084.763232,
+  "environment": {
+    "system": "Linux",
+    "kernel": "5.15.0-198-generic",
+    "architecture": "x86_64",
+    "python": "3.10.12",
+    "logical_cpus": 40,
+    "eligible_cpus": 40,
+    "cpu_model": "Intel(R) Xeon(R) CPU E5-2660 v3 @ 2.60GHz"
+  },
+  "method": {
+    "rendering": "none",
+    "percentile": "nearest-rank",
+    "minimum_rest_s": 0.05,
+    "initialization_and_warmup": "excluded from measured windows",
+    "final_sample_rest": "included in measured window",
+    "cpu_scope": "monitor process only; excludes child utility CPU",
+    "exclusions": [
+      "terminal rendering",
+      "recording/disk writes",
+      "profiling",
+      "control jobs",
+      "benchmark report encoding/output"
+    ],
+    "input_latency_command": "python3 scripts/benchmark_input.py"
+  },
+  "cases": [
+    {
+      "requested_interval_s": 1.0,
+      "samples": 20,
+      "warmup_samples": 2,
+      "mode": "json",
+      "measured_window_s": 20.020560956996633,
+      "monitor_process_cpu_ms": 1282.198219,
+      "monitor_cpu_one_core_pct": 6.404407058094479,
+      "collection_overruns": 0,
+      "pipeline_overruns": 0,
+      "metrics": {
+        "collection_ms": {
+          "count": 20,
+          "min": 26.60786,
+          "median": 56.787389,
+          "p95": 67.234365,
+          "max": 101.278134,
+          "mean": 54.433939
+        },
+        "collection_cpu_ms": {
+          "count": 20,
+          "min": 26.065807,
+          "median": 55.537772,
+          "p95": 64.861239,
+          "max": 99.640281,
+          "mean": 53.402277
+        },
+        "pipeline_ms": {
+          "count": 20,
+          "min": 28.271584,
+          "median": 58.907427,
+          "p95": 69.771996,
+          "max": 102.702978,
+          "mean": 56.88499
+        },
+        "json_ms": {
+          "count": 20,
+          "min": 1.328375,
+          "median": 2.398874,
+          "p95": 2.831971,
+          "max": 3.073172,
+          "mean": 2.309668
+        },
+        "json_cpu_ms": {
+          "count": 20,
+          "min": 1.329266,
+          "median": 2.400002,
+          "p95": 2.831096,
+          "max": 3.078548,
+          "mean": 2.310303
+        },
+        "json_bytes": {
+          "count": 20,
+          "min": 43712,
+          "median": 43755.0,
+          "p95": 43813,
+          "max": 43824,
+          "mean": 43767.45
+        },
+        "start_interval_ms": {
+          "count": 20,
+          "min": 1001.00559,
+          "median": 1001.023931,
+          "p95": 1001.073315,
+          "max": 1001.118599,
+          "mean": 1001.031953
+        },
+        "start_delay_ms": {
+          "count": 20,
+          "min": 1.00559,
+          "median": 1.023931,
+          "p95": 1.073315,
+          "max": 1.118599,
+          "mean": 1.031953
+        },
+        "peak_rss_bytes": {
+          "count": 20,
+          "min": 17227776,
+          "median": 17858560.0,
+          "p95": 17858560,
+          "max": 17858560,
+          "mean": 17710080
+        }
+      },
+      "stages": {
+        "capabilities": {
+          "duration_ms": {
+            "count": 20,
+            "min": 1.953765,
+            "median": 3.513891,
+            "p95": 4.348788,
+            "max": 4.465989,
+            "mean": 3.447441
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 1.955064,
+            "median": 3.515743,
+            "p95": 4.138662,
+            "max": 4.259758,
+            "mean": 3.390899
+          }
+        },
+        "cgroup_tree": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.755595,
+            "median": 17.684578,
+            "p95": 24.993157,
+            "max": 25.226239,
+            "mean": 12.75779
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.756239,
+            "median": 16.836937,
+            "p95": 23.535276,
+            "max": 23.601115,
+            "mean": 12.472101
+          }
+        },
+        "cpu": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.99527,
+            "median": 1.784314,
+            "p95": 1.88292,
+            "max": 1.924912,
+            "mean": 1.72232
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.998136,
+            "median": 1.787632,
+            "p95": 1.886332,
+            "max": 1.891477,
+            "mean": 1.723836
+          }
+        },
+        "cpu_hardware": {
+          "duration_ms": {
+            "count": 20,
+            "min": 2.328054,
+            "median": 4.285798,
+            "p95": 4.39351,
+            "max": 53.188613,
+            "mean": 6.421004
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 2.328913,
+            "median": 4.286984,
+            "p95": 4.394415,
+            "max": 51.682491,
+            "mean": 6.346682
+          }
+        },
+        "disks": {
+          "duration_ms": {
+            "count": 20,
+            "min": 1.209735,
+            "median": 1.786353,
+            "p95": 1.925666,
+            "max": 2.200441,
+            "mean": 1.756503
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 1.182721,
+            "median": 1.789068,
+            "p95": 1.878441,
+            "max": 2.203505,
+            "mean": 1.745181
+          }
+        },
+        "energy": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.748135,
+            "median": 1.202277,
+            "p95": 1.401566,
+            "max": 1.517245,
+            "mean": 1.168148
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.62915,
+            "median": 1.051012,
+            "p95": 1.189503,
+            "max": 1.235298,
+            "mean": 1.01526
+          }
+        },
+        "frequencies": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.179867,
+            "median": 0.304733,
+            "p95": 0.343381,
+            "max": 1.257373,
+            "mean": 0.338438
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.180443,
+            "median": 0.305523,
+            "p95": 0.344769,
+            "max": 1.266863,
+            "mean": 0.339657
+          }
+        },
+        "gpus": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.097755,
+            "median": 0.167578,
+            "p95": 0.188496,
+            "max": 0.189254,
+            "mean": 0.163357
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.097693,
+            "median": 0.167607,
+            "p95": 0.188553,
+            "max": 0.189449,
+            "mean": 0.163495
+          }
+        },
+        "load": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.101444,
+            "median": 0.145545,
+            "p95": 0.148476,
+            "max": 0.153745,
+            "mean": 0.138953
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.100915,
+            "median": 0.147322,
+            "p95": 0.150355,
+            "max": 0.155828,
+            "mean": 0.140635
+          }
+        },
+        "memory": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.491184,
+            "median": 0.616239,
+            "p95": 0.896404,
+            "max": 1.651728,
+            "mean": 0.726762
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.39895,
+            "median": 0.605125,
+            "p95": 0.732371,
+            "max": 1.303165,
+            "mean": 0.633677
+          }
+        },
+        "network": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.406323,
+            "median": 0.61808,
+            "p95": 0.645743,
+            "max": 0.704802,
+            "mean": 0.595294
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.407959,
+            "median": 0.620378,
+            "p95": 0.648025,
+            "max": 0.707184,
+            "mean": 0.597345
+          }
+        },
+        "pressure": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.57505,
+            "median": 1.022,
+            "p95": 1.293256,
+            "max": 1.298953,
+            "mean": 1.015783
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.57654,
+            "median": 1.018264,
+            "p95": 1.295765,
+            "max": 1.30169,
+            "mean": 1.016665
+          }
+        },
+        "processes": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.84534,
+            "median": 1.347218,
+            "p95": 1.68461,
+            "max": 1.687003,
+            "mean": 1.364664
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.847161,
+            "median": 1.349456,
+            "p95": 1.687123,
+            "max": 1.689489,
+            "mean": 1.366933
+          }
+        },
+        "resource_topology": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.325692,
+            "median": 0.574949,
+            "p95": 0.654148,
+            "max": 8.41177,
+            "mean": 0.932293
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.326366,
+            "median": 0.573785,
+            "p95": 0.585544,
+            "max": 8.412719,
+            "mean": 0.926771
+          }
+        },
+        "root_filesystem": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.018921,
+            "median": 0.028389,
+            "p95": 0.039265,
+            "max": 0.065409,
+            "mean": 0.029716
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.019313,
+            "median": 0.029074,
+            "p95": 0.039832,
+            "max": 0.065858,
+            "mean": 0.030288
+          }
+        },
+        "temperatures": {
+          "duration_ms": {
+            "count": 20,
+            "min": 4.213104,
+            "median": 6.357605,
+            "p95": 7.354526,
+            "max": 7.396022,
+            "mean": 6.221129
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 4.214629,
+            "median": 6.359864,
+            "p95": 7.223583,
+            "max": 7.357122,
+            "mean": 6.19971
+          }
+        },
+        "thermal_throttling": {
+          "duration_ms": {
+            "count": 20,
+            "min": 6.892377,
+            "median": 12.058978,
+            "p95": 13.90451,
+            "max": 14.807743,
+            "mean": 11.806017
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 6.88603,
+            "median": 11.98861,
+            "p95": 12.66649,
+            "max": 13.250269,
+            "mean": 11.4961
+          }
+        },
+        "workloads": {
+          "duration_ms": {
+            "count": 20,
+            "min": 2.034763,
+            "median": 3.173866,
+            "p95": 3.455415,
+            "max": 4.000201,
+            "mean": 3.057341
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 2.035543,
+            "median": 3.176344,
+            "p95": 3.458061,
+            "max": 4.002811,
+            "mean": 3.059818
+          }
+        }
+      },
+      "counts": {
+        "cgroup_nodes": {
+          "count": 20,
+          "min": 47,
+          "median": 47.0,
+          "p95": 47,
+          "max": 47,
+          "mean": 47
+        },
+        "disks": {
+          "count": 20,
+          "min": 3,
+          "median": 3.0,
+          "p95": 3,
+          "max": 3,
+          "mean": 3
+        },
+        "energy_domains": {
+          "count": 20,
+          "min": 4,
+          "median": 4.0,
+          "p95": 4,
+          "max": 4,
+          "mean": 4
+        },
+        "gpus": {
+          "count": 20,
+          "min": 1,
+          "median": 1.0,
+          "p95": 1,
+          "max": 1,
+          "mean": 1
+        },
+        "logical_cpus": {
+          "count": 20,
+          "min": 40,
+          "median": 40.0,
+          "p95": 40,
+          "max": 40,
+          "mean": 40
+        },
+        "network_interfaces": {
+          "count": 20,
+          "min": 1,
+          "median": 1.0,
+          "p95": 1,
+          "max": 1,
+          "mean": 1
+        },
+        "processes": {
+          "count": 20,
+          "min": 3,
+          "median": 3.0,
+          "p95": 3,
+          "max": 3,
+          "mean": 3
+        },
+        "processes_skipped": {
+          "count": 20,
+          "min": 0,
+          "median": 0.0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0
+        },
+        "workloads": {
+          "count": 20,
+          "min": 1,
+          "median": 1.0,
+          "p95": 1,
+          "max": 1,
+          "mean": 1
+        }
+      },
+      "coverage": {
+        "hierarchy_truncated_samples": 0,
+        "hierarchy_errors": 0,
+        "warning_count": 0
+      },
+      "initialization": {
+        "duration_ms": 25.83642599711311,
+        "cpu_ms": 7.218764000000003
+      },
+      "collection_mode": "background",
+      "nvidia_query": "disabled_or_not_installed"
+    },
+    {
+      "requested_interval_s": 0.2,
+      "samples": 20,
+      "warmup_samples": 2,
+      "mode": "json",
+      "measured_window_s": 4.004553678001685,
+      "monitor_process_cpu_ms": 982.5036409999999,
+      "monitor_cpu_one_core_pct": 24.53466028929046,
+      "collection_overruns": 0,
+      "pipeline_overruns": 0,
+      "metrics": {
+        "collection_ms": {
+          "count": 20,
+          "min": 30.701237,
+          "median": 42.775986,
+          "p95": 62.104799,
+          "max": 65.886934,
+          "mean": 45.069391
+        },
+        "collection_cpu_ms": {
+          "count": 20,
+          "min": 30.293625,
+          "median": 42.414489,
+          "p95": 61.908064,
+          "max": 64.854303,
+          "mean": 44.632722
+        },
+        "pipeline_ms": {
+          "count": 20,
+          "min": 32.622274,
+          "median": 45.746789,
+          "p95": 64.234741,
+          "max": 68.615636,
+          "mean": 47.86127
+        },
+        "json_ms": {
+          "count": 20,
+          "min": 1.810006,
+          "median": 2.78093,
+          "p95": 2.871332,
+          "max": 2.878534,
+          "mean": 2.637348
+        },
+        "json_cpu_ms": {
+          "count": 20,
+          "min": 1.811005,
+          "median": 2.782054,
+          "p95": 2.855986,
+          "max": 2.860578,
+          "mean": 2.635978
+        },
+        "json_bytes": {
+          "count": 20,
+          "min": 43341,
+          "median": 43735.0,
+          "p95": 43767,
+          "max": 43792,
+          "mean": 43694.85
+        },
+        "start_interval_ms": {
+          "count": 20,
+          "min": 200.206729,
+          "median": 200.226324,
+          "p95": 200.243715,
+          "max": 200.247148,
+          "mean": 200.227961
+        },
+        "start_delay_ms": {
+          "count": 20,
+          "min": 0.206729,
+          "median": 0.226324,
+          "p95": 0.243715,
+          "max": 0.247148,
+          "mean": 0.227961
+        },
+        "peak_rss_bytes": {
+          "count": 20,
+          "min": 18288640,
+          "median": 18296832.0,
+          "p95": 18345984,
+          "max": 18366464,
+          "mean": 18310553.6
+        }
+      },
+      "stages": {
+        "capabilities": {
+          "duration_ms": {
+            "count": 20,
+            "min": 2.771547,
+            "median": 4.007912,
+            "p95": 4.21905,
+            "max": 4.38138,
+            "mean": 3.860766
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 2.773132,
+            "median": 4.008517,
+            "p95": 4.098197,
+            "max": 4.166248,
+            "mean": 3.833946
+          }
+        },
+        "cgroup_tree": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.925338,
+            "median": 1.38839,
+            "p95": 23.004621,
+            "max": 23.363427,
+            "mean": 4.609278
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.925962,
+            "median": 1.389248,
+            "p95": 22.966284,
+            "max": 23.13441,
+            "mean": 4.592212
+          }
+        },
+        "cpu": {
+          "duration_ms": {
+            "count": 20,
+            "min": 1.398139,
+            "median": 1.814191,
+            "p95": 1.830827,
+            "max": 1.835348,
+            "mean": 1.778389
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 1.40047,
+            "median": 1.817584,
+            "p95": 1.834267,
+            "max": 1.8385,
+            "mean": 1.781722
+          }
+        },
+        "cpu_hardware": {
+          "duration_ms": {
+            "count": 20,
+            "min": 2.886073,
+            "median": 4.311931,
+            "p95": 4.330557,
+            "max": 4.331459,
+            "mean": 4.208094
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 2.886921,
+            "median": 4.312862,
+            "p95": 4.331872,
+            "max": 4.332456,
+            "mean": 4.20914
+          }
+        },
+        "disks": {
+          "duration_ms": {
+            "count": 20,
+            "min": 1.358839,
+            "median": 1.801763,
+            "p95": 2.09617,
+            "max": 2.118387,
+            "mean": 1.81598
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 1.342857,
+            "median": 1.804378,
+            "p95": 1.915692,
+            "max": 1.918594,
+            "mean": 1.787025
+          }
+        },
+        "energy": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.967975,
+            "median": 1.325902,
+            "p95": 1.349135,
+            "max": 1.363526,
+            "mean": 1.283664
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.846061,
+            "median": 1.17611,
+            "p95": 1.198732,
+            "max": 1.215371,
+            "mean": 1.135048
+          }
+        },
+        "frequencies": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.133014,
+            "median": 0.304536,
+            "p95": 0.323299,
+            "max": 0.32917,
+            "mean": 0.292073
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.1338,
+            "median": 0.305185,
+            "p95": 0.324376,
+            "max": 0.330307,
+            "mean": 0.29286
+          }
+        },
+        "gpus": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.114868,
+            "median": 0.168768,
+            "p95": 0.182251,
+            "max": 0.186208,
+            "mean": 0.166474
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.114802,
+            "median": 0.168836,
+            "p95": 0.182382,
+            "max": 0.186662,
+            "mean": 0.166564
+          }
+        },
+        "load": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.109321,
+            "median": 0.147031,
+            "p95": 0.148884,
+            "max": 0.149228,
+            "mean": 0.144492
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.110837,
+            "median": 0.148906,
+            "p95": 0.150877,
+            "max": 0.15117,
+            "mean": 0.146347
+          }
+        },
+        "memory": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.559428,
+            "median": 0.604153,
+            "p95": 0.806858,
+            "max": 0.820889,
+            "mean": 0.63141
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.449888,
+            "median": 0.605934,
+            "p95": 0.642337,
+            "max": 0.646548,
+            "mean": 0.601297
+          }
+        },
+        "network": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.465985,
+            "median": 0.622488,
+            "p95": 0.644279,
+            "max": 0.948572,
+            "mean": 0.62999
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.467711,
+            "median": 0.624584,
+            "p95": 0.646371,
+            "max": 0.749763,
+            "mean": 0.622067
+          }
+        },
+        "pressure": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.895572,
+            "median": 1.075311,
+            "p95": 1.107713,
+            "max": 1.119343,
+            "mean": 1.056328
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.816732,
+            "median": 1.077668,
+            "p95": 1.109995,
+            "max": 1.122001,
+            "mean": 1.051212
+          }
+        },
+        "processes": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.990635,
+            "median": 1.357366,
+            "p95": 1.376993,
+            "max": 1.3898,
+            "mean": 1.334429
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.992551,
+            "median": 1.359606,
+            "p95": 1.379113,
+            "max": 1.392391,
+            "mean": 1.336719
+          }
+        },
+        "resource_topology": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.383554,
+            "median": 0.571796,
+            "p95": 0.582918,
+            "max": 0.637774,
+            "mean": 0.562108
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.384119,
+            "median": 0.572518,
+            "p95": 0.583947,
+            "max": 0.624382,
+            "mean": 0.562144
+          }
+        },
+        "root_filesystem": {
+          "duration_ms": {
+            "count": 20,
+            "min": 0.021811,
+            "median": 0.028808,
+            "p95": 0.030183,
+            "max": 0.042623,
+            "mean": 0.029015
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 0.022139,
+            "median": 0.02934,
+            "p95": 0.030747,
+            "max": 0.043331,
+            "mean": 0.02956
+          }
+        },
+        "temperatures": {
+          "duration_ms": {
+            "count": 20,
+            "min": 4.70248,
+            "median": 6.509635,
+            "p95": 6.817897,
+            "max": 7.339029,
+            "mean": 6.426907
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 4.704421,
+            "median": 6.512152,
+            "p95": 6.806438,
+            "max": 7.341303,
+            "mean": 6.427964
+          }
+        },
+        "thermal_throttling": {
+          "duration_ms": {
+            "count": 20,
+            "min": 8.978622,
+            "median": 12.381168,
+            "p95": 12.741482,
+            "max": 14.237764,
+            "mean": 12.262076
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 8.98043,
+            "median": 12.383678,
+            "p95": 12.536168,
+            "max": 13.161747,
+            "mean": 12.139198
+          }
+        },
+        "workloads": {
+          "duration_ms": {
+            "count": 20,
+            "min": 2.366528,
+            "median": 3.183458,
+            "p95": 3.507054,
+            "max": 3.678215,
+            "mean": 3.163577
+          },
+          "cpu_ms": {
+            "count": 20,
+            "min": 2.368677,
+            "median": 3.186128,
+            "p95": 3.309028,
+            "max": 3.314365,
+            "mean": 3.137797
+          }
+        }
+      },
+      "counts": {
+        "cgroup_nodes": {
+          "count": 20,
+          "min": 47,
+          "median": 47.0,
+          "p95": 47,
+          "max": 47,
+          "mean": 47
+        },
+        "disks": {
+          "count": 20,
+          "min": 3,
+          "median": 3.0,
+          "p95": 3,
+          "max": 3,
+          "mean": 3
+        },
+        "energy_domains": {
+          "count": 20,
+          "min": 4,
+          "median": 4.0,
+          "p95": 4,
+          "max": 4,
+          "mean": 4
+        },
+        "gpus": {
+          "count": 20,
+          "min": 1,
+          "median": 1.0,
+          "p95": 1,
+          "max": 1,
+          "mean": 1
+        },
+        "logical_cpus": {
+          "count": 20,
+          "min": 40,
+          "median": 40.0,
+          "p95": 40,
+          "max": 40,
+          "mean": 40
+        },
+        "network_interfaces": {
+          "count": 20,
+          "min": 1,
+          "median": 1.0,
+          "p95": 1,
+          "max": 1,
+          "mean": 1
+        },
+        "processes": {
+          "count": 20,
+          "min": 3,
+          "median": 3.0,
+          "p95": 3,
+          "max": 3,
+          "mean": 3
+        },
+        "processes_skipped": {
+          "count": 20,
+          "min": 0,
+          "median": 0.0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0
+        },
+        "workloads": {
+          "count": 20,
+          "min": 1,
+          "median": 1.0,
+          "p95": 1,
+          "max": 1,
+          "mean": 1
+        }
+      },
+      "coverage": {
+        "hierarchy_truncated_samples": 0,
+        "hierarchy_errors": 0,
+        "warning_count": 0
+      },
+      "initialization": {
+        "duration_ms": 31.320752001192886,
+        "cpu_ms": 11.801711999999798
+      },
+      "collection_mode": "background",
+      "nvidia_query": "disabled_or_not_installed"
+    }
+  ]
+}

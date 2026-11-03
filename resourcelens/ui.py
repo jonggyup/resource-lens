@@ -23,6 +23,8 @@ from .resource_panels import resource_lines, expanded_overview
 from .navigation import NavigationView, actions, context_help
 from .focus import FocusView, KINDS
 from .investigation import Investigation, indicators
+from .control_workflow import ControlWorkflow, preview_note, workflow_buttons
+from .memory_ui import MemoryControlsView
 from .usability_ui import UsabilityView
 from .usability import tree_rows
 from .workspaces import Workspaces, related_groups
@@ -84,14 +86,20 @@ def pressure(snapshot, kind):
     return f"{kind.upper()} pressure (10s): {pct(value)}"
 
 
-class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView, UsabilityView, Workspaces, ApplicationProcesses):
+class View(MemoryControlsView, ControlWorkflow, InsightsView, HardwareView, PlacementView, NavigationView, FocusView, UsabilityView, Workspaces, ApplicationProcesses):
     names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Applications", "Timeline", "Capabilities")
 
     def __init__(self, unicode=False, control=False, session=None):
+        from .diagnostics import DiagnosticHistory
+        self.diagnostic_history = DiagnosticHistory()
+        self.inventory_revision = 0
         self.memory_sharing = None
         self.profile_view = None
+        self.sessions_view = None
+        self.sessions_only = False
         self.profile_jobs = []
         self.proc_root = '/proc'
+        self.cgroup_root = '/sys/fs/cgroup'
         self.application_process_init()
         self.browser = None
         self.browser_button = None
@@ -99,6 +107,7 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
         self.usability_init()
         self.hardware_init()
         self.placement_init()
+        self.memory_control_init()
         self.overview_expanded = False
         self.overview_links = {}
         self.overview_cards_regions = []
@@ -111,6 +120,7 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
         self.replay_delta = 0
         self.replay_playing = False
         self.pending_action = {}
+        self.workflow_init()
         self.page = 0
         self.scroll = 0
         self.sort = "cpu"
@@ -142,6 +152,7 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
         self.investigation.observe(snapshot)
         if self.paused:
             return
+        self.diagnostic_history.observe(snapshot)
         self.snapshot = snapshot
         self.sample_times.append(snapshot['timestamp'])
         active_devices = set()
@@ -195,18 +206,82 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
                     marks[index] = '|'
         return 'Marks ' + ''.join(marks).rjust(width) + ' (M mark; 9 compare)'
 
-    def mark_event(self, label, status='marker', target=None, timestamp=None):
+    def mark_event(self, label, status='marker', target=None, timestamp=None, **metadata):
         event = self.investigation.mark(label, timestamp, target, status)
+        event.update(metadata)
         if self.recorder:
             self.recorder.write('event', event)
         return event
 
-    def open_profile(self, scheduler=False):
+    def active_inspector(self):
+        return self.browser.ensure_inspector(self.snapshot) if self.browser and self.snapshot else None
+
+    def open_sessions(self, path=None):
+        from .sessions_ui import SessionBrowser
+        from .usability import state_dir
+        self.sessions_view=SessionBrowser(state_dir(),(path,) if path else ())
+
+    def inspect_request(self, request):
+        from .diagnostics import request_current
+        from .inspector import Inspector
+        if not request or not request_current(self.snapshot or {}, request):
+            self.modal = dict(stage='result', message='The target identity changed; select it again.')
+            return
+        current = self.active_inspector()
+        if current:
+            if current.request == tuple(request):
+                current.select_tab('Summary')
+            else:
+                current.navigate(request)
+            self.browser.detail_scroll = current.scroll
+            return
+        self.page = 7
+        if request[0] == 'process':
+            self.browser = CgroupBrowser(self.snapshot, request[3] or '/')
+            self.browser.process, self.browser.process_entry = tuple(request[1:3]), True
+        else:
+            self.browser = CgroupBrowser(self.snapshot, request[1])
+            self.browser.inode, self.browser.context_detail = request[2], True
+        self.browser.inspector = Inspector(request)
+
+    def browser_action(self):
+        if self.browser and self.browser.pending_action:
+            from .actions import dispatch
+            action, self.browser.pending_action = self.browser.pending_action, None
+            dispatch(self, action)
+
+    def open_profile(self, scheduler=False, request=None):
         if self.replay:
             self.modal=dict(stage='result',message='Profiling requires a live target; disabled during replay.')
             return
         target=None
-        if self.browser and self.browser.process:
+        from .targets import inspection_request
+        from .diagnostics import context_for, request_current
+        request = tuple(request) if request is not None else inspection_request(self)
+        if request is not None:
+            inspector = self.active_inspector()
+            if not request_current(self.snapshot or {}, request) or inspector and inspector.invalid_reason(self.snapshot):
+                self.modal = dict(stage='result', message='The target identity or membership changed; return and reselect.')
+                return
+            if request[0] == 'process':
+                target = dict(pid=request[1], expected_start=request[2])
+            else:
+                from pathlib import PurePosixPath
+                context = context_for(self.snapshot, request)
+                if len(request) > 4 and request[4] == 'visible':
+                    relative = request[1].lstrip('/')
+                elif context:
+                    try:
+                        relative = str(PurePosixPath(context['exact_cgroup']).relative_to(context['mount']['root']))
+                    except (ValueError, KeyError):
+                        relative = None
+                else:
+                    relative = None
+                if relative is None:
+                    self.modal = dict(stage='result', message='Establish the readable cgroup mount mapping in the inspector before capture.')
+                    return
+                target = dict(cgroup=self.cgroup_root + '/' + relative, expected_inode=request[2], expected_device=request[3])
+        elif self.browser and self.browser.process:
             pid,start=self.browser.process
             target=dict(pid=pid,expected_start=start)
         elif self.browser:
@@ -222,19 +297,39 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
             if group and group.get('path'):
                 target=dict(cgroup='/sys/fs/cgroup/'+group['path'].lstrip('/'),expected_inode=group.get('inode'))
         if target:
+            if target.get('pid') and self.browser is None:
+                self.application_process = (target['pid'], target.get('expected_start'))
+                self.application_process_manual = True
             if scheduler:target['scheduler']=True
-            self.profile_view=ProfileView(target,choose=not scheduler)
+            inspector=self.active_inspector()
+            context=None
+            if inspector:
+                inspector.refresh(self)
+                context=dict(schema=1,scope_id=self.snapshot.get('collection_scope',{}).get('id'),
+                    observed_at=self.snapshot['timestamp'],request=list(inspector.request),
+                    interpretation='Inspector evidence at capture selection; not a continuously sampled capture diagnosis.',
+                    findings=[f.to_dict() for f in inspector.findings])
+            self.profile_view=ProfileView(target,choose=not scheduler,context=context)
             self.profile_jobs=[job for job in self.profile_jobs if job.result is None and job.error is None and not job.stop.is_set()]
             self.profile_jobs.append(self.profile_view)
         else:
             self.modal=dict(stage='result',message='Select a process or cgroup in Applications, then press P to profile for 10 seconds.')
 
-    def open_memory_sharing(self):
+    def open_memory_sharing(self, request=None):
         if self.replay:
             self.modal = dict(stage='result',message='Memory sharing inspection requires live /proc data; it is disabled during replay.')
             return
         target = None
-        if self.browser and self.browser.process:
+        from .targets import inspection_request
+        from .diagnostics import request_current
+        request = tuple(request) if request is not None else inspection_request(self)
+        if request is not None:
+            inspector = self.active_inspector()
+            if request[0] != 'process' or not request_current(self.snapshot or {}, request) or inspector and inspector.invalid_reason(self.snapshot):
+                self.modal = dict(stage='result', message='Select the same live process identity and membership before inspecting memory.')
+                return
+            target = next((p for p in self.snapshot.get('processes', []) if (p['pid'], p.get('starttime')) == request[1:3]), None)
+        elif self.browser and self.browser.process:
             target = next((p for p in self.snapshot.get('processes',[]) if (p['pid'],p.get('starttime')) == self.browser.process),None)
         elif self.page == 7 and self.application_mode == 'processes':
             rows = self.application_process_rows()
@@ -304,17 +399,32 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
             self.modal = {'stage': 'result', 'message': 'Replay is read-only; live control operations are disabled.'}
             return
         self.pending_action = {'plan': args[0] if args and isinstance(args[0], dict) else {}, 'timestamp': time.time(), 'target': args[0].get('target') if args and isinstance(args[0], dict) else None}
+        context = self.control_job_context(kind, args)
         self.modal = {"stage": "busy", "kind": kind}
         def execute():
             try:
-                self.results.put((kind, function(*args), None))
+                result, error = function(*args), None
             except Exception as exc:
-                self.results.put((kind, None, str(exc)))
+                result, error = None, str(exc)
+            self.results.put((kind, result, error, context, time.time()))
         threading.Thread(target=execute, daemon=True).start()
 
     def poll_actions(self):
+        if self.sessions_view:
+            self.sessions_view.poll()
+            if self.sessions_view.record_view:self.sessions_view.record_view.colors=self.colors
         while not self.results.empty():
-            kind, result, error = self.results.get()
+            entry = self.results.get()
+            kind, result, error = entry[:3]
+            context, completed_at = entry[3:] if len(entry) == 5 else (None, time.time())
+            if kind in ('apply', 'undo') or kind.endswith(('_apply', '_undo')):
+                # Failed/uncertain writes can also have changed the observed state.
+                self.inventory_revision += 1
+            change = self.control_finished(kind, result, error, context, completed_at)
+            if change:
+                if kind.startswith('placement') and not error:
+                    self.placement = None
+                continue
             if kind.startswith("utility_"):
                 self.utility_result(kind, result, error)
                 continue
@@ -339,6 +449,8 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
                 self.placement_ready(result)
             elif kind == 'placement_prepare':
                 self.modal = dict(stage='placement_confirm', plan=result)
+            elif kind in ('memory_prepare','memory_restore_prepare'):
+                self.modal=dict(stage='memory_confirm',plan=result,scroll=0)
             elif kind in ('placement_apply', 'placement_undo'):
                 self.placement = None
                 self.page, self.workload_detail, self.scroll = 7, True, 0
@@ -365,6 +477,10 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
 
     def modal_lines(self):
         modal = self.modal
+        if modal['stage'].startswith('workflow_'):
+            return self.workflow_lines()
+        if modal['stage'].startswith('memory_'):
+            return self.memory_control_lines()
         if modal['stage'] == 'impact':
             lines = [part for line in modal['lines'] for part in (textwrap.wrap(line, max(20,min(76,self.screen_size[1]-8))) or [''])]
             count = max(1, self.screen_size[0]-9)
@@ -406,7 +522,7 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
             return ["Confirm temporary CPU setting", f"Unit: {plan['target']['unit']}",
                     f"Manager: {plan['target']['manager']}", "Cgroup: " + plan["target"]["path"],
                     f"{property.title()}: {cpu_setting(property, plan['before'][property])} -> {cpu_setting(property, plan['value'])}",
-                    "Weight affects competition; quota limits CPU time.",
+                    preview_note('cpu'),
                     "Applies to this entire unit and its descendants.",
                     "Remains active after UI exit, until changed or reboot.",
                     "Undo restores the previous value using systemd.",
@@ -416,11 +532,18 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
             return ["Resource settings may still be active.", "Leaving the dashboard does not restore previous settings.",
                     "Undo history is available only until you exit.",
                     "Enter: exit and keep settings | Esc: go back",
-                    "u: undo the latest disk, placement, hardware or service change"]
-        return [modal["message"], "", "Enter or Esc: close | 8: inspect workloads"]
+                    "u: review/undo remaining memory, disk, placement, hardware or CPU settings"]
+        return [modal["message"], "", "Enter or Esc: close | 8: inspect workloads | H: health | J: Changes"]
 
     def modal_key(self, key):
         stage = self.modal["stage"]
+        if stage.startswith('workflow_'):
+            return self.workflow_key(key)
+        if stage.startswith('memory_'):
+            return self.memory_control_key(key)
+        if stage == 'result' and key in (ord('H'),ord('J')):
+            self.open_changes() if key == ord('J') else self.open_insights('health')
+            return True
         if stage == 'impact':
             if key in (10,13,27):self.modal = self.modal['preview']
             elif key == curses.KEY_DOWN:self.modal['scroll'] += 1
@@ -439,9 +562,9 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
                     self.open_control_mode()
                 else:
                     self.control = not self.control
-                    self.modal = None
+                    self.modal = self.modal.get('return_to')
             elif key in (27, ord('q')):
-                self.modal = None
+                self.modal = self.modal.get('return_to')
             return True
         if stage.startswith("utility_"):
             return self.utility_modal_key(key)
@@ -461,7 +584,10 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
             if key in (10, 13):
                 return False
             if key == ord("u"):
-                if any(e['status'] != 'undone' for e in self.disk_session.events):
+                if any(e['status']!='undone' for e in self.memory_session.events):
+                    receipt=self.memory_session.latest()
+                    self.job('memory_restore_prepare',self.memory_session.prepare_restore,receipt['receipt_id'])
+                elif any(e['status'] != 'undone' for e in self.disk_session.events):
                     self.job("utility_disk_undo", self.disk_session.undo)
                 elif any(e['status'] != 'undone' for e in self.placement_session.events):
                     self.job('placement_undo', self.placement_session.undo)
@@ -528,6 +654,8 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
         self.topology_line_regions.update({row + offset: value for row, value in hits.items()})
         lines.extend(tiles)
         if not p:
+            from .presentation import source_note
+            lines += [note for name in ('frequencies', 'cpu_hardware') if (note := source_note(s, name))]
             energy=s.get('energy')
             if energy:
                 domains=energy.get('domains',[])
@@ -592,17 +720,26 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
                 9: self.capability_lines, 4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines, 8: lambda width: [piece for line in self.investigation.lines(width) for piece in (textwrap.wrap(line, width) or [''])]}.get(self.page, self.process_lines)(width)
 
     def mouse(self, x, y, state):
+        if self.sessions_view:
+            return self.sessions_view.mouse(x,y,state,self.screen_size[0])
         wheel_up = state & getattr(curses, "BUTTON4_PRESSED", 0)
         wheel_down = state & getattr(curses, "BUTTON5_PRESSED", 0)
         left = state & (getattr(curses, "BUTTON1_CLICKED", 0) | getattr(curses, "BUTTON1_PRESSED", 0))
         right = state & (getattr(curses, "BUTTON3_CLICKED", 0) | getattr(curses, "BUTTON3_PRESSED", 0))
         if self.modal:
-            if self.modal['stage'] in ('insights','impact') and (wheel_up or wheel_down):
+            if left and self.modal['stage'].startswith('workflow_'):
+                for row, start, end, key in getattr(self,'workflow_regions',[]):
+                    if y == row and start <= x < end:
+                        self.workflow_key(key)
+                        return
+            if (self.modal['stage'] in ('insights','impact','memory_confirm') or self.modal['stage'].startswith('workflow_')) and (wheel_up or wheel_down):
                 self.modal_key(curses.KEY_UP if wheel_up else curses.KEY_DOWN)
                 return
             hit = self.modal_regions.get(y)
             if left and hit and hit[0] <= x < hit[1]:
-                if hit[2] == 'impact':
+                if self.modal['stage'].startswith('workflow_'):
+                    self.workflow_key(hit[2])
+                elif hit[2] == 'impact':
                     self.modal_key(ord('i'))
                 elif self.modal['stage'] == 'insights' and not self.modal.get('detail'):
                     self.modal['selected'] = hit[2]
@@ -620,6 +757,8 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
                     self.hardware_choose()
                 elif self.modal['stage'] == 'placement_confirm' and hit[2] == 'apply':
                     self.placement_confirm_key(10)
+                elif self.modal['stage']=='memory_confirm':
+                    self.memory_control_key(10 if hit[2]=='apply' else 27)
                 elif self.modal['stage'] == 'hardware_confirm' and hit[2] == 'apply':
                     self.hardware_key(10)
                 elif self.modal['stage'] == 'utility_disk_confirm' and hit[2] == 'apply':
@@ -664,6 +803,7 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
                         return self.key(key,self.screen_size[0])
             if self.browser.mouse(x,y,state,self.snapshot,self.screen_size[0]) is False:
                 self.browser = None
+            self.browser_action()
             return
         if self.page == 7 and left and self.application_mode_region and y == 2 and self.application_mode_region[0] <= x < self.application_mode_region[1]:
             return self.key(ord('g'),self.screen_size[0])
@@ -771,6 +911,15 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
             self.scroll += 3
 
     def key(self, key, height=24):
+        if self.sessions_view:
+            if key==curses.KEY_MOUSE:
+                try:
+                    _,x,y,_,state=curses.getmouse();self.mouse(x,y,state)
+                except curses.error:pass
+            elif not self.sessions_view.key(key,height):
+                self.sessions_view=None
+                return not self.sessions_only
+            return True
         if self.modal:
             if key == curses.KEY_MOUSE:
                 try:
@@ -815,10 +964,16 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
         if key == ord('C') and not self.placement:
             self.open_control_mode()
             return True
+        if key == ord('J') and not self.placement and not self.profile_view and not self.memory_sharing:
+            self.open_changes()
+            return True
+        if key==ord('L') and not self.placement and not self.profile_view and not self.memory_sharing and not self.help:
+            self.open_sessions()
+            return True
         if self.profile_view:
             if not self.profile_view.key(key,height):self.profile_view=None
             return True
-        if key in (ord('P'),ord('W')) and not self.help and not self.placement and not self.memory_sharing:
+        if key in (ord('P'),ord('W')) and not self.help and not self.placement and not self.memory_sharing and not (self.active_inspector() and self.active_inspector().help):
             self.open_profile(scheduler=key==ord('W'))
             return True
         if self.memory_sharing:
@@ -831,12 +986,13 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
             elif not self.memory_sharing.key(key,height):
                 self.memory_sharing=None
             return True
-        if key == ord('V') and not self.help and not self.placement:
+        if key == ord('V') and not self.help and not self.placement and not (self.active_inspector() and self.active_inspector().help):
             self.open_memory_sharing()
             return True
         if self.browser:
             if not self.browser.key(key,self.snapshot,height):
                 self.browser = None
+            self.browser_action()
             return True
         key = {curses.KEY_F1: ord('?'), curses.KEY_F4: ord('/'), curses.KEY_F10: ord('q')}.get(key, key)
         if key == ord('?') or self.help and key == 27:
@@ -854,6 +1010,14 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
                 self.scroll = 0
             elif key == curses.KEY_END:
                 self.scroll = 10**9
+            return True
+        if self.page == 7 and key == ord('I') and not self.placement:
+            from .actions import dispatch
+            if self.application_mode == 'processes':
+                self.selected_application_process(self.application_process_rows())
+            else:
+                self.selected_workload()
+            dispatch(self, 'inspect')
             return True
         if self.placement:
             return self.placement_key(key)
@@ -902,6 +1066,10 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
                 self.investigation.selected = (self.investigation.selected + (1 if key in (curses.KEY_DOWN, ord('j')) else -1)) % count
                 self.scroll = 0
             return True
+        if self.page==8 and key in (ord('['),ord(']')):
+            durations=(5,15,30,60);index=durations.index(self.investigation.window_seconds)
+            self.investigation.window_seconds=durations[(index+(1 if key==ord(']') else -1))%len(durations)]
+            return True
         if key == ord(':'):
             self.modal = dict(stage='navigate', query='', selected=0)
             return True
@@ -910,7 +1078,7 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
             if key == 27 and self.page == 7 and self.workload_detail:
                 self.workload_detail, self.scroll = False, 0
                 return True
-            if any(event["status"] in ("confirmed", "unconfirmed") for event in self.session.events + self.hardware.events + self.placement_session.events + self.disk_session.events):
+            if any(event['status'] in ('confirmed','unconfirmed') for session in self.control_sessions().values() for event in session.events):
                 self.modal = {"stage": "quit"}
                 return True
             return False
@@ -929,6 +1097,9 @@ class View(InsightsView, HardwareView, PlacementView, NavigationView, FocusView,
                 self.open_placement()
             elif self.control:
                 self.job('placement_undo', self.placement_session.undo)
+            return True
+        if self.page==7 and key==ord('h'):
+            self.open_memory_control(self.selected_workload())
             return True
         if self.page == 7 and key in (ord("w"), ord("l"), ord("u")):
             if not self.control:
@@ -1006,6 +1177,7 @@ def draw(screen, view, interval, error=None):
     h, w = screen.getmaxyx()
     view.screen_size = h, w
     view.action_regions = []
+    view.workflow_regions = []
     view.guide_region = None
     view.application_process_regions = []
     view.application_mode_region = None
@@ -1020,6 +1192,9 @@ def draw(screen, view, interval, error=None):
     if h < 10 or w < 40:
         put(screen, 0, 0, "Resize to at least 40 x 10. q: quit")
         screen.refresh()
+        return
+    if view.sessions_view:
+        view.sessions_view.draw(screen,w,h)
         return
     s = view.snapshot
     stamp = time.strftime("%H:%M:%S", time.localtime(s["timestamp"])) if s else "waiting"
@@ -1056,11 +1231,13 @@ def draw(screen, view, interval, error=None):
         view.memory_sharing.draw(screen,w,h)
         status = "Memory sharing | [] tabs | arrows scroll | r refresh | Esc back"
     elif view.browser:
-        view.browser.draw(screen,s,w,h)
+        view.browser.draw(screen,s,w,h,view=view)
         tree = s.get('cgroup_tree') or {}
         coverage = "PARTIAL: unreadable directories / node limit" if tree.get('truncated') or tree.get('errors') else 'visible directories'
         status = ("Process details | arrows/wheel: scroll | Esc: back" if view.browser.process else
                   "Cgroup browser | "+coverage+" | group totals include children")
+        if view.browser.inspector:
+            status = 'Inspector / '+view.browser.inspector.request[0]+' | Tab sections | Esc: previous selection'
     elif view.page == 7 and not view.help and view.application_mode == 'processes':
         status = view.draw_application_processes(screen,w,h)
     elif view.page == 7 and not view.help and w >= 100 and h >= 20:
@@ -1166,7 +1343,7 @@ def draw(screen, view, interval, error=None):
         label = '[ Enter Open group ]'
         put(screen,2,1,label,accent | curses.A_REVERSE)
         view.browser_button = (1,1+len(label))
-        put(screen,2,24,'T: root | [] metrics | D: details')
+        put(screen,2,24,'I: inspect | T: root | [] metrics')
     if view.page == 7 and not view.browser and not view.memory_sharing and not view.profile_view and not view.help:
         label = '[ g: '+('Service groups' if view.application_mode == 'processes' else 'Processes')+' ]'
         x = 1 if view.application_mode == 'processes' else max(1,w-len(label)-2)
@@ -1216,6 +1393,9 @@ def draw(screen, view, interval, error=None):
         put(screen, top + box_height - 1, left, "+" + "-" * (box_width - 2) + "+", accent, box_width)
         option_index = view.modal.get('offset', 0)
         for index, line in enumerate(lines[:box_height - 3]):
+            if view.modal['stage'].startswith('workflow_'):
+                view.workflow_regions.extend((top+1+index, left+2+start, left+2+end, key)
+                                             for start,end,key in workflow_buttons(line))
             if view.modal['stage'] in ('hardware_menu', 'navigate', 'focus', 'insights') and (line.startswith('> ') or line.startswith('- ')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, option_index)
                 option_index += 1
@@ -1223,7 +1403,7 @@ def draw(screen, view, interval, error=None):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, 'impact')
             if view.modal['stage'] == 'control_mode' and line.startswith(('[ Enable controls ]', '[ Disable controls ]', '[ Cancel ]')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, 'cancel' if line.startswith('[ Cancel ]') else 'toggle')
-            if view.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm') and line.startswith(('[ Apply ]', '[ Cancel ]')):
+            if view.modal['stage'] in ('hardware_confirm', 'placement_confirm', 'utility_disk_confirm','memory_confirm') and line.startswith(('[ Apply ]', '[ Cancel ]')):
                 view.modal_regions[top + 1 + index] = (left, left + box_width, 'apply' if line.startswith('[ Apply ]') else 'cancel')
             draw_text(screen, top + 1 + index, left + 2, line, curses.A_REVERSE | (curses.A_BOLD if index == 0 else 0), content_width, accent=accent)
     screen.refresh()
@@ -1255,7 +1435,7 @@ def read_input(screen, view):
         screen.timeout(100)
 
 
-def run(collector, interval, ascii=False, control=False, recorder=None, replay=None, preferences=None, incidents=None, helper=None):
+def run(collector, interval, ascii=False, control=False, recorder=None, replay=None, preferences=None, incidents=None, helper=None, sessions=None):
     latest = {"snapshot": None, "sequence": 0, "error": None}
     lock, stop = threading.Lock(), threading.Event()
     alerts = queue.SimpleQueue()
@@ -1307,6 +1487,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
         view, sequence = View(unicode=not ascii and encoding == "utf8", control=control and replay is None), -1
         view.health_stale_after = max(5, interval * 3)
         view.proc_root = str(getattr(collector, "proc", "/proc"))
+        view.cgroup_root = str(getattr(collector, 'sys', '/sys')) + '/fs/cgroup'
         for name,value in (preferences or {}).items():
             setattr(view, name, value)
         if helper:
@@ -1314,17 +1495,27 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             view.session = RemoteSession(helper, 'cpu')
             view.disk_session = RemoteSession(helper, 'disk')
         view.colors = palette()
+        if sessions is not None:
+            view.sessions_only=True
+            view.open_sessions(sessions or None)
         view.recorder, view.replay = recorder, replay
         replay_position, replay_deadline = -1, time.monotonic()
         if replay:
             view.investigation.events = list(replay.events)
 
         previous_render = None
+        inventory_revision = view.inventory_revision
         while True:
             view.poll_actions()
+            if not replay and inventory_revision != view.inventory_revision:
+                invalidate = getattr(collector, 'invalidate_inventory', None)
+                if invalidate:
+                    invalidate()
+                inventory_revision = view.inventory_revision
             while not alerts.empty():
                 event = alerts.get()
-                view.mark_event(event["label"], event["status"], event.get("target"), event["timestamp"])
+                view.mark_event(event['label'],event['status'],event.get('target'),event['timestamp'],
+                                **{k:v for k,v in event.items() if k not in ('label','status','target','timestamp')})
             if replay:
                 desired = replay.index + view.replay_delta
                 view.replay_delta = 0
@@ -1336,6 +1527,7 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
                     view.history.clear()
                     view.sample_times.clear()
                     view.investigation.samples.clear()
+                    view.diagnostic_history.clear()
                     for sample in replay.window(desired):
                         view.update(sample)
                     replay_position = desired
@@ -1346,21 +1538,32 @@ def run(collector, interval, ascii=False, control=False, recorder=None, replay=N
             if current["snapshot"] is not None and current["sequence"] != sequence:
                 view.update(current["snapshot"])
                 sequence = current["sequence"]
+            if not replay:
+                request = getattr(collector, 'request_target', None)
+                if request:
+                    from .targets import selection_request
+                    request(selection_request(view))
             view.collector_error = current['error']
             view.incident_status = incidents.status if incidents else None
             stale = bool(not replay and view.snapshot and time.time() - view.snapshot["timestamp"] > max(5, interval * 3))
             render = (id(view.snapshot), view.page, view.scroll, view.sort, view.filter,
                       view.editing_filter, view.workload_filter, view.help, view.paused, current["error"],
                       screen.getmaxyx(), stale, view.control, repr({k:v for k,v in view.modal.items() if k != 'items'}) if view.modal and view.modal['stage']=='insights' else repr(view.modal), view.workload_id, view.workload_detail, repr(view.placement), view.overview_expanded, view.focus, repr(view.overlay), len(view.investigation.events), view.investigation.selected, view.replay_playing, view.workload_sort, view.process_tree, view.incident_status, view.application_mode, view.application_process, view.app_tab, repr(view.relation), view.hardware_selection, (view.browser.path, view.browser.inode, view.browser.selected, view.browser.process, view.browser.sort, view.browser.detail_scroll) if view.browser else None, (view.memory_sharing.tab, view.memory_sharing.scroll, id(view.memory_sharing.result), view.memory_sharing.error) if view.memory_sharing else None, (view.profile_view.scroll, id(view.profile_view.result), view.profile_view.error, view.profile_view.choosing, view.profile_view.selection, view.profile_view.details) if view.profile_view else None)
+            render += (view.browser.context_detail if view.browser else None,)
+            render += (view.browser.inspector.signature() if view.browser and view.browser.inspector else None,)
+            render += ((view.profile_view.target.get('duration'), view.profile_view.context_error) if view.profile_view else None,)
+            render += ((view.sessions_view.version,view.sessions_view.pending) if view.sessions_view else None,)
+            render += (view.investigation.window_seconds,)
             if render != previous_render:
                 draw(screen, view, interval, current["error"])
                 previous_render = render
             if not read_input(screen, view):
+                if view.sessions_view:view.sessions_view.close()
                 for job in view.profile_jobs:job.stop.set()
                 break
 
     worker = threading.Thread(target=collect, daemon=True)
-    if not replay:
+    if not replay and collector is not None:
         worker.start()
     try:
         curses.wrapper(terminal)

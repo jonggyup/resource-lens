@@ -7,6 +7,7 @@ from resourcelens.insights import health_rows, search_entries
 from resourcelens.impact import impact_lines, impact_summary
 from resourcelens.investigation import Investigation
 from resourcelens.collect import Collector
+from resourcelens.model import SourceQuality
 from test_navigation import Screen
 
 
@@ -57,7 +58,7 @@ class InsightsTests(unittest.TestCase):
         self.sample['processes'][0]['starttime'] = 78
         self.view.key(10)
         self.assertEqual(self.view.modal['stage'], 'result')
-        self.assertIsNone(self.view.browser)
+        self.assertEqual(self.view.browser.process, (123,77))
 
     def test_search_devices_views_and_cores(self):
         entries=search_entries(self.sample,self.view.names)
@@ -87,6 +88,7 @@ class InsightsTests(unittest.TestCase):
 
     def test_health_zero_missing_stale_replay_and_explicit_permissions(self):
         sample=deepcopy(self.sample);sample['timestamp']=100
+        sample.pop('source_quality', None)  # Exercise legacy snapshot-only freshness.
         sample['cpu']=[{'id':'cpu','busy_pct':0}]
         self.assertEqual(health_rows(sample,now=101)[0][1],'live')
         self.assertEqual(health_rows(sample,now=110)[0][1],'stale')
@@ -95,6 +97,24 @@ class InsightsTests(unittest.TestCase):
         self.assertEqual(health_rows(sample,now=101)[0][1],'unavailable')
         sample['gpus']=[dict(id='g0',busy_pct=None,error='Permission denied')]
         self.assertEqual(next(r for r in health_rows(sample,now=101) if r[0]=='GPU g0')[1],'permission denied')
+
+    def test_source_freshness_and_retained_errors_override_new_snapshot_timestamp(self):
+        sample = deepcopy(self.sample)
+        sample['timestamp'] = 1000
+        sample['cpu'] = [dict(id='cpu', busy_pct=0)]
+        sample['source_quality'] = {'cpu': SourceQuality('cpu', 'ok', None,
+            observed_at_wall=990, observed_at_monotonic=10).to_dict()}
+        row = health_rows(sample, now=1001)[0]
+        self.assertEqual(row[1], 'stale')
+        self.assertIn('11.0s', row[3])
+        sample['source_quality']['cpu'].update(status='unavailable', reason='permission_denied', observed_at_wall=1000)
+        self.assertEqual(health_rows(sample, now=1001)[0][1], 'stale')
+        self.assertIn('permission denied', health_rows(sample, now=1001)[0][3])
+        self.assertEqual(health_rows(sample, replay=True, now=2000)[0][1], 'recorded')
+        sample['cpu'][0]['busy_pct'] = None
+        self.assertEqual(health_rows(sample, now=1001)[0][1], 'permission denied')
+        sample['source_quality']['cpu']['status'] = 'invented'
+        self.assertEqual(health_rows(sample, now=1001)[0][1], 'unknown')
 
     def test_impact_offline_reports_empty_and_unknown_sets(self):
         sample={'workloads':[dict(id='/a',limits={'ancestors':[{'cpuset.cpus.effective':'0'}]}),dict(id='/b')]}
@@ -135,9 +155,9 @@ class InsightsTests(unittest.TestCase):
         self.assertIn('Energy (hardware) core W',pair[0])
         self.assertNotIn('network:net0:2 rx B/s',pair[0])
         text='\n'.join(investigation.lines())
-        self.assertIn('baseline is zero',text)
-        self.assertIn('one window has no usable values',text)
-        self.assertIn('Before [',text)
+        self.assertIn('time-weighted',text)
+        self.assertIn('coverage',text)
+        self.assertIn('post-change starts after verified completion',text)
 
 
 if __name__ == '__main__':unittest.main()

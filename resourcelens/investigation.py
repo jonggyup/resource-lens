@@ -59,10 +59,11 @@ class Investigation:
         self.samples = deque(maxlen=600)
         self.events = []
         self.selected = 0
+        self.window_seconds=30
 
     def observe(self, sample):
         self.samples.append({key: value for key, value in sample.items()
-                             if key in ('timestamp', 'cpu', 'memory', 'pressure', 'workloads', 'disks', 'network', 'energy')})
+                             if key in ('timestamp', 'elapsed_s', 'collection_scope', 'cpu', 'memory', 'pressure', 'workloads', 'disks', 'network', 'energy')})
 
     def mark(self, label, timestamp=None, target=None, status='marker'):
         event = dict(timestamp=time.time() if timestamp is None else timestamp,
@@ -73,6 +74,7 @@ class Investigation:
         return event
 
     def compare(self, event, seconds=30):
+        """Legacy sample-mean API; UI/export use comparison() with time coverage."""
         stamp, target = event['timestamp'], event.get('target')
         windows = ([s for s in self.samples if stamp - seconds <= s['timestamp'] < stamp],
                    [s for s in self.samples if stamp < s['timestamp'] <= stamp + seconds])
@@ -86,40 +88,26 @@ class Investigation:
             result.append({key: (sum(items) / len(items), len(items)) for key, items in values.items()})
         return result, [len(window) for window in windows]
 
+    def comparison(self, event, seconds=None):
+        from .comparison import compare_windows
+        return compare_windows(self.samples, event, metrics, self.window_seconds if seconds is None else seconds, self.events)
+
+    def observation_lines(self, event):
+        from .comparison import comparison_lines
+        return comparison_lines(self.comparison(event))
+
     def lines(self, width=80):
-        lines = ['CHANGE TIMELINE', 'M: mark baseline | Up/Down: event | PgUp/PgDn: scroll', '',
+        lines = ['CHANGE TIMELINE', 'M: mark | Up/Down: event | PgUp/PgDn: scroll | [ / ]: window',
+                 f'Requested window: {self.window_seconds}s on each side', '',
                  '-- How to read the comparison --',
-                 'Values are averages from the 30 seconds before and after the event.',
-                 'These are sample averages, not time-weighted values or proof of cause.',
+                 'Baseline ends at apply start; post-change starts after verified completion.',
+                 'Transition time is excluded; gaps and unknown intervals reduce coverage.',
                  'Missing samples are excluded. Request latency is not measured here.', '']
         if not self.events:
             return lines + ['No events yet. Press M to mark a baseline; control attempts are marked automatically.']
         self.selected = max(0, min(self.selected, len(self.events) - 1))
         event = self.events[self.selected]
-        pair, counts = self.compare(event)
-        lines += [f"Selected: {event['label']} [{event['status']}]", f'Available samples: before {counts[0]}, after {counts[1]}',
-                  'Bars share a scale within each metric; counts show available samples.']
-        bar_width = max(6, min(24, width - 32))
-        def display(key, value):
-            if value is None:return 'N/A'
-            if key.endswith(('bytes','B/s')):
-                from .ui import size
-                return size(value) + ('/s' if key.endswith('B/s') else '')
-            return f'{value:.2f}'
-        for key in sorted(set(pair[0]) | set(pair[1])):
-            before, after = pair[0].get(key), pair[1].get(key)
-            scale = max((abs(v[0]) for v in (before,after) if v is not None), default=0) or 1
-            lines += ['', key]
-            for label,value in (('Before',before),('After ',after)):
-                graph = '?' * bar_width if value is None else '#' * round(abs(value[0])/scale*bar_width)
-                lines.append(f"  {label} [{graph:<{bar_width}}] {display(key, value[0] if value else None)} (n={value[1] if value else 0})")
-            if before is None or after is None:
-                lines.append('  Change: unavailable; one window has no usable values.')
-            else:
-                delta=after[0]-before[0]
-                relative=f'{100*delta/abs(before[0]):+.1f}%' if before[0] else 'baseline is zero; relative change undefined'
-                lines.append('  Change: '+('+' if delta>=0 else '-')+display(key,abs(delta))+'; '+relative)
-        if not pair[0] and not pair[1]:lines.append('No usable measurements for this target in either window.')
+        lines += [f"Selected: {event['label']} [{event['status']}]", *self.observation_lines(event)]
         lines += ['', '-- Events: time / result / action --']
         for index, entry in enumerate(self.events):
             lines.append(('> ' if index == self.selected else '  ') + time.strftime('%H:%M:%S', time.localtime(entry['timestamp'])) +
