@@ -9,16 +9,10 @@ import math
 from pathlib import PurePosixPath
 
 from .model import TargetRef, source_quality
+from .evidence import finite
 
 
 RULE_VERSION = 1
-
-
-def finite(value):
-    try:
-        return type(value) in (int, float) and math.isfinite(value)
-    except OverflowError:
-        return False
 
 
 def context_for(sample, request):

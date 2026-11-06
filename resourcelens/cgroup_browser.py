@@ -184,7 +184,6 @@ class CgroupBrowser:
 
     def draw(self, screen, snapshot, width, height, view=None):
         from .ui import put, pct, size
-        from .readability import draw_text, wrap_lines
         self.regions, self.back = [], (1, 14, 2)
         self.context_region = None if self.process else (1, 18, 4)
         node = self.node(snapshot)
@@ -204,7 +203,7 @@ class CgroupBrowser:
                 return
         put(screen,2,1,'[ < Back ]' if self.process_entry or self.process else '[ < Parent ]',curses.A_BOLD)
         put(screen,3,1,'PROCESS DETAILS' if self.process_entry else 'CGROUP BROWSER: '+self.path,curses.A_BOLD)
-        put(screen,4,1,'Arrows: scroll | V: memory | P: investigate' if self.process else '[ D Constraints ] | Enter: open | Left: parent')
+        put(screen,4,1,'Arrows: scroll | V: memory | P: investigate' if self.process else '[ D Limits ] | Enter: open | Left: parent')
         tree = snapshot.get('cgroup_tree')
         if tree is None and not self.process_entry:
             put(screen,6,1,'This recording has no cgroup hierarchy data. Live collection or a new recording is required.')
@@ -213,44 +212,8 @@ class CgroupBrowser:
         if node is None and not self.process_entry:
             put(screen,6,1,'Cgroup disappeared, was replaced, or is outside collection coverage. Go to parent to reselect.')
             return
-        node = node or {}
         if not self.process_entry:
             put(screen,5,1,f"Group CPU {pct(node.get('cpu_pct'))} | memory {size(node.get('memory_current'))} (includes descendants)")
-        if self.context_detail and not self.process:
-            from .targets import context_lines
-            lines = wrap_lines(context_lines(snapshot, ('cgroup', self.path, self.inode, node.get('device'), 'visible')), width - 3)
-            capacity = max(1, height - 9)
-            self.detail_scroll = min(self.detail_scroll, max(0, len(lines) - capacity))
-            for i, line in enumerate(lines[self.detail_scroll:self.detail_scroll + capacity]):
-                draw_text(screen, 7+i, 1, line)
-            return
-        if self.process:
-            pid,starttime = self.process
-            p = next((p for p in snapshot.get('processes',[]) if (p['pid'],p.get('starttime')) == (pid,starttime) and (self.process_entry or p.get('cgroup') == self.path)),None)
-            if not p:
-                put(screen,7,1,'Process exited, moved, or PID was reused. Left/Esc returns to this group.')
-                return
-            states = {'R': 'Running or ready for CPU', 'S': 'Sleeping; waiting for an event',
-                      'D': 'Uninterruptible wait (often I/O)', 'T': 'Stopped',
-                      't': 'Stopped by a debugger', 'Z': 'Zombie; waiting for its parent',
-                      'I': 'Idle kernel thread', 'X': 'Exited'}
-            state = p.get('state') or '?'
-            lines = [f"PID {pid}: {p['name']}", '', '-- Resource use --',
-                     f"CPU: {pct(p.get('cpu_pct'))}", '100% means one logical CPU is fully busy.',
-                     f"RAM (RSS): {size(p.get('memory'))}",
-                     'RSS includes shared mappings; use V to inspect sharing.',
-                     '', '-- Process identity --', f"State: {states.get(state, 'Unknown')} ({state})",
-                     f"Parent PID: {p.get('ppid')}", f"Start ticks: {starttime}",
-                     'Cgroup: '+(p.get('cgroup') or 'unknown ('+str(p.get('cgroup_reason') or 'not recorded').replace('_', ' ')+')'),
-                     '', 'V: inspect memory | P: investigate | Esc: back']
-            from .targets import context_lines
-            lines += ['', *context_lines(snapshot, ('process', pid, starttime, p.get('cgroup')))]
-            wrapped = wrap_lines(lines, width - 3)
-            capacity = max(1, height - 9)
-            self.detail_scroll = min(self.detail_scroll, max(0, len(wrapped) - capacity))
-            for i, line in enumerate(wrapped[self.detail_scroll:self.detail_scroll + capacity]):
-                draw_text(screen, 7+i, 1, line)
-            return
         rows = self.rows(snapshot)
         selected = self.selection(rows)
         capacity = max(1,height-9)

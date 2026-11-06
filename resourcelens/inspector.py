@@ -8,7 +8,10 @@ from .model import TargetRef
 from .readability import wrap_lines, draw_text
 
 
-TABS = ('Summary', 'Usage', 'Constraints', 'Evidence', 'Actions')
+TABS = ('Summary', 'Usage', 'Limits', 'Evidence', 'Actions')
+PROCESS_STATES = {'R': 'Running or ready for CPU', 'S': 'Sleeping', 'D': 'Waiting (often disk I/O)',
+                  'T': 'Stopped', 't': 'Stopped by a debugger', 'Z': 'Exited; waiting for its parent',
+                  'I': 'Idle kernel thread', 'X': 'Exited'}
 
 
 class Inspector:
@@ -106,7 +109,7 @@ class Inspector:
         if key in (ord('e'), ord('D')):
             self.select_tab('Evidence'); return 'handled'
         if key == ord('c'):
-            self.select_tab('Constraints'); return 'handled'
+            self.select_tab('Limits'); return 'handled'
         if self.tab == 4 and not self.help and key in (curses.KEY_DOWN, curses.KEY_UP, ord('j'), ord('k'), 10, 13):
             from .actions import ACTIONS
             if key in (10, 13):
@@ -172,12 +175,12 @@ class Inspector:
                 if 'mean_psi_pct' in selected.window:lines += [f"Mean PSI some.avg10: {selected.window['mean_psi_pct']:.2f}%"]
                 if 'events_delta' in selected.window:lines += [f"Counter increase: {selected.window['events_delta']} events"]
             return lines + ['', '-- Interpretation limits --', *selected.limitations,
-                            'Actions: c constraints | W CPU + waits | a limiting ancestor']
+                            'c Limits | W CPU + waits | a Limiting parent']
         if self.tab == 2:
             from .targets import context_lines
             if context:
                 return context_lines(dict(sample, target_context=context), request)
-            return ['Exact constraints are unavailable in this sample; no unrestricted state is inferred.']
+            return ['Limits are unavailable for this group. Unknown limits may still apply.']
         if self.tab == 1:
             lines = ['USAGE - each measurement names its scope']
             if process:
@@ -206,7 +209,8 @@ class Inspector:
                       'Coverage: ' + context.get('ancestry_visibility', 'unknown')]
         if process:
             lines += ['', '-- Process identity --', f"PID {process['pid']} | parent {process.get('ppid')} | start ticks {process.get('starttime')}",
-                      'State: ' + str(process.get('state', '?')), 'Cgroup: ' + (process.get('cgroup') or 'unknown')]
+                      'State: ' + PROCESS_STATES.get(process.get('state'), 'Unknown') + ' (' + str(process.get('state') or '?') + ')',
+                      'Cgroup: ' + (process.get('cgroup') or 'unknown')]
         investigation = getattr(view, 'investigation', None)
         if investigation:
             paths = {n['path'] for n in (context or {}).get('ancestors', [])}
@@ -216,7 +220,7 @@ class Inspector:
                 event = events[-1]
                 lines += ['', '-- Latest configuration event --', event['label']+' ['+event['status']+']',
                           *investigation.observation_lines(event), 'J: full Changes history and restoration']
-        return lines + ['', 'e evidence | c constraints | r review controls | J Changes | P capture | V memory | Esc back']
+        return lines
 
     def draw(self, screen, view, width, height):
         from .ui import put
@@ -267,7 +271,7 @@ class Inspector:
                 row += count
         if height >= 12 and not self.help:
             x = 1
-            for label, action in (('[P Capture]', 'profile'), ('[V Memory]', 'memory'), ('[e Evidence]', 'show_evidence'),
+            for label, action in (('[P Investigate]', 'profile'), ('[V Memory]', 'memory'), ('[e Evidence]', 'show_evidence'),
                                   ('[r Controls]', 'review_controls'), ('[J Changes]', 'show_changes')):
                 if x+len(label) >= width:
                     break

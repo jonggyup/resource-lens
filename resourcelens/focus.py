@@ -1,6 +1,6 @@
 """Individual resource focus and pinned service overlays."""
-from .hardware import cpulist
 from .investigation import indicators
+from .workspaces import allowed_cpus, io_rate
 
 KINDS = {1: 'cpu', 2: 'memory', 3: 'disk', 4: 'gpu', 6: 'network'}
 
@@ -26,7 +26,7 @@ class FocusView:
         if not self.snapshot:
             return
         options = candidates(self.snapshot, KINDS.get(self.page))
-        self.modal = dict(stage='focus', options=options, selected=0, query='')
+        self.modal = dict(stage='focus', options=options, selected=0)
 
     def focus_lines(self):
         modal = self.modal
@@ -65,13 +65,7 @@ class FocusView:
                      if g['id'] == self.overlay['id'] and g.get('inode') == self.overlay['inode']), None)
 
     def overlay_cpus(self):
-        group = self.overlay_group()
-        if group:
-            for entry in group.get('limits', {}).get('ancestors', []):
-                value = entry.get('cpuset.cpus.effective')
-                if value:
-                    return set(cpulist(value))
-        return None
+        return allowed_cpus(self.overlay_group() or {})
 
     def overlay_lines(self):
         from .ui import pct, size
@@ -80,10 +74,8 @@ class FocusView:
         group = self.overlay_group()
         if group is None:
             return ['Pinned service exited, was replaced, or is absent from this sample. o clears overlay.']
-        rates = group.get('io_devices', [])
-        total = lambda key: sum(d[key] for d in rates) if rates and all(d.get(key) is not None for d in rates) else None
         return [f"SERVICE: {group['unit'] or group['id']} | o clears overlay",
                 f"CPU {pct(group['cpu_pct'])} | RAM {size(group['memory_current'])} | {len(group['pids'])} visible processes",
-                f"Read {size(total('read_bps'))}/s | Write {size(total('write_bps'))}/s (cgroup device counters)",
+                f"Read {size(io_rate(group,'read'))}/s | Write {size(io_rate(group,'write'))}/s (group accounting)",
                 'Highlighted CPUs = effective cgroup set; task affinity can narrow it.' if self.overlay_cpus() is not None else
                 'Effective CPU set unavailable; no placement inferred.', *indicators(self.snapshot, group)]

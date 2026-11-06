@@ -11,7 +11,10 @@ MAX_JSON = 32 * 1024 * 1024
 
 
 def finite(value):
-    return type(value) in (int, float) and math.isfinite(value)
+    try:
+        return type(value) in (int, float) and math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def validate_tree(value, depth=0, budget=None):

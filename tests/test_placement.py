@@ -172,3 +172,15 @@ class TopologyTests(unittest.TestCase):
         data = dict(cpus=[dict(id=i, socket=None, core=None, online=True, policy=None) for i in range(2)])
         _, hits = topology_map(data, {}, 80)
         self.assertEqual(sum(kind == 'core' for row in hits.values() for _, _, kind, _ in row), 2)
+
+    def test_repeated_core_ids_do_not_share_socket_temperatures(self):
+        data=self.sample()
+        readings=[dict(name='Core 0',socket=0,core=0,temperature_c=45),
+                  dict(name='Core 0',socket=1,core=0,temperature_c=65)]
+        lines,_=topology_map(data,{},80,temperatures=readings)
+        first,second='\n'.join(lines).split('[ SOCKET 1 ]')
+        self.assertIn('Temp: 45.0 C',first);self.assertNotIn('65.0 C',first)
+        self.assertIn('Temp: 65.0 C',second);self.assertNotIn('45.0 C',second)
+        legacy=[dict(name='Core 0',temperature_c=45)]
+        lines,_=topology_map(data,{},80,temperatures=legacy)
+        self.assertNotIn('45.0 C','\n'.join(lines))

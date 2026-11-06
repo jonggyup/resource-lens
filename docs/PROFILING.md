@@ -7,7 +7,7 @@ for perf, an automatic regression verdict, or a complete kernel profiler.
 ## Interactive capture
 
 Open Applications (`8`), select a process, and press **P** for **Investigate**.
-Choose **CPU usage**, **CPU + waits**, **Energy efficiency**, or **Counters only**. Energy captures
+Choose **CPU usage**, **CPU + waits**, **Energy use**, or **Counters only**. Energy captures
 hardware-domain counters without CPU stack sampling; see [energy](ENERGY.md).
 Click a choice, press 1/2/3/4, or use arrows then
 Enter. No collection starts until you choose; Escape closes the menu. In cgroup
@@ -240,7 +240,7 @@ profile/repeat set with the same calculations as `--compare`. Coverage, status,
 repeat counts/spread and environment changes remain visible. Partial/cancelled
 captures cannot be used as complete comparison runs.
 
-In a complete profile, **o** adds `name | unit | value | provenance` measured over
+In a complete profile, **o** adds `name | unit | value | measurement source` measured over
 the displayed capture window. `outcomes.json` stores this supplementary evidence
 with a profile content digest; `session.json` remains unchanged. Mismatched units
 and mixed structured/unknown units are omitted from matched-outcome comparisons.

@@ -1,4 +1,4 @@
-# Energy efficiency (0.15.0 preview)
+# Energy use
 
 This first energy release measures hardware domains during a workload window.
 It does not measure energy owned by a PID/cgroup, predict savings, or produce a
@@ -7,18 +7,21 @@ whole-machine total. It never adds overlapping package/subdomain readings.
 ## Use the interface
 
 In Applications (`8`), select a process or cgroup and press **P → 3 Energy
-efficiency**. You can click the third choice instead. The ten-second background
+use**. You can click the third choice instead. The ten-second background
 capture saves hardware-reported counter samples, interval joules and average watts
 for each exposed domain. The selected application's ordinary counters provide
 workload context. CPU stack sampling and scheduler tracing are disabled in this
 mode to avoid their extra measurement overhead. Escape cancels immediately.
 
-The CPU page (`2`) shows up to three discovered domains and interval-average power.
-Status (`0`) lists the full inventory, source, sysfs identifier, parent directory
-and unavailable reasons. These domains can include non-CPU devices; labels come
-from the driver. The display does not pretend to know their physical scope beyond
-what the driver exposes. Record/replay retains the energy snapshot without reading
-live sensors during replay.
+The CPU page (`2`) shows every discovered energy domain, grouped by its named CPU
+package/socket when available, with interval-average watts and measured interval
+joules. Each socket heading also shows its unique whole-package power reading.
+DRAM/core subdomains stay separate, and per-die or duplicate counters are never
+summed into an inferred socket total. Other hardware domains remain visible with
+their driver labels. System (`0`) retains sysfs identifiers, parent directories and
+unavailable reasons. Socket associations use package labels and parent hierarchy,
+not discovery order or powercap directory indices. Record/replay retains this
+metadata and can resolve old recorded parent relationships without live sensor reads.
 
 ## Discover and capture from the CLI
 
@@ -107,13 +110,15 @@ under the existing capture rules.
 
 ## Validation and next steps
 
-The development host exposes CPU idle-state counters but no supported energy
-counters. Live checks validate discovery, the unavailable path, capture/UI flow,
-CLI comparison and responsiveness. Controlled sysfs fixtures validate arithmetic,
+Live read-only checks on a two-socket host verify discovery and display of both
+package counters and their separate DRAM counters, including socket headings.
+Earlier checks cover the unavailable path, capture/UI flow, CLI comparison and
+responsiveness. Controlled sysfs fixtures validate arithmetic, socket association
+independent of directory indices/discovery order, offline replay association,
 source deduplication, units, wraps/resets, gaps, missing sensors and normalized
 comparisons. Real sensor accuracy and cross-hardware coverage are **not validated**.
 
-Next steps are validation on an energy-capable host, workload-phase markers and
+Next steps are validation across more energy-capable hosts, workload-phase markers and
 post-capture completed-work entry, GPU-native cumulative energy APIs, idle-state
 correlation, and an interactive energy/performance comparison. Power-only sensors,
 NVML energy, external meters, idle attribution, automatic tuning and power-cap

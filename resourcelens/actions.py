@@ -15,23 +15,22 @@ class ActionSpec:
     help: str
     kinds: tuple = ('process', 'cgroup')
     live: bool = False
-    mutation: bool = False
 
 
 ACTIONS = (
     ActionSpec('inspect', 'Inspect selection', 'I', 'Open the selected target inspector.'),
-    ActionSpec('profile', 'Investigate CPU / capture', 'P', 'Choose counters, stacks, waits or hardware energy and a duration.', live=True),
-    ActionSpec('waits', 'Capture CPU + waits', 'W', 'Start the existing ten-second CPU + waits capture.', live=True),
+    ActionSpec('profile', 'Investigate', 'P', 'Choose CPU, wait or energy measurements and a duration.', live=True),
+    ActionSpec('waits', 'CPU + waits', 'W', 'Record CPU activity and thread waits for ten seconds.', live=True),
     ActionSpec('memory', 'Inspect memory', 'V', 'Inspect process allocation, threads and shared mappings.', ('process',), live=True),
-    ActionSpec('open_group', 'Open exact group', 'g', 'Inspect the exact group containing this process.', ('process',)),
-    ActionSpec('open_service', 'Open associated service', 'o', 'Inspect the readable service ancestor; keep its scope distinct.'),
-    ActionSpec('open_ancestor', 'Open limiting ancestor', 'a', 'Inspect the ancestor identified by the selected evidence or quota.'),
-    ActionSpec('show_constraints', 'Show constraints', 'c', 'Read local and inherited settings and coverage.'),
+    ActionSpec('open_group', 'Open process group', 'g', 'Inspect the cgroup containing this process.', ('process',)),
+    ActionSpec('open_service', 'Open service', 'o', 'Inspect the service containing this group, including its other processes.'),
+    ActionSpec('open_ancestor', 'Open limiting parent', 'a', 'Inspect the parent group responsible for the selected limit.'),
+    ActionSpec('show_constraints', 'Show limits', 'c', 'Read local and inherited settings and measurement coverage.'),
     ActionSpec('show_evidence', 'Show evidence', 'e', 'Read finding sources, counter intervals and limitations.'),
-    ActionSpec('group_memory','Explain group memory','m','Read cgroup memory usage, high/max/swap boundaries, categories and scoped events.'),
-    ActionSpec('review_controls', 'Review service controls', 'r', 'Review the service scope before opening CPU, placement or disk editors.', live=True),
-    ActionSpec('show_changes', 'Changes and observation', 'J', 'Inspect control results, coverage and session restoration.'),
-    ActionSpec('sessions', 'Saved investigations', 'L', 'Reopen recordings, profiles and compatible run comparisons.'),
+    ActionSpec('group_memory','Explain group memory','m','Read group memory usage, limits, categories and memory events.'),
+    ActionSpec('review_controls', 'Review service controls', 'r', 'Review affected processes before changing CPU, memory or disk settings.', live=True),
+    ActionSpec('show_changes', 'Review changes', 'J', 'Review applied settings, measured effects and Undo availability.'),
+    ActionSpec('sessions', 'Saved sessions', 'L', 'Reopen recordings and profiles or compare saved runs.'),
     ActionSpec('health', 'Measurement health', 'H', 'Inspect unavailable measurements and next steps.'),
 )
 BY_ID = {action.id: action for action in ACTIONS}
@@ -117,7 +116,7 @@ def dispatch(view, action_id, request=None, scope_id=None):
         if action_id=='group_memory':
             inspector.select_tab('Usage')
         elif action_id.startswith('show_'):
-            inspector.select_tab('Constraints' if action_id == 'show_constraints' else 'Evidence')
+            inspector.select_tab('Limits' if action_id == 'show_constraints' else 'Evidence')
         else:
             selected = inspector.selected_finding()
             hint = selected.evidence[0].get('path') if selected and selected.evidence else None

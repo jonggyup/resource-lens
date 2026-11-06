@@ -1,7 +1,70 @@
 """Read-only hardware energy domains. Never attribute shared-domain joules to a PID."""
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import math
+import re
 import time
+from .evidence import finite
+
+
+def scoped_domains(domains):
+    """Recover socket association from named package zones, including old recordings.
+
+    Directory indices are not socket IDs. Follow recorded parent relationships to
+    the package name; do not infer a socket for unrelated/unnamed hardware domains.
+    """
+    zones={str(PurePosixPath(row['id']).parent):row for row in domains if row.get('id')}
+    result=[]
+    for row in domains:
+        item=dict(row);origin=row;seen=set()
+        while origin:
+            label=origin.get('label','')
+            package=re.fullmatch(r'package-(\d+)(?:-die-(\d+))?',label) if isinstance(label,str) and origin.get('source')=='powercap' else None
+            if package:
+                item.update(socket=int(package[1]),die=int(package[2]) if package[2] else None,package=label,
+                            domain_scope=('die' if package[2] else 'package') if origin is row else 'subdomain')
+                break
+            if type(origin.get('socket')) is int:
+                item.update(socket=origin['socket'],die=origin.get('die'),package=origin.get('package'),
+                            domain_scope=origin.get('domain_scope','unknown') if origin is row else 'subdomain')
+                break
+            parent=origin.get('parent')
+            if not isinstance(parent,str) or parent in seen:break
+            seen.add(parent);origin=zones.get(parent)
+        result.append(item)
+    return result
+
+
+def package_power(domains,socket):
+    """Only a unique whole-package counter can supply a socket headline."""
+    matches=[d for d in domains if d.get('socket')==socket and d.get('domain_scope')=='package']
+    if len(matches)!=1:return None
+    value=matches[0].get('watts')
+    return value if finite(value) else None
+
+
+def cpu_energy_lines(energy,width=80):
+    from .readability import wrap_lines
+    domains=scoped_domains(energy.get('domains',[]))
+    if not domains:return wrap_lines(['Energy readings unavailable. H: measurement health.'],max(20,width))
+    def order(row):
+        socket=row.get('socket');die=row.get('die')
+        return (socket if type(socket) is int else math.inf,die if type(die) is int else -1,
+                0 if row.get('domain_scope') in ('package','die') else 1,row.get('label',''),row.get('id',''))
+    output=['POWER AND ENERGY']
+    for domain in sorted(domains,key=order):
+        socket=domain.get('socket');die=domain.get('die');label=domain['label']
+        if type(socket) is int:
+            prefix=f'Socket {socket}'+(f' / Die {die}' if type(die) is int else '')
+            label='CPU package' if domain.get('domain_scope') in ('package','die') else {'dram':'DRAM','core':'CPU cores'}.get(label,label)
+            label=prefix+' / '+label
+        watts,joules,interval=(domain.get(key) for key in ('watts','joules','interval_seconds'))
+        value=f'{watts:.2f} W' if finite(watts) else domain.get('status','unavailable').replace('_',' ')
+        if finite(joules) and finite(interval) and interval>0:value+=f' | {joules:.3f} J / {interval:.3f}s'
+        elif type(domain.get('counter_uj')) is int:value+=f" | counter {domain['counter_uj']/1e6:.3f} J"
+        output.append(label+': '+value)
+    output+=['Readings cover all workloads. Package and subdomain readings can overlap.']
+    return wrap_lines(output,max(20,width))
 
 
 def text(path):
@@ -73,6 +136,7 @@ class EnergyMeter:
             pass
         except OSError as exc:
             self.warnings.append('Hwmon discovery: '+str(exc))
+        self.paths=scoped_domains(self.paths)
 
     def _add(self, path, source, seen):
         path = path.resolve()
@@ -133,7 +197,8 @@ def summarize(samples, work_units=None, work_unit='unit'):
     for index,sample in enumerate(samples):
         for domain in sample['domains']:
             row = totals.setdefault(domain['id'],dict(id=domain['id'],label=domain['label'],source=domain['source'],
-                         parent=domain['parent'],observed_joules=0.,observed_seconds=0.,intervals=0,gaps=0))
+                         parent=domain['parent'],observed_joules=0.,observed_seconds=0.,intervals=0,gaps=0,
+                         **{key:domain[key] for key in ('socket','die','package','domain_scope') if key in domain}))
             if domain['status']=='measured':
                 row['observed_joules'] += domain['joules']
                 row['observed_seconds'] += domain['interval_seconds']

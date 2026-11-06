@@ -1,8 +1,13 @@
 """Mouse and keyboard CPU menus, shared by the curses view."""
-from .impact import impact_lines, impact_summary
+from .impact import impact_summary
 import curses
 from .hardware import Hardware
 from .control_workflow import preview_note
+
+
+def scope_label(scope):
+    kind, value = scope
+    return 'All CPUs / all sockets' if kind == 'all' else f"{'CPU' if kind == 'id' else 'Socket'} {value}"
 
 
 class HardwareView:
@@ -63,17 +68,18 @@ class HardwareView:
             count = max(1, self.screen_size[0] - 12)
             start = m['selected'] // count * count
             m['offset'] = start
-            title = 'All CPUs / all sockets' if m['scope'][0] == 'all' else f"{m['scope'][0].upper()} {m['scope'][1]}"
+            title = scope_label(m['scope'])
             return [f'CPU settings: {title}', m['note'] or 'Select a governor or online/offline action.',
                     'Up/Down + Enter, or click a choice; Esc cancels.'] + [
                     ('> ' if i == m['selected'] else '- ') + label[:max(16, min(74, self.screen_size[1] - 10))]
                     for i, (label, _) in enumerate(m['options']) if start <= i < start + count]
         plan = m['plan']
-        return ['Confirm machine-wide CPU setting', f"Scope: {plan['scope']}",
+        lines = ['Confirm machine-wide CPU setting', 'Scope: ' + scope_label(plan['scope']),
                 f"{plan['setting']}: {', '.join(sorted({old for _, old, _ in plan['changes']}))} -> {plan['value']}",
-                'Affected logical CPUs: ' + ','.join(map(str, plan['affected'])),
-                'Governor policies may include CPUs outside the selected scope.',
-                'Offline removes logical CPUs from scheduling; it is not physical removal.',
+                'Affected logical CPUs: ' + ','.join(map(str, plan['affected']))]
+        lines.append('Shared governor policies may affect CPUs outside this selection.' if plan['setting'] == 'governor'
+                     else 'Offline CPUs cannot run tasks.')
+        return lines + [
                 'Changes remain after exit. Batches can partially succeed.',
                 preview_note('hardware'),
                 'J Changes or u on CPU restores the latest session hardware change.',

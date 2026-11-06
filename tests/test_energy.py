@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from resourcelens.energy import EnergyMeter, summarize, lines
+from resourcelens.energy import EnergyMeter, summarize, lines, scoped_domains, package_power, cpu_energy_lines
 from resourcelens.profiling import capture, compare, ProfileView
 
 
@@ -39,6 +39,80 @@ class EnergyTests(unittest.TestCase):
         self.assertEqual(parent['average_watts'],10)
         self.assertEqual(parent['joules_per_work_unit'],5)
         self.assertNotIn('total_joules',result)
+
+    def test_cpu_view_keeps_every_socket_and_its_subdomains(self):
+        from resourcelens.ui import View
+        # RAPL directory indices need not match physical package IDs.
+        (self.zone/'name').write_text('package-1')
+        other=self.zone.parent/'intel-rapl:1';other.mkdir()
+        (other/'name').write_text('package-0')
+        (other/'energy_uj').write_text('1000000')
+        counters=[]
+        for index,(zone,package_watts,dram_watts) in enumerate(((self.zone,12,2),(other,20,3))):
+            child=zone/f'intel-rapl:{index}:0';child.mkdir()
+            (child/'name').write_text('dram');(child/'energy_uj').write_text('1000000')
+            counters.extend(((zone/'energy_uj',package_watts),(child/'energy_uj',dram_watts)))
+        meter=self.meter();first=meter.sample();self.now=.5
+        for path,watts in counters:path.write_text(str(1000000+watts*500000))
+        sample=meter.sample()
+        self.assertEqual(len(sample['domains']),4)
+        expected={str(path.relative_to(self.root)):(socket,scope,watts)
+                  for (path,watts),socket,scope in zip(counters,(1,1,0,0),('package','subdomain','package','subdomain'))}
+        for domain in sample['domains']:
+            self.assertEqual((domain['socket'],domain['domain_scope'],domain['watts']),expected[domain['id']])
+        summary=summarize([first,sample])
+        self.assertEqual({d['id']:d['socket'] for d in summary['domains']},
+                         {d['id']:d['socket'] for d in sample['domains']})
+        view=View()
+        view.snapshot=dict(cpu_model='fixture',cpu=[],pressure={},energy=sample,cpu_hardware=dict(
+            cpus=[dict(id=i,socket=i,core=0,die=None,nodes=[],siblings=[i],online=True,policy=None) for i in (0,1)],
+            policies={}))
+        rendered='\n'.join(view.cpu_lines(80))
+        for label,watts in (('Socket 0 / CPU package',20),('Socket 0 / DRAM',3),
+                            ('Socket 1 / CPU package',12),('Socket 1 / DRAM',2)):
+            self.assertIn(f'{label}: {watts:.2f} W | {watts/2:.3f} J',rendered)
+        headers=[line for line in rendered.splitlines() if line.startswith('[ SOCKET')]
+        self.assertIn('Power: 20.00 W',headers[0]);self.assertIn('Power: 12.00 W',headers[1])
+
+    def test_legacy_socket_scope_uses_recorded_hierarchy_without_live_reads(self):
+        zones='devices/virtual/powercap/intel-rapl'
+        legacy=[dict(id=zones+'/intel-rapl:9/intel-rapl:9:0/energy_uj',label='dram',
+                     source='powercap',parent=zones+'/intel-rapl:9'),
+                dict(id=zones+'/intel-rapl:9/energy_uj',label='package-3',source='powercap',parent=zones),
+                dict(id=zones+'/intel-rapl:8/energy_uj',label='psys',source='powercap',parent=zones)]
+        original=json.dumps(legacy)
+        with patch('resourcelens.energy.text',side_effect=AssertionError('replay must stay offline')):
+            for rows in (legacy,list(reversed(legacy))):
+                scoped={d['label']:d for d in scoped_domains(rows)}
+                self.assertEqual(scoped['dram']['socket'],3)
+                self.assertEqual(scoped['dram']['domain_scope'],'subdomain')
+                self.assertEqual(scoped['package-3']['socket'],3)
+                self.assertNotIn('socket',scoped['psys'])
+        self.assertEqual(json.dumps(legacy),original)
+
+    def test_die_and_duplicate_domains_do_not_invent_socket_total(self):
+        domains=scoped_domains([dict(id='rapl/energy_uj',parent='.',source='powercap',label='package-3-die-2',watts=8),
+                                dict(id='rapl/dram/energy_uj',parent='rapl',source='powercap',label='dram',watts=2)])
+        self.assertEqual([(d['socket'],d['die'],d['domain_scope']) for d in domains],
+                         [(3,2,'die'),(3,2,'subdomain')])
+        self.assertIsNone(package_power(domains,3))
+        self.assertIn('Socket 3 / Die 2 / CPU package: 8.00 W','\n'.join(cpu_energy_lines({'domains':domains})))
+        duplicates=scoped_domains([dict(label='package-0',source='powercap',watts=value) for value in (10,20)])
+        self.assertIsNone(package_power(duplicates,0))
+        self.assertEqual(sum(' W' in row for row in cpu_energy_lines({'domains':duplicates})),2)
+
+    def test_cpu_energy_preserves_unknown_and_zero_at_narrow_width(self):
+        domains=[dict(label='package-0',source='powercap',watts=None,status='warming_up',counter_uj=1000000),
+                 dict(label='package-1',source='powercap',watts=0,joules=0,interval_seconds=.5,status='measured'),
+                 dict(label='unmapped device',source='hwmon',watts=None,status='unavailable')]
+        rows=cpu_energy_lines({'domains':domains},37)
+        self.assertTrue(all(len(row)<=37 for row in rows))
+        rendered=' '.join(rows)
+        self.assertIn('warming up | counter 1.000 J',rendered)
+        self.assertIn('0.00 W | 0.000 J / 0.500s',rendered)
+        self.assertIn('unmapped device: unavailable',rendered)
+        self.assertIsNone(package_power(scoped_domains(domains),0))
+        self.assertEqual(package_power(scoped_domains(domains),1),0)
 
     def test_wrap_reset_gaps_never_create_invented_energy(self):
         meter=self.meter();samples=[meter.sample()]

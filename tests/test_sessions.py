@@ -61,7 +61,8 @@ class SessionsTests(unittest.TestCase):
         path=self.root/'bad.jsonl';path.write_text('{"type":"header","format":"resource-lens","version":99}\n')
         with self.assertRaises(ValueError):import_path(path,self.root/'state')
         self.assertFalse((self.root/'state/session-paths.json').exists())
-        for text in ('{"metrics":NaN}','{"value":Infinity}','{"schema":1,"schema":2}', '['*40+'0'+']'*40):
+        for text in ('{"metrics":NaN}','{"value":Infinity}','{"schema":1,"schema":2}',
+                     '{"value":'+'9'*400+'}', '['*40+'0'+']'*40):
             with self.assertRaises(ValueError):decode(text)
 
     def test_symlink_devices_oversize_and_replaced_artifact_are_rejected(self):

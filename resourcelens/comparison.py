@@ -1,9 +1,5 @@
 """Time-weighted descriptive windows over recorded observations; no live reads."""
-import math
-
-
-def finite(value):
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+from .evidence import finite
 
 
 def scope(sample):

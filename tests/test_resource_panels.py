@@ -9,6 +9,30 @@ from resourcelens.ui import View
 
 
 class ResourcePanelsTests(unittest.TestCase):
+    def test_pressure_details_stay_with_the_relevant_resource(self):
+        view = View()
+        sample = Collector(nvidia=False).sample()
+        sample['pressure'] = {kind: {'some': {'avg10': value}}
+                              for kind, value in (('cpu', 11), ('memory', 22), ('io', 33))}
+        view.update(sample)
+        cpu = '\n'.join(view.cpu_lines(117))
+        self.assertIn('CPU waiting (10s): 11.0%', cpu)
+        self.assertNotIn('Memory waiting', cpu)
+        self.assertNotIn('I/O waiting', cpu)
+        for kind in ('memory', 'disk', 'gpu', 'network'):
+            text = '\n'.join(resource_lines(view, kind, 117))
+            self.assertNotIn('Thermal throttling:', text)
+            self.assertNotIn('CPU waiting', text)
+            self.assertNotIn('CPU pressure', text)
+            if kind == 'memory':
+                self.assertIn('MEMORY pressure (10s): 22.0%', text)
+                self.assertNotIn('IO pressure', text)
+            elif kind == 'disk':
+                self.assertIn('IO pressure (10s): 33.0%', text)
+                self.assertNotIn('MEMORY pressure', text)
+            else:
+                self.assertNotIn('pressure (10s)', text)
+
     def test_panels_wrap_without_loss_or_overflow(self):
         cards = [('Long title', ['word ' * 40, 'detail']), ('Second', ['tail'])]
         for width in (37, 77, 117, 200):

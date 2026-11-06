@@ -1,5 +1,5 @@
 """Usability actions kept separate from core rendering and telemetry."""
-from .impact import impact_lines, impact_summary
+from .impact import impact_summary
 import curses
 import copy
 import textwrap

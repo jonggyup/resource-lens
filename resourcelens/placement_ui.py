@@ -1,5 +1,5 @@
 """Topology-based workload CPU selection."""
-from .impact import impact_lines, impact_summary
+from .impact import impact_summary
 import curses
 import textwrap
 from .placement import PlacementSession, format_cpus

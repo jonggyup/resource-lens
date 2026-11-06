@@ -10,7 +10,7 @@ import time
 from . import __version__
 from .collect import Collector
 from .ui import View, run
-from .recording import Recorder, Replay, RecordingError
+from .recording import Recorder, Replay
 from .usability import load_preferences, export_report
 from .incidents import IncidentCapture
 from .controls import ControlError

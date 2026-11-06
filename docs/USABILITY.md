@@ -1,3 +1,6 @@
+> These are historical development notes. For current labels and workflows, see
+> the [user guide](USER_GUIDE.md) and [cleanup review](CLEANUP.md).
+
 # M5 PR14 memory observation and MemoryHigh
 
 Inspector m explains exact cgroup memory accounting separately from process RSS/PSS.

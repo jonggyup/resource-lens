@@ -1,4 +1,4 @@
-# Saved investigations
+# Saved sessions
 
 **L** opens Sessions from the dashboard. `resource-lens --sessions [PATH]` starts
 fully offline and never constructs a live collector. With no path it discovers
@@ -66,7 +66,7 @@ In a complete saved profile, press **o** and enter:
 p99 | ms | 12.5 | load generator log
 ```
 
-The fields are name, unit, finite value and provenance. Only enter measurements
+The fields are name, unit, finite value and measurement source. Only enter measurements
 from the displayed capture window. These are user-supplied measurements, not
 latency inferred from resource counters. A private `outcomes.json` sidecar records
 the value/unit/provenance/window and original profile identity/content digest.

@@ -138,7 +138,7 @@ class InvestigationTests(unittest.TestCase):
         sample = deepcopy(self.sample)
         sample['pressure'] = {}
         sample['thermal_throttling'] = []
-        self.assertIn('unknown', ' '.join(indicators(sample)))
+        self.assertIn('N/A', ' '.join(indicators(sample)))
         sample['thermal_throttling'] = [{'core_events': 0, 'package_events': 0}]
         self.assertIn('no events', indicators(sample)[-1])
         sample['thermal_throttling'][0]['package_events'] = 1

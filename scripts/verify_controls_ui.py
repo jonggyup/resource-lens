@@ -115,7 +115,7 @@ def verify():
         until(b'INSPECT / PID 123',b'sworker\n','inspect_process')
         until(b'REVIEW SERVICE CONTROLS',b'r','review_service_scope')
         until(b'Set CPU quota for demo.service',b'l','open_quota_editor')
-        until(b'Confirm temporary CPU setting',b'25\n','prepare_without_write')
+        until(b'Confirm runtime CPU setting',b'25\n','prepare_without_write')
         until(b'CONTROL RESULT',b'\n','apply_and_verify')
         until(b'CHANGES',b'J','open_changes')
         until(b'REVIEW RESTORATION',b'u','review_restore')

@@ -100,7 +100,7 @@ def capture(directory, *, pid=None, cgroup=None, duration=10, label='', stop=Non
     if (pid is None)==(cgroup is None):
         raise ValueError('Choose exactly one PID or cgroup')
     if not math.isfinite(duration) or not 0.2<=duration<=300:
-        raise ValueError('Duration must be 0.2–300 seconds')
+        raise ValueError('Duration must be 0.2-300 seconds')
     if pid is not None and pid<=0:
         raise ValueError('PID must be positive')
     if cgroup:
@@ -265,7 +265,7 @@ def compare(baseline, candidate):
 def compare_runs(a,b):
     """The same repeat statistics for validated saved evidence and the CLI."""
     from .evidence import validate_profile
-    if not a or not b or max(len(a),len(b))>1000:raise ValueError('Expected 1–1000 profiles per comparison side')
+    if not a or not b or max(len(a),len(b))>1000:raise ValueError('Expected 1-1000 profiles per comparison side')
     for record in a+b:validate_profile(record)
     warnings=['Descriptive comparison only; match workload, warmup, build and load before attributing a regression.',
               'CPU percentages and stack samples do not predict application latency.']
@@ -399,7 +399,7 @@ class ProfileView:
     def lines(self):
         from .ui import size
         target='PID '+str(self.target['pid']) if self.target.get('pid') else 'Cgroup '+str(self.target.get('cgroup'))
-        mode='Energy efficiency' if self.target.get('energy') else ('CPU + waits' if self.target.get('scheduler') else 'Counters only' if self.target.get('perf') is False else 'CPU usage')
+        mode='Energy use' if self.target.get('energy') else ('CPU + waits' if self.target.get('scheduler') else 'Counters only' if self.target.get('perf') is False else 'CPU usage')
         lines=['INVESTIGATE / '+target+' / '+mode]
         if self.error:return lines+[self.error,'Esc returns.']
         if self.result is None:
@@ -410,7 +410,7 @@ class ProfileView:
         samples=r.get('samples',[])
         if samples:
             span=samples[-1]['elapsed']-samples[0]['elapsed']
-            lines += [f"Counter coverage: {len(samples)} observations over {span:.2f}s; requested {r.get('requested_seconds',self.target['duration']):g}s."]
+            lines += [f"Measured time: {span:.2f}s / {r.get('requested_seconds',self.target['duration']):g}s requested; {len(samples)} samples."]
         if self.context_error:lines.append('Capture context could not be saved: '+self.context_error)
         labels={'cpu_percent':'CPU (% of one CPU)', 'rss_end_bytes':'Resident memory at end',
                 'major_faults_per_second':'Major faults / second',
@@ -466,8 +466,8 @@ class ProfileView:
                 put(screen,3,x,label,curses.A_REVERSE if duration==self.target['duration'] else curses.A_BOLD)
                 self.duration_regions.append((x,x+len(label),3,duration));x+=len(label)+1
             options=[('1  CPU usage','Find functions using CPU.'),
-                     ('2  CPU + waits','See where threads stop and wait for CPU.'),
-                     ('3  Energy efficiency','Hardware energy during the capture, not per-process energy.'),
+                     ('2  CPU + waits','See when threads sleep or wait for CPU.'),
+                     ('3  Energy use','Measure hardware energy across all workloads.'),
                      ('4  Counters only','Resource counters without perf or scheduler tracing.')]
             row=5 if height >= 16 else 4
             budget=max(0,min(2,(height-9)//4-1))

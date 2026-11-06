@@ -67,9 +67,9 @@ def health_rows(sample, replay=False, now=None, stale_after=5):
         frequency = next((c['frequency_mhz'] for c in sample.get('cpu', []) if c.get('frequency_mhz') is not None), None)
         rows.append(row('CPU frequency', frequency, 'cpufreq scaling_cur_freq', 'Open CPU (2); frequency reads run separately from CPU usage.', quality_id='frequencies'))
     domains = sample.get('energy',{}).get('domains',[])
-    if not domains:rows.append(row('Energy', None, 'powercap / hwmon', 'Open Status (0); hardware or the host may not expose energy counters.'))
+    if not domains:rows.append(row('Energy', None, 'powercap / hwmon', 'Open System (0); this machine may not expose energy counters.'))
     for d in domains:
-        rows.append(row('Energy '+d['label'], d.get('watts'), d['id'], 'Open Status (0); inspect counter availability, permissions and gaps.', d.get('reason','')))
+        rows.append(row('Energy '+d['label'], d.get('watts'), d['id'], 'Open System (0); check counter availability, permissions and gaps.', d.get('reason','')))
     return rows
 
 
@@ -99,8 +99,10 @@ class InsightsView:
         self.modal = dict(stage='insights',mode=mode,items=items,query='',selected=0,scroll=0)
 
     def insight_items(self):
+        from .navigation import ALIASES
         query=self.modal['query'].casefold().split()
-        return [item for item in self.modal['items'] if all(word in item[2].casefold() for word in query)]
+        return [item for item in self.modal['items'] if all(word in
+                (item[2]+' '+ALIASES[item[1]] if item[0]=='view' else item[2]).casefold() for word in query)]
 
     def insight_lines(self):
         m=self.modal
@@ -120,7 +122,7 @@ class InsightsView:
         return [title,'Search: '+m['query']+'_',f'{len(items)} matches | arrows select | Enter or click opens',
                 *[('> ' if i==m['selected'] else '- ')+item[2][:width] for i,item in enumerate(items) if start<=i<start+count],
                 *([] if items else ['No matches. Backspace edits the search.']),
-                'Uppercase keys use Shift. Esc closes.' if m['mode']=='guide' else 'Snapshot-based results. Esc closes.']
+                'Esc closes.']
 
     def insight_key(self,key):
         m=self.modal
@@ -205,4 +207,4 @@ class InsightsView:
         self.modal=None
 
     def search_gone(self):
-        self.modal=dict(stage='result',message='This result exited, changed identity or is no longer visible. Press s to search again after closing this message.')
+        self.modal=dict(stage='result',message='This result changed or is no longer visible. Close this message and press s to search again.')

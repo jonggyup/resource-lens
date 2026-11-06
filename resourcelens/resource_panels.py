@@ -1,7 +1,6 @@
 """Responsive device panels shared by details and expanded overview."""
 import textwrap
 from .placement import format_cpus
-from .investigation import indicators
 
 
 def panels(cards, width):
@@ -91,7 +90,7 @@ def resource_lines(view, kind, width):
         fs = s.get('root_filesystem')
         if fs and focus is None:
             cards.append(('/ FILESYSTEM', [gauge(ratio(fs['used'], fs['total'])),
-                f"Used {size(fs['used'])} / {size(fs['total'])}", pressure(s, 'io'),
+                f"Used {size(fs['used'])} / {size(fs['total'])}",
                 'Filesystem capacity is separate from device traffic.']))
     elif kind == 'gpu':
         for g in s['gpus']:
@@ -131,17 +130,17 @@ def resource_lines(view, kind, width):
             cards.append((net['name'] + ' | NETWORK INTERFACE', content))
     if not cards:
         cards = [(kind.upper(), ['No readable devices/counters; usage is unknown.'])]
-    notes = {'memory': 'RAM availability and NUMA free memory measure different things.',
-             'disk': 'Active time is not saturation. Stacked devices may count the same I/O.',
-             'gpu': 'Unknown usage is not zero. Shared GPU memory is not total system RAM.',
-             'network': 'Each RX/TX history scales to its visible peak, not link utilization. Do not sum layered interfaces.'}
+    notes = {'disk': 'Active time is not saturation. Stacked devices may count the same I/O.',
+             'network': 'RX/TX charts use separate scales. Layered interfaces may count the same traffic.'}
     history_lines = ['History ' + view.trend(view.history['gpu'], plot_width)] if kind == 'gpu' and focus is None else []
-    tail = [view.marker_line(plot_width), *indicators(s), *view.overlay_lines()]
+    tail = ([pressure(s, 'io')] if kind == 'disk' else []) + [view.marker_line(plot_width), *view.overlay_lines()]
     from .presentation import source_note
     source = 'gpus' if kind == 'gpu' else 'resource_topology'
-    if source_note(s, source):
-        tail.insert(0, source_note(s, source))
-    return panels(cards, width) + history_lines + [piece for line in tail + [notes[kind]] for piece in (textwrap.wrap(line, width) or [''])]
+    if note := source_note(s, source, problems_only=True):
+        tail.insert(0, note)
+    if note := notes.get(kind):
+        tail.append(note)
+    return panels(cards, width) + history_lines + [piece for line in tail for piece in (textwrap.wrap(line, width) or [''])]
 
 
 def expanded_overview(view, width):
@@ -154,7 +153,8 @@ def expanded_overview(view, width):
         lines.append('[ ' + title + ' | click for details ]')
         lines.extend(content)
         lines.append('')
-    tiles, _ = topology_map(s.get('cpu_hardware', {}), {c['id']: c for c in s['cpu']}, width)
+    tiles, _ = topology_map(s.get('cpu_hardware', {}), {c['id']: c for c in s['cpu']}, width,
+                            temperatures=s.get('temperatures',[]),energy=s.get('energy'))
     section('CPU TOPOLOGY', 1, tiles)
     for kind, page in [('memory', 2), ('disk', 3), ('gpu', 4), ('network', 6)]:
         section(kind.upper(), page, resource_lines(view, kind, width))

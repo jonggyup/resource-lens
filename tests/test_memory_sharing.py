@@ -91,6 +91,6 @@ class MemorySharingTests(unittest.TestCase):
         x,end,y,tab=view.memory_sharing.regions[2]
         view.mouse(x,y,curses.BUTTON1_CLICKED)
         self.assertEqual(view.memory_sharing.tab,2)
-        self.assertIn('not proof','\n'.join(view.memory_sharing.lines(100)))
+        self.assertIn('may use different RAM pages','\n'.join(view.memory_sharing.lines(100)))
         view.key(27);self.assertIsNone(view.memory_sharing)
         self.assertEqual(view.page,7)

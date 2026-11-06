@@ -47,7 +47,7 @@ children, so adding rows can double-count usage.
 Process details also show the exact group and its readable ancestor constraints
 after background inspection completes. The service association is listed separately:
 a child group can have a tighter limit than its service. In the cgroup browser,
-press **D** or click **D Constraints** for inspection starting on Constraints;
+press **D** or click **D Limits** for inspection starting on Limits;
 **I** inspects a group directly from the Applications list. Esc/Back returns one
 level. Partial ancestry means some restrictions remain unknown.
 
@@ -55,7 +55,7 @@ level. Partial ancestry means some restrictions remain unknown.
 
 Select it and press Enter. Summary separates observed quota activity, configured
 ceilings and missing evidence. Tab or section numbers 1–5 switch between Summary,
-Usage, Constraints, Evidence and Actions. Click a finding or press **e** for sources
+Usage, Limits, Evidence and Actions. Click a finding or press **e** for sources
 and intervals; **n/p** or the buttons select evidence. **g/o/a** opens its exact
 group / associated service / limiting ancestor. Esc restores the previous view.
 
@@ -86,7 +86,7 @@ Press **H** or click the health indicator for missing/stale data and next steps.
 Health uses source observation times when available; older recordings fall back
 to snapshot freshness. CPU frequency and GPU reads run separately from fast usage
 counters. Their last value can remain visible with its original age after a failed
-refresh. Status (**0**) shows source quality/age; CPU/GPU details show relevant
+refresh. System (**0**) shows source quality/age; CPU/GPU details show relevant
 source notes. The source observation time cannot establish when a driver last
 updated its internal sensor. Hardware and containers expose different data.
 
@@ -152,7 +152,7 @@ and configuration differences. Partial/cancelled captures stay readable but cann
 be compared as complete runs. One run has unknown spread.
 
 For measured latency/throughput, open a complete profile and press **o**. Enter
-`name | unit | value | provenance`, for example `p99 | ms | 12.5 | load generator log`.
+`name | unit | value | measurement source`, for example `p99 | ms | 12.5 | load generator log`.
 Only enter measurements from the displayed capture window. **x** exports a private,
 redacted summary; originals and outcome sidecars remain separate raw evidence.
 
@@ -161,7 +161,7 @@ Memory-event findings name the counter and local/subtree accounting. Neither
 ancestor activity nor shared group counters identifies a delayed PID or request.
 See [Sessions details](SESSIONS.md) and [M4 validation](M4_VALIDATION.md).
 
-For energy, select a process in Applications and choose **P → Energy efficiency**.
+For energy, select a process in Applications and choose **P → Energy use**.
 Energy belongs to the exposed hardware domain and includes other work. It is not
 energy attributed to that process. Unsupported sensors remain unavailable.
 

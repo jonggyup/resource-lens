@@ -76,6 +76,13 @@ class InsightsTests(unittest.TestCase):
         self.view.key(27)
         self.assertIsNone(self.view.modal)
 
+    def test_search_keeps_common_names_for_renamed_views(self):
+        for query, page in (('capabilities', 9), ('status', 9), ('ram', 2), ('tasks', 5)):
+            self.search(query)
+            self.view.key(10)
+            self.assertEqual(self.view.page, page)
+            self.assertIsNone(self.view.modal)
+
     def test_metric_mouse_select_and_related_view(self):
         self.view.key(ord('E'))
         draw(Screen(35,110),self.view,1)

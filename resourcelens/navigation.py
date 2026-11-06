@@ -4,7 +4,7 @@ import textwrap
 
 ALIASES = ('home overview dashboard', 'cpu processor topology', 'ram memory numa',
            'disk storage io', 'gpu graphics video', 'tasks processes pid',
-           'net network interfaces', 'applications apps workloads services containers cgroups', 'timeline events changes comparison', 'status capabilities permissions collector')
+           'net network interfaces', 'applications apps workloads services containers cgroups', 'timeline events changes comparison', 'system status capabilities permissions collector')
 
 
 def actions(view):
@@ -23,7 +23,7 @@ def actions(view):
         from .actions import BY_ID
         return [('Esc Back',27), ('5 Actions',ord('5')), *[
             (BY_ID[name].key+' '+BY_ID[name].label, ord(BY_ID[name].key))
-            for name in ('profile', 'memory', 'show_evidence', 'review_controls', 'show_changes', 'show_constraints', 'waits', 'open_group', 'open_service', 'open_ancestor')],
+            for name in ('profile', 'memory', 'show_evidence', 'review_controls', 'show_changes')],
             ('? Help',ord('?')), ('s Find',ord('s'))]
     if view.browser and view.browser.process:
         return [('Esc Back',27), ('V Memory',ord('V')), ('P Investigate',ord('P')),
@@ -52,7 +52,7 @@ def actions(view):
     extra = [('f Focus', ord('f'))] if view.page in (0, 1, 2, 3, 4, 6) else []
     if view.page == 7:
         extra = [('o Overlay', ord('o'))]
-    extra += [('L Sessions',ord('L')), ('J Changes', ord('J')), ('E Explain', ord('E')), ('H Health', ord('H')), ('0 Status', ord('0')), ('M Mark', ord('M')), ('9 Timeline', ord('9'))]
+    extra += [('L Sessions',ord('L')), ('J Changes', ord('J')), ('E Explain', ord('E')), ('H Health', ord('H')), ('0 System', ord('0')), ('M Mark', ord('M')), ('9 Timeline', ord('9'))]
     return common + [('q Quit', ord('q'))] + local + extra
 
 
@@ -77,7 +77,7 @@ def context_help(view, width=80):
                 ('g', 'Switch to cgroups: services and groups of processes.')]))
         else:
             sections.append(('Services and cgroups', [
-                ('I', 'Inspect findings, usage, constraints, evidence and actions for the selected group.'),
+                ('I', 'Open the selected group inspector.'),
                 ('Enter / Right', 'Open the selected group to see its children and processes.'),
                 ('c / m / n / i', 'Sort by CPU usage / memory / name / disk I/O.'),
                 ('/', 'Filter the group list.'),
@@ -98,7 +98,7 @@ def context_help(view, width=80):
                 ('d', 'Open the disk used by the selected service.'),
                 ('o', 'Pin this service on resource views.')]))
         sections.append(('Investigate the selection', [
-            ('P', 'Choose CPU usage, CPU + waits, or Energy efficiency.'),
+            ('P', 'Choose CPU usage, CPU + waits, or Energy use.'),
             ('W', 'Start CPU + waits directly: where the selected work spends time waiting.'),
             ('V', 'Inspect memory allocation, shared address spaces and mapped files.'),
             ('', 'P: choose 5/10/30 seconds, including counters-only capture. W starts ten seconds directly.'),
@@ -151,14 +151,11 @@ def context_help(view, width=80):
         ('Understand the numbers', [
             ('N/A', 'Unavailable measurement, not zero usage.'),
             ('CPU usage', 'For a process, 100% means one logical CPU is fully busy.'),
-            ('History', 'Oldest samples are on the left; newest on the right. Gaps mean missing data.'),
-            ('Disk activity', 'Active time alone does not tell you whether a disk is saturated.'),
-            ('Network', 'Graphs scale to their visible peaks. Counters on layered devices may overlap.')])])
+            ('E', 'Read metric definitions, sources and interpretation limits.')])])
     width = max(20, width)
     key_width = 20 if width >= 60 else 0
-    lines = ['HELP / ' + title, 'Shortcuts for this view, then general reference.',
-             'Scroll: arrows or mouse wheel    Back: Esc or ?',
-             'Uppercase shortcuts use Shift. Bottom buttons are clickable.']
+    lines = ['HELP / ' + title, 'Arrows / mouse wheel: scroll | Esc or ?: close',
+             'Uppercase shortcuts use Shift.']
     result = []
     for line in lines:
         result.extend(textwrap.wrap(line, width))
@@ -188,7 +185,7 @@ class NavigationView:
         count = max(1, self.screen_size[0] - 10)
         start = self.modal['selected'] // count * count
         self.modal['offset'] = start
-        return ['Switch view (navigation only)', ': ' + self.modal['query'] + '_',
+        return ['Switch view', ': ' + self.modal['query'] + '_',
                 *[('> ' if i == self.modal['selected'] else '- ') + f'{page + 1} {name}'
                   for i, (page, name) in enumerate(items) if start <= i < start + count],
                 *([] if items else ['No matching views.']), 'Type to filter | Up/Down | Enter opens', 'Esc cancels']

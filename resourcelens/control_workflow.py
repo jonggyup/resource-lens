@@ -39,7 +39,7 @@ def service_target(sample, request):
 
 
 def preview_note(domain):
-    return 'Verification: ' + ('kernel read-back' if domain == 'hardware' else 'systemd + kernel read-back') + '; workload effects require observation.'
+    return 'Verification: ' + ('kernel read-back' if domain == 'hardware' else 'systemd + kernel read-back') + '; observe workload effects separately.'
 
 
 def setting_value(domain, setting, value):
@@ -190,19 +190,23 @@ class ControlWorkflow:
         if modal['stage'] == 'workflow_review':
             group = modal['target']
             context = context_for(self.snapshot, modal['request']) or {}
-            return ['REVIEW SERVICE CONTROLS', 'Inspected: ' + str(modal['request']),
+            request = modal['request']
+            selected = ('PID ' if request[0] == 'process' else 'Group ') + str(request[1])
+            quota = context.get('limits', {}).get('quota_pct')
+            return ['REVIEW SERVICE CONTROLS', 'Selected: ' + selected,
+                    'Selected group: ' + context.get('exact_cgroup', 'unknown'),
                     'Control target: '+group['unit'], 'Manager: '+group['manager'], 'Cgroup: '+group['path'],
-                    'Scope expands to this entire service and its descendants, including other processes.',
+                    'Applies to this entire service and child groups, including other processes.',
                     'Weight changes relative sibling priority; quota changes CPU time capacity.',
-                    'Observed effective quota: '+str(context.get('limits', {}).get('quota_pct', 'unknown'))+'% (100% = one CPU).',
+                    'Observed CPU quota: '+(f'{quota:g}% (100% = one CPU)' if quota is not None else 'unknown'),
                     'Quota source: '+str(context.get('limits', {}).get('quota_source', 'unknown')),
                     'Tighter ancestors and child settings can still restrict the selected process.',
-                    'Permissions are checked by each backend during preview and apply.',
+                    'Existing permissions apply; each preview reads fresh settings.',
                     'Runtime settings remain after exit; restoration requires this session and unchanged identity/settings.',
                     'w Weight | l Quota | p Placement | b Disk bandwidth',
-                    'h MemoryHigh: review memory usage and reclaim/throttling boundary.',
-                    'g Hardware: opens a separate machine-wide CPU menu.',
-                    'Each choice opens an editor, then a fresh preview; no setting changes here.',
+                    'h MemoryHigh: review the memory reclaim threshold.',
+                    'g Hardware: machine-wide CPU settings.',
+                    'Choose a setting to edit and preview. Nothing changes here.',
                     'C Controls | J Changes | H Health | Esc back']
         event = self.workflow_event()
         if event is None:
@@ -214,7 +218,7 @@ class ControlWorkflow:
                     'Setting: '+str(event.get('setting')),
                     'Previous: '+setting_value(event['domain'],event['setting'],event.get('previous_value')),
                     'Current requested value: '+setting_value(event['domain'],event['setting'],event.get('requested')),
-                    'The existing backend rechecks lifetime, external changes and domain conflicts.',
+                    'Checks that the target and its settings still match this session.',
                     'Restoration can be refused or remain unconfirmed. It does not restore workload performance.',
                     'Enter: restore and verify | Esc: cancel']
         lines = ['CHANGES' if modal['stage'] == 'workflow_changes' else 'CONTROL RESULT',

@@ -116,7 +116,7 @@ def import_path(path,state):
 
 def add_outcome(row,text):
     fields=[part.strip() for part in text.split('|')]
-    if len(fields)!=4 or any(not field for field in fields):raise ValueError('Expected name | unit | value | provenance')
+    if len(fields)!=4 or any(not field for field in fields):raise ValueError('Expected name | unit | value | measurement source')
     name,unit,raw,provenance=fields
     value=float(raw)
     if not finite(value) or max(len(name),len(unit))>64 or len(provenance)>512:raise ValueError('Outcome value/label exceeds limits')

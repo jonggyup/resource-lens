@@ -7,6 +7,7 @@ import subprocess
 
 from resourcelens.collect import Collector, delta, parse_nvidia
 from resourcelens.ui import View, clean, ratio, spark
+from resourcelens.presentation import overview_cards
 
 
 class MetricsTests(unittest.TestCase):
@@ -43,6 +44,18 @@ class MetricsTests(unittest.TestCase):
         self.assertIsNone(s["disks"][0]["read_bps"])
         self.assertIsNone(s["processes"][0]["cpu_pct"])
         self.assertEqual(s["memory"]["used"], 400 * 1024)
+
+    def test_core_temperatures_preserve_socket_when_core_labels_repeat(self):
+        for socket,value in ((0,45000),(1,65000)):
+            directory=f'sys/class/hwmon/hwmon{socket}'
+            self.write(directory+'/name','coretemp')
+            self.write(directory+'/temp1_label',f'Package id {socket}')
+            self.write(directory+'/temp1_input','bad')
+            self.write(directory+'/temp2_label','Core 0')
+            self.write(directory+'/temp2_input',str(value))
+        rows=self.collector.temperatures()
+        self.assertEqual({(row['socket'],row['core']):row['temperature_c'] for row in rows},
+                         {(0,0):45.,(1,0):65.})
 
     def test_cpu_excludes_guest_double_counting_and_iowait(self):
         self.collector.sample()
@@ -223,7 +236,8 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(spark(view.history["cpu"]), " -")
         self.assertNotIn("N/A", spark(view.history["memory"]))
         self.assertNotIn("N/A", spark(view.history["disk"]))
-        self.assertIn("History N/A (no measured data)", view.gpu_lines())
+        view.page = 4
+        self.assertIn("History N/A (no measured data)", view.lines(60))
 
     def net(self, rx=1000, tx=2000, ifindex=2):
         self.write("proc/net/dev", "Inter-| Receive | Transmit\n face | bytes packets errs drop | bytes packets errs drop\n"
@@ -300,15 +314,16 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(entry["rx_bps"], 0)
         self.assertIsNone(entry["speed_mbps"])
 
-    def test_network_overview_favors_live_link_and_summarizes_other_interfaces(self):
+    def test_network_overview_favors_live_link(self):
         self.net()
         snapshot = self.collector.sample()
         snapshot["network"].insert(0, {**snapshot["network"][0], "name": "aaa", "state": "down"})
         view = View()
         view.update(snapshot)
-        lines = view.network_lines(100)
-        self.assertTrue(lines[0].startswith("eth0 (up)"))
-        self.assertIn("1 other interfaces", lines[-1])
+        cards = overview_cards(view, 60, 8, view.colors)
+        network = next(card for card in cards if card[0].startswith('NETWORK'))
+        self.assertEqual(network[0], 'NETWORK eth0')
+        self.assertIn('eth0 | up', ' '.join(text for text, _ in network[3]))
 
 
 if __name__ == "__main__":

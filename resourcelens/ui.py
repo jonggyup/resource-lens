@@ -21,7 +21,7 @@ from .topology import topology_map
 from .placement import format_cpus
 from .resource_panels import resource_lines, expanded_overview
 from .navigation import NavigationView, actions, context_help
-from .focus import FocusView, KINDS
+from .focus import FocusView
 from .investigation import Investigation, indicators
 from .control_workflow import ControlWorkflow, preview_note, workflow_buttons
 from .memory_ui import MemoryControlsView
@@ -87,7 +87,7 @@ def pressure(snapshot, kind):
 
 
 class View(MemoryControlsView, ControlWorkflow, InsightsView, HardwareView, PlacementView, NavigationView, FocusView, UsabilityView, Workspaces, ApplicationProcesses):
-    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Applications", "Timeline", "Capabilities")
+    names = ("Overview", "CPU", "Memory", "Disks", "GPU", "Processes", "Network", "Applications", "Timeline", "System")
 
     def __init__(self, unicode=False, control=False, session=None):
         from .diagnostics import DiagnosticHistory
@@ -204,7 +204,7 @@ class View(MemoryControlsView, ControlWorkflow, InsightsView, HardwareView, Plac
                 if times[0] <= event['timestamp'] <= times[-1]:
                     index = min(range(len(times)), key=lambda i: abs(times[i] - event['timestamp']))
                     marks[index] = '|'
-        return 'Marks ' + ''.join(marks).rjust(width) + ' (M mark; 9 compare)'
+        return 'Marks ' + ''.join(marks).rjust(width)
 
     def mark_event(self, label, status='marker', target=None, timestamp=None, **metadata):
         event = self.investigation.mark(label, timestamp, target, status)
@@ -379,11 +379,11 @@ class View(MemoryControlsView, ControlWorkflow, InsightsView, HardwareView, Plac
     def workload_lines(self, width=100):
         rows = self.workload_rows()
         group = self.selected_workload()
-        mode = "CPU controls enabled: p placement | U undo placement | w weight | l quota | u Undo" if self.control else "Read-only | C enables runtime resource controls"
         if not self.workload_detail or group is None:
             name_width = max(12, min(45, width - 32))
-            lines = [f"{len(rows)} workloads | / find | Enter open | Filter: {clean(self.workload_filter) or '(none)'}", mode,
-                     self.workload_notice or self.relation_label or f"Sort: {self.workload_sort} | c CPU / m RAM / n name / i I/O | b disk limits / B Undo",
+            lines = [f"{len(rows)} groups | Filter: {clean(self.workload_filter) or '(none)'}",
+                     'Enter: open | I: inspect | /: filter',
+                     self.workload_notice or self.relation_label or f"Sort: {self.workload_sort} | c CPU / m RAM / n name / i I/O",
                      f"  {'UNIT / GROUP':<{name_width}} {'CPU':>7} {'MEMORY':>10} {'PIDS':>5}"]
             for row in rows:
                 name = clean(row["unit"] or row["id"])
@@ -467,7 +467,7 @@ class View(MemoryControlsView, ControlWorkflow, InsightsView, HardwareView, Plac
                     f"{result['target']['unit']}: CPU {result['property']} confirmed in systemd and the kernel. u: Undo latest change.")}
 
     def control_label(self):
-        return '[CONTROL C]' if self.control else '[Read-only C]'
+        return '[Controls C]' if self.control else '[Read-only C]'
 
     def open_control_mode(self):
         if self.replay:
@@ -490,10 +490,9 @@ class View(MemoryControlsView, ControlWorkflow, InsightsView, HardwareView, Plac
             return self.insight_lines()
         if modal['stage'] == 'control_mode':
             return ['RESOURCE CONTROLS',
-                    'Current mode: ' + ('controls enabled' if self.control else 'monitoring only'),
-                    'Enable controls to adjust CPU and service settings.',
-                    'Nothing changes until you preview and confirm an action.',
-                    'Existing permissions apply. Disabling does not undo changes.',
+                    'Each change requires a preview and confirmation.',
+                    'Existing permissions apply. Settings remain after exit.',
+                    'Disabling menus does not undo applied changes.',
                     '[ Disable controls ]' if self.control else '[ Enable controls ]',
                     '[ Cancel ]', 'Enter: switch mode | Esc: cancel']
         if modal['stage'].startswith('utility_'):
@@ -507,19 +506,19 @@ class View(MemoryControlsView, ControlWorkflow, InsightsView, HardwareView, Plac
         if modal["stage"].startswith("hardware_"):
             return self.hardware_lines()
         if modal["stage"] == "busy":
-            return ["Running the requested action...", "The dashboard continues collecting data.", "Please wait for a confirmed result."]
+            return ["Working...", "Measurements continue in the background."]
         if modal["stage"] == "input":
             property = modal["property"]
             return [f"Set CPU {property} for {modal['target']['unit']}",
                     "Weight: 1-10000, relative priority among sibling groups." if property == "weight" else
                     "Quota: whole percent; 100% = one CPU, 200% = two CPUs.",
                     "Enter 'default' to reset weight or 'max' to remove quota.",
-                    "Runtime only. The next screen previews the actual setting.",
+                    "The next screen previews the runtime setting.",
                     "Value: " + modal["value"] + "_", "Enter: preview | Esc: cancel"]
         if modal["stage"] == "confirm":
             plan = modal["plan"]
             property = plan["property"]
-            return ["Confirm temporary CPU setting", f"Unit: {plan['target']['unit']}",
+            return ["Confirm runtime CPU setting", f"Unit: {plan['target']['unit']}",
                     f"Manager: {plan['target']['manager']}", "Cgroup: " + plan["target"]["path"],
                     f"{property.title()}: {cpu_setting(property, plan['before'][property])} -> {cpu_setting(property, plan['value'])}",
                     preview_note('cpu'),
@@ -533,7 +532,7 @@ class View(MemoryControlsView, ControlWorkflow, InsightsView, HardwareView, Plac
                     "Undo history is available only until you exit.",
                     "Enter: exit and keep settings | Esc: go back",
                     "u: review/undo remaining memory, disk, placement, hardware or CPU settings"]
-        return [modal["message"], "", "Enter or Esc: close | 8: inspect workloads | H: health | J: Changes"]
+        return [modal["message"], "", "Enter / Esc: close | H: health | J: changes"]
 
     def modal_key(self, key):
         stage = self.modal["stage"]
@@ -624,6 +623,8 @@ class View(MemoryControlsView, ControlWorkflow, InsightsView, HardwareView, Plac
         s = self.snapshot
         aggregate = next((c for c in s['cpu'] if c['id'] == 'cpu'), {})
         data = s.get('cpu_hardware', {'cpus': [], 'policies': {}})
+        from .topology import scoped_temperatures
+        temperatures=scoped_temperatures(data,s.get('temperatures',[]))
         if self.focus and self.focus[0] == 'cpu' and not self.placement:
             data = {**data, 'cpus': [c for c in data['cpus'] if str(c['socket']) == self.focus[1]]}
         metrics = {c['id']: c for c in s['cpu']}
@@ -638,61 +639,36 @@ class View(MemoryControlsView, ControlWorkflow, InsightsView, HardwareView, Plac
                                              (45, 55, 'action', ('esc',))]}
         else:
             lines = [clean(s['cpu_model']),
-                     'CPU ' + bar(aggregate.get('busy_pct'), 18) + ' | ' + pressure(s, 'cpu'),
+                     'CPU ' + bar(aggregate.get('busy_pct'), 18),
                      'History ' + self.trend(self.history['cpu'], max(8, width - 10)),
-                     '[ All CPUs / sockets settings ]  g menu | click/right-click thread',
-                     'Shift-click CPU/core/socket: related apps | tile positions are not chip coordinates.']
+                     '[ CPU settings ] g | click a CPU, core or socket',
+                     'Shift-click: show related applications']
             self.topology_line_regions = {}
         if not p:
             lines += self.overlay_lines()
-            lines += indicators(s)
+            lines += indicators(s, resources=('cpu',))
             lines.append(self.marker_line(max(8, min(50, width - 30))))
         overlay_cpus = self.overlay_cpus() if self.overlay else None
         tiles, hits = topology_map(data, metrics, width,
-            p['selected'] if p else overlay_cpus, set(p['info']['eligible']) if p else {c['id'] for c in data['cpus']}, p['focus'] if p else None)
+            p['selected'] if p else overlay_cpus, set(p['info']['eligible']) if p else {c['id'] for c in data['cpus']}, p['focus'] if p else None,
+            temperatures=temperatures,energy=s.get('energy'))
         offset = len(lines)
         self.topology_line_regions.update({row + offset: value for row, value in hits.items()})
         lines.extend(tiles)
         if not p:
             from .presentation import source_note
-            lines += [note for name in ('frequencies', 'cpu_hardware') if (note := source_note(s, name))]
+            lines += [note for name in ('frequencies', 'cpu_hardware') if (note := source_note(s, name, problems_only=True))]
             energy=s.get('energy')
             if energy:
-                domains=energy.get('domains',[])
-                values=[d['label']+': '+(f"{d['watts']:.2f} W" if d.get('watts') is not None else d['status']) for d in domains[:3]]
-                lines.append('Hardware energy: '+(' | '.join(values) if values else 'unavailable (no exposed energy counters)'))
-                if domains:lines.append('Separate hardware domains, not additive or process-attributed. 0: full sensor inventory.')
-        if not data['policies']:
-            lines.append('Frequency governors: unavailable on this system.')
-        for policy, info in data['policies'].items():
-            lines.append(f"{policy}: {info['governor'] or 'N/A'} | shared CPUs {format_cpus(info['cpus'])}")
-        for sensor in s['temperatures']:
-            lines.append(f"{clean(sensor['name'])}: {sensor['temperature_c']:.1f} C")
+                from .energy import cpu_energy_lines
+                lines.extend(cpu_energy_lines(energy,width))
         return lines
-
-    def memory_lines(self, width=60):
-        return resource_lines(self, "memory", width)
-
-    def disk_lines(self, width=60):
-        return resource_lines(self, "disk", width)
-
-    def gpu_lines(self, width=60):
-        return resource_lines(self, "gpu", width)
 
     def primary_network(self):
         entries = self.snapshot["network"]
         entries = [entry for entry in entries if entry["name"] != "lo"] or entries
         return max(entries, key=lambda entry: (
             entry["state"] == "up", (entry["rx_bps"] or 0) + (entry["tx_bps"] or 0)), default=None)
-
-    def network_lines(self, width=60):
-        if self.page == 0 and not self.overview_expanded:
-            net = self.primary_network()
-            if not net:
-                return ['Network: N/A (no readable interface counters)']
-            return [f"{clean(net['name'])} ({clean(net['state'])}) RX {size(net['rx_bps'])}/s TX {size(net['tx_bps'])}/s",
-                    f"{len(self.snapshot['network']) - 1} other interfaces | 7 Network: all interfaces and totals"]
-        return resource_lines(self, "network", width)
 
     def process_lines(self, width=100):
         rows = [p for p in self.snapshot["processes"] if self.filter.casefold() in
@@ -716,8 +692,14 @@ class View(MemoryControlsView, ControlWorkflow, InsightsView, HardwareView, Plac
     def lines(self, width):
         if self.help:
             return context_help(self, width)
-        return {1: self.cpu_lines, 2: self.memory_lines, 3: self.disk_lines,
-                9: self.capability_lines, 4: self.gpu_lines, 6: self.network_lines, 7: self.workload_lines, 8: lambda width: [piece for line in self.investigation.lines(width) for piece in (textwrap.wrap(line, width) or [''])]}.get(self.page, self.process_lines)(width)
+        resource = {2: 'memory', 3: 'disk', 4: 'gpu', 6: 'network'}.get(self.page)
+        if resource:
+            return resource_lines(self, resource, width)
+        if self.page == 8:
+            from .readability import wrap_lines
+            return wrap_lines(self.investigation.lines(), width)
+        return {1: self.cpu_lines, 9: self.capability_lines,
+                7: self.workload_lines}.get(self.page, self.process_lines)(width)
 
     def mouse(self, x, y, state):
         if self.sessions_view:
@@ -1198,7 +1180,7 @@ def draw(screen, view, interval, error=None):
         return
     s = view.snapshot
     stamp = time.strftime("%H:%M:%S", time.localtime(s["timestamp"])) if s else "waiting"
-    state = "REPLAY" if view.replay else "FROZEN" if view.paused else "LIVE"
+    state = "REPLAY" if view.replay else "PAUSED" if view.paused else "LIVE"
     if error:
         state = "COLLECTOR ERROR"
     elif s and not view.replay and not view.paused and time.time() - s["timestamp"] > max(5, interval * 3):
@@ -1208,7 +1190,7 @@ def draw(screen, view, interval, error=None):
     put(screen, 0, 1, f"RESOURCE LENS  {state}  {interval:g}s  |  {stamp}", accent)
     if s and w >= 95:
         put(screen, 0, 60, s["hostname"], muted)
-    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Tasks", "Net", "Apps", "Timeline", "Status")
+    labels = ("Home", "CPU", "RAM", "Disk", "GPU", "Procs", "Net", "Apps", "Timeline", "System")
     view.tab_regions = []
     x = 1
     compact_tabs = [f'{(i+1)%10}:{label}' for i,label in enumerate(labels)]
@@ -1221,8 +1203,7 @@ def draw(screen, view, interval, error=None):
         x += len(text) + 1
     if not named_tabs:
         put(screen, 1, x + 1, view.names[view.page], accent)
-    mode = "Runtime resource controls enabled" if view.control else "Read-only"
-    status = mode + " | newest samples at right"
+    status = "Newest samples at right"
     if not s:
         put(screen, 4, 2, "Collecting the first sample...", muted)
     elif view.profile_view:
@@ -1311,7 +1292,7 @@ def draw(screen, view, interval, error=None):
                 attribute = view.colors[{2: 'memory', 3: 'disk', 4: 'gpu', 6: 'network'}[view.page]] | curses.A_BOLD
             if view.page == 1 and not view.help:
                 view.topology_regions[i + 3] = view.topology_line_regions.get(index, [])
-                if line.startswith('[ All CPUs'):
+                if line.startswith('[ CPU settings ]'):
                     view.cpu_regions[i + 3] = ('all', None)
             draw_text(screen, i + 3, 1, line, attribute, accent=accent)
             if view.help and w - 3 >= 60 and line.startswith('  ') and line[:20].strip():

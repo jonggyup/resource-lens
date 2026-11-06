@@ -177,10 +177,21 @@ class TerminalTests(unittest.TestCase):
         self.assertIn(b"CPU settings: All CPUs / all sockets", output)
         os.write(master, b"\x1b")
         drain(1.2)
-        # SGR right-button press on the first logical CPU row.
-        os.write(master, b"\x1b[<2;5;17M")
+        # Use the current layout rather than a fixed number of introductory rows.
+        from resourcelens.collect import Collector
+        from resourcelens.ui import View
+        collector = Collector(nvidia=False)
+        try:
+            preview = View()
+            preview.update(collector.sample())
+            preview.cpu_lines(117)
+        finally:
+            collector.close()
+        row, column, cpu = min((row, start, ids[0]) for row, hits in preview.topology_line_regions.items()
+                               for start, _, kind, ids in hits if kind == 'cpu')
+        os.write(master, f"\x1b[<2;{column+5};{row+4}M".encode())
         drain()
-        self.assertIn(b"CPU settings: ID 0", output)
+        self.assertIn(f"CPU settings: CPU {cpu}".encode(), output)
         os.write(master, b"\x1b")
         drain(1.2)
         os.write(master, b"q")

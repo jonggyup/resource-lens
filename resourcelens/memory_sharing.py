@@ -165,12 +165,10 @@ class MemorySharingView:
             shared=sum(values[k] for k in ('Shared_Clean','Shared_Dirty')) if all(k in values for k in ('Shared_Clean','Shared_Dirty')) else None
             rss=values.get('Rss')
             lines=['-- Memory in RAM --',
-                   'Resident memory is in RAM; virtual reservation is separate.',
                    'RSS '+size(rss)+' | PSS '+size(values.get('Pss'))+' | private resident '+size(private),
                    'Shared resident mappings '+size(shared),
                    'Private '+bar(100*private/rss if rss and private is not None else None,min(30,max(8,width-15))),
                    'Shared  '+bar(100*shared/rss if rss and shared is not None else None,min(30,max(8,width-15))),
-                   '', '-- Reading these values --',
                    'RSS counts resident mappings. PSS divides shared pages among their users.',
                    'Private resident = Private_Clean + Private_Dirty (USS-style estimate).',
                    'Shared counters may include multiple mappings within one process.',
@@ -179,15 +177,13 @@ class MemorySharingView:
                    'PSS categories: anonymous '+size(values.get('Pss_Anon'))+' | file '+size(values.get('Pss_File'))+' | shmem '+size(values.get('Pss_Shmem')),
                    'Swap '+size(values.get('Swap'))+' | proportional swap '+size(values.get('SwapPss')),
                    'Hugetlb: shared '+size(values.get('Shared_Hugetlb'))+' | private '+size(values.get('Private_Hugetlb')),
-                   'Hugetlb counters are separate; RSS/PSS may exclude these pages.',
-                   '', '-- Measurement limits --',
-                   'Physical page IDs, DIMM placement and exact shared bytes between processes are unavailable.']
+                   'Hugetlb counters are separate; RSS/PSS may exclude these pages.']
         elif self.tab==1:
             lines=[f"{len(result['threads'])} observed threads in TGID {result['pid']}: one shared address space.",
                    'Stacks/TLS are per-thread regions within that address space; resident totals are not per-thread.','']
             lines += [f"TID {t['tid']:<8} {t['name']} | {t['state']}" for t in result['threads']]
         else:
-            lines=['COMMON FILE-BACKED MAPPINGS — not proof of identical resident RAM pages',
+            lines=['COMMON FILE MAPPINGS - matching files may use different RAM pages',
                    'Matches require device + inode + overlapping file offsets, not just the filename.',
                    'Shared-mode = both mappings use MAP_SHARED; either side may have nonresident pages.',
                    'Private mappings can diverge through copy-on-write. Anonymous fork/KSM peers are not identified.',
@@ -195,7 +191,7 @@ class MemorySharingView:
             for p in result['peers']:
                 lines += [f"PID {p['pid']} {p['name']} | common objects {p['common_count']} | shared-mode objects {p['shared_count']}",*['  '+n for n in p['examples']]]
             if not result['peers']:lines.append('No matching visible peers found; this does not prove there is no shared memory.')
-        return lines+(['PARTIAL: scan limits or unreadable/exited entries; absence is not proof of no sharing.'] if result['partial'] else [])+['',*result['warnings'], 'Inspection is a point-in-time, non-atomic observation; r refreshes.']
+        return lines+(['PARTIAL: scan limits or unreadable/exited entries; absence is not proof of no sharing.'] if result['partial'] else [])+['',*result['warnings'], 'Snapshot collected over time; r refreshes.']
 
     def draw(self,screen,width,height):
         from .readability import draw_text, wrap_lines

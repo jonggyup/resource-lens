@@ -48,6 +48,8 @@ class ComparisonTests(unittest.TestCase):
         self.assertFalse(report['before']['metrics']['Rate B/s']['complete'])
         self.assertEqual(report['after']['metrics']['Rate B/s']['mean'],0)
         self.assertEqual(report['after']['metrics']['Rate B/s']['coverage'],.2)
+        for invalid in (True, 10**400):
+            self.assertFalse(self.report([sample(12,invalid),sample(13,invalid)])['after']['metrics'])
 
     def test_gauges_use_left_hold_with_a_bound_on_missing_observations(self):
         report = self.report([sample(12,8), sample(17,80,5)])

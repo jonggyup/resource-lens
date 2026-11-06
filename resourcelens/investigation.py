@@ -4,20 +4,21 @@ import math
 import time
 
 
-def indicators(snapshot, group=None):
+def indicators(snapshot, group=None, resources=('cpu', 'memory', 'io')):
     pressure = group.get('pressure', {}) if group else snapshot.get('pressure', {})
     result = []
-    for kind in ('cpu', 'memory', 'io'):
+    for kind in resources:
         value = pressure.get(kind, {})
         value = value.get('avg10') if group else value.get('some', {}).get('avg10')
-        result.append(f'{kind.upper()} waiting: ' + ('unknown' if value is None else f'{value:.1f}% PSI (10s)'))
-    if group:
+        label = {'cpu': 'CPU', 'memory': 'Memory', 'io': 'I/O'}[kind]
+        result.append(f'{label} waiting (10s): ' + ('N/A' if value is None else f'{value:.1f}%'))
+    if group and 'cpu' in resources:
         throttled = group.get('throttled_usec_per_s')
-        result.append('CPU quota throttling: ' + ('unknown' if throttled is None else f'{throttled / 1000:.1f} ms/s'))
-    else:
+        result.append('CPU quota throttling: ' + ('N/A' if throttled is None else f'{throttled / 1000:.1f} ms/s'))
+    elif not group and 'cpu' in resources:
         thermal = snapshot.get('thermal_throttling', [])
         known = [v for entry in thermal for v in (entry.get('core_events'), entry.get('package_events')) if v is not None]
-        result.append('Thermal throttling: ' + ('unknown (no interval counters)' if not known else
+        result.append('Thermal throttling: ' + ('N/A (no interval counters)' if not known else
                       'events observed this interval' if any(v > 0 for v in known) else 'no events in exposed counters'))
     return result
 

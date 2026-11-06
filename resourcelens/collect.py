@@ -382,11 +382,18 @@ class Collector:
             driver = read(hw / "name")
             if driver not in ("coretemp", "k10temp", "zenpower", "cpu_thermal"):
                 continue
+            sensors,packages=[],set()
             for sensor in hw.glob("temp*_input"):
+                label=read(sensor.with_name(sensor.name.replace('_input','_label')))
+                package=re.fullmatch(r'(?:Package|Physical) id (\d+)',label)
+                if package:packages.add(int(package[1]))
                 value = numeric_file(sensor, 1000)
                 if value is not None:
-                    result.append({"name": read(sensor.with_name(sensor.name.replace("_input", "_label")))
-                                   or f"{driver}/{sensor.stem}", "temperature_c": value})
+                    core=re.fullmatch(r'Core (\d+)',label) if driver=='coretemp' else None
+                    sensors.append(dict(name=label or f'{driver}/{sensor.stem}',temperature_c=value,
+                                        driver=driver,core=int(core[1]) if core else None))
+            socket=next(iter(packages)) if len(packages)==1 else None
+            result.extend(dict(sensor,socket=socket) for sensor in sensors)
         return result
 
     def close(self):

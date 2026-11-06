@@ -1,11 +1,34 @@
 import curses
 import unittest
 
-from resourcelens.presentation import card_layout, chart
+from resourcelens.presentation import card_layout, chart, source_note
+from resourcelens.model import SourceQuality
 from resourcelens.ui import View, clean
 
 
 class PresentationTests(unittest.TestCase):
+    def test_source_notes_hide_healthy_reads_but_preserve_problems(self):
+        quality = SourceQuality('frequencies', 'ok', None, observed_at_wall=99).to_dict()
+        sample = dict(timestamp=100, source_quality={'frequencies': quality})
+        self.assertEqual(source_note(sample, 'frequencies', problems_only=True), '')
+        self.assertIn('CPU frequency: available', source_note(sample, 'frequencies'))
+        quality['observed_at_wall'] = 90
+        self.assertIn('old reading', source_note(sample, 'frequencies', problems_only=True))
+        quality.update(status='error', reason='permission_denied', observed_at_wall=99)
+        self.assertIn('permission denied', source_note(sample, 'frequencies', problems_only=True))
+        quality.update(status='unknown', reason='not_recorded', observed_at_wall=None)
+        self.assertIn('no observation yet', source_note(sample, 'frequencies', problems_only=True))
+        quality['status'] = 'invalid'
+        self.assertIn('invalid measurement details', source_note(sample, 'frequencies', problems_only=True))
+
+    def test_inventory_freshness_respects_its_collection_cadence(self):
+        sample = dict(timestamp=100, source_cadence_s={'cpu_hardware': 10}, source_quality={
+            'cpu_hardware': SourceQuality('cpu_hardware', 'ok', None, observed_at_wall=88).to_dict()})
+        self.assertEqual(source_note(sample, 'cpu_hardware', problems_only=True), '')
+        self.assertIn('12.0s old', source_note(sample, 'cpu_hardware'))
+        sample['timestamp'] = 120
+        self.assertIn('old reading', source_note(sample, 'cpu_hardware', problems_only=True))
+
     def test_chart_preserves_scale_zero_missing_and_peak(self):
         self.assertEqual(chart([0, None, 100], 3, 2, unicode=False), ["  #", ". #"])
         self.assertEqual(chart([0, None, 100], 3, 2, unicode=True), ["  █", "· █"])

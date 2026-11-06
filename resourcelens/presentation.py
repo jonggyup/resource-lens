@@ -1,20 +1,35 @@
 """Responsive overview cards and terminal charts. No telemetry collection."""
 
 import curses
+from .evidence import finite
 
 
-def source_note(sample, name):
+SOURCE_LABELS = {'cpu': 'CPU usage', 'frequencies': 'CPU frequency', 'cpu_hardware': 'CPU topology',
+                 'memory.available': 'Available RAM', 'gpus': 'GPU readings',
+                 'resource_topology': 'Device details', 'cgroup_tree': 'Process groups',
+                 'target_context': 'Selected process details'}
+
+
+def source_note(sample, name, *, problems_only=False):
     """A source's status and age at this snapshot, also meaningful in replay."""
     from .model import source_quality
     if name not in sample.get('source_quality', {}):
         return ''
+    label = SOURCE_LABELS.get(name, name.replace('_', ' '))
     try:
         quality = source_quality(sample, name)
     except ValueError:
-        return name + ': invalid source metadata'
+        return label + ': invalid measurement details'
     age = max(0, sample['timestamp'] - quality.observed_at_wall) if quality.observed_at_wall is not None else None
-    state = quality.status + (': ' + quality.reason.replace('_', ' ') if quality.reason else '')
-    return name + ' ' + state + (f' | age {age:.1f}s at sample' if age is not None else ' | no observation yet')
+    cadence = sample.get('source_cadence_s', {}).get(name)
+    threshold = max(5, 2 * cadence) if finite(cadence) else 5
+    recent = age is not None and age <= threshold
+    if problems_only and quality.status == 'ok' and not quality.reason and recent:
+        return ''
+    state = {'ok': 'available' if recent else 'not yet measured' if age is None else 'old reading', 'error': 'read failed',
+             'unknown': 'not yet measured'}.get(quality.status, quality.status)
+    state += ': ' + quality.reason.replace('_', ' ') if quality.reason else ''
+    return label + ': ' + state + (f' | {age:.1f}s old' if age is not None else ' | no observation yet')
 
 
 GLYPHS = frozenset("─│┌┐└┘▁▂▃▄▅▆▇█░·")
@@ -117,7 +132,7 @@ def overview_cards(view, width, height, colors):
         for i, line in enumerate(chart(values, graph_width, graph_height, unicode=view.unicode)):
             axis = ("100% " if i == 0 else "  0% " if i == graph_height - 1 else "     ") if graph_height > 1 else "     "
             content.append((axis + line, color))
-        content.extend([(f"0-100% | {min(len(values), graph_width)} samples | latest >", muted),
+        content.extend([(f"{min(len(values), graph_width)} samples | newest at right", muted),
                         (footnote, muted)])
         return content[:rows]
 
@@ -154,7 +169,7 @@ def overview_cards(view, width, height, colors):
                      ("Unavailable does not mean idle.", muted)]
         if gpu:
             gpu_lines[2] = (clean(gpu["status"]), muted)
-    note = source_note(s, 'gpus')
+    note = source_note(s, 'gpus', problems_only=True)
     if note:
         gpu_lines.insert(0, (note, muted))
 
@@ -207,8 +222,8 @@ def compact_overview(view):
              f"Memory  {pct(ratio(m['used'], m['total']))} | {size(m['used'])}/{size(m['total'])}"]
     gpu = max((g["busy_pct"] for g in s["gpus"] if g["busy_pct"] is not None), default=None)
     lines.append("GPU     " + (pct(gpu) if gpu is not None else "Usage unavailable"))
-    if source_note(s, 'gpus'):
-        lines.append(source_note(s, 'gpus'))
+    if note := source_note(s, 'gpus', problems_only=True):
+        lines.append(note)
     for d in s["disks"]:
         lines.append(f"Disk {clean(d['name'])}  R {size(d['read_bps'])}/s W {size(d['write_bps'])}/s")
     net = view.primary_network()

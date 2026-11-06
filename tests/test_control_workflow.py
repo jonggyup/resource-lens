@@ -42,7 +42,7 @@ class WorkflowTests(unittest.TestCase):
         dispatch(view,'review_controls')
         self.assertEqual(view.modal['stage'],'workflow_review')
         text=' '.join(view.workflow_content())
-        self.assertIn('entire service and its descendants',text)
+        self.assertIn('entire service and child groups',text)
         self.assertIn('/demo.service/jobs',text)
         self.assertIn('Quota source: /demo.service',text)
         self.assertEqual(backend.calls,[])

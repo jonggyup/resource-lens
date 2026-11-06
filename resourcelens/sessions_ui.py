@@ -173,7 +173,6 @@ class SessionBrowser:
         if self.stage=='comparison':value=dict(comparison=self.comparison)
         elif self.stage=='profile':
             value={key:self.profile.get(key) for key in ('label','target','status','metrics','requested_seconds','elapsed_seconds','outcomes','outcome_metadata','environment')}
-            value['source']=self.current
             value['source']={key:self.current[key] for key in ('path','name','kind')}
             value['captured_findings']=self.profile.get('capture_context',{}).get('findings',[])
         else:self.message='Open a profile/comparison to export; recordings use R in replay.';return
@@ -245,21 +244,22 @@ class SessionBrowser:
                 screen.refresh();return
         screen.erase();put(screen,0,1,'RESOURCE LENS / SESSIONS',curses.A_BOLD)
         if self.stage=='list':
-            put(screen,2,1,'Recordings and profiles | bounded scan; originals retained',limit=width-2)
+            put(screen,2,1,'Recordings, profiles and repeated runs',limit=width-2)
             capacity=max(1,height-8);offset=max(0,self.selected-capacity+1)
             for i,row in enumerate(self.entries[offset:offset+capacity],offset):
-                label=('> ' if i==self.selected else '  ')+row['kind']+' / '+row['name']
+                kind={'profile':'Profile','profile_set':'Repeated runs','recording':'Recording'}[row['kind']]
+                label=('> ' if i==self.selected else '  ')+kind+' / '+row['name']
                 put(screen,4+i-offset,1,label,curses.A_REVERSE if i==self.selected else 0,width-2)
                 self.regions.append((4+i-offset,1,width-1,('entry',i)))
             if not self.entries:put(screen,4,1,'No saved evidence found. i: import a file/directory',limit=width-2)
             footer=[('Enter Open',10),('i Import',ord('i')),('b Baseline',ord('b')),('c Compare',ord('c')),('r Refresh',ord('r')),('Esc Back',27)]
         else:
             if self.stage=='import':lines=['IMPORT LOCAL EVIDENCE','Path to recording.jsonl, session.json, profile/repeat directory:',self.query+'_',
-                'Enter validates before remembering this path. No originals are moved or deleted.','Enter: import | Esc: cancel']
+                'Import remembers this path and keeps the original files.','Enter: import | Esc: cancel']
             elif self.stage=='outcome':lines=['MEASURED APPLICATION OUTCOME','Only enter measurements for this capture window:',
                 str([self.profile.get('started'),self.profile.get('elapsed_seconds')]),
-                'Format: name | unit | value | provenance','Example: p99 | ms | 12.5 | load generator log',self.query+'_',
-                'Saved in a private sidecar; original capture remains unchanged.','Enter: save | Esc: cancel']
+                'Format: name | unit | value | measurement source','Example: p99 | ms | 12.5 | load generator log',self.query+'_',
+                'Saved alongside this profile; the original capture stays unchanged.','Enter: save | Esc: cancel']
             elif self.stage=='comparison':lines=comparison_lines(self.comparison)
             else:lines=profile_lines(self.profile)
             wrapped=wrap_lines(lines,max(10,width-3));capacity=max(1,height-6)
@@ -269,7 +269,7 @@ class SessionBrowser:
             footer=[('Esc Back',27),('b Baseline',ord('b')),('c Compare',ord('c')),('o Outcome',ord('o')),('x Export',ord('x'))]
             if self.stage in ('import','outcome'):footer=[('Enter Confirm',10),('Esc Cancel',27)]
         put(screen,height-3,1,('Working: '+self.pending if self.pending else self.message or '; '.join(self.warnings)),limit=width-2)
-        put(screen,height-2,1,'Offline evidence never enables live capture or controls.',limit=width-2)
+        put(screen,height-2,1,'Offline / read-only',limit=width-2)
         x=1
         for label,key in footer:
             if x+len(label)>=width:continue

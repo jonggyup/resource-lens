@@ -94,7 +94,7 @@ class Workspaces:
             self.relation = ('memory',None)
             self.relation_label = 'Memory charged to this group: > 0; NUMA-node attribution unavailable'
         else:
-            self.modal = dict(stage='result',message='Per-application GPU/network attribution is unavailable. Host utilization is not attributed to applications.')
+            self.modal = dict(stage='result',message='Per-application GPU and network measurements are unavailable. Resource views show device totals.')
             return
         self.application_mode = 'cgroups'
         self.page, self.scroll, self.focus = 7, 0, None
@@ -110,17 +110,17 @@ class Workspaces:
                     self.relation_label, 'x clears the hardware relationship filter.']
         lines = [group.get('unit') or group['id'],
                  'Group type: '+group.get('kind','cgroup')+' | manager: '+str(group.get('manager') or 'unknown'),
-                 'Cgroup: '+group['id']+' | inode '+str(group.get('inode')),
-                 self.workload_notice or 'A group may contain several processes or services.',
+                 'Cgroup: '+group['id'],
+                 self.workload_notice or 'Usage includes this group and its children.',
                  ' | '.join(('['+name+']') if i==self.app_tab else name for i,name in enumerate(TABS)),
-                 '[ / ] tabs | D detail focus | Esc list focus', '']
+                 '[ / ] tabs | D scroll details | Esc return to list', '']
         if self.app_tab == 0:
             lines += [f"CPU {pct(group.get('cpu_pct'))} (100% = one logical CPU)",
                       'Memory charged to this group: '+size(group.get('memory_current')),
                       'Host RAM share: '+bar(ratio(group.get('memory_current'),self.snapshot['memory'].get('total')),min(26,max(8,width-22))),
                       f"Block I/O: read {size(io_rate(group,'read'))}/s | write {size(io_rate(group,'write'))}/s",
                       *indicators(self.snapshot,group), '',
-                      'o: allowed CPU overlay | d: first mapped accounting disk',
+                      'o: pin on resource views | d: open its disk',
                       'GPU / network per-application usage: unavailable',
                       'Parent totals include children; adding rows can double-count usage.','', 'Disk accounting:']
             cpu_values = self.history['workload:'+group['id']]
@@ -139,7 +139,7 @@ class Workspaces:
         elif self.app_tab == 2:
             ids = allowed_cpus(group)
             lines += ['Allowed CPUs: '+(','.join(map(str,sorted(ids))) if ids is not None else 'unknown'),
-                      'Allowed placement is not per-core execution attribution.',
+                      'Allowed CPUs show where work may run, not where it ran.',
                       'Thread affinity and child cgroups may narrow this set.',
                       'o shows placement on the CPU map; p edits it after C enables controls.',
                       'NUMA memory residency: unavailable; no node use inferred.']
